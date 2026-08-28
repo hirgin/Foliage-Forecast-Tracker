@@ -81,8 +81,27 @@ times slower.
 - [x] **Phase 2** — weather pipeline (Open-Meteo) *(Vermont: 18,920 cell-days)*
 - [x] **Phase 3** — phenology model *(Vermont: 49,324 scored cell-days)*
 - [x] **Phase 4** — map experience *(time slider, detail panel, factor breakdown)*
-- [~] **Phase 5** — polish *(pages, code-splitting, CI done; deploy pending)*
+- [x] **Phase 5** — polish and deploy *(static export, GitHub Pages, nightly refresh)*
 - [ ] **Phase 6** — NOAA GRIB2 pipeline
+
+## Deployment
+
+There is **no server**. The read path is entirely precomputed, so the backend
+exports the season as static JSON and GitHub Pages serves it from a CDN — no
+cold starts, no hosting bill, nothing to keep alive.
+
+```
+site-data/meta.json                  season bounds, model version
+site-data/forecast/<date>.json       every cell on one day   (~5 KB gzipped)
+site-data/timeline/<h3>.json         one cell's whole season (~1.3 KB gzipped)
+```
+
+76 daily files and 649 per-cell files, 9.5 MB in total, exported in about ten
+seconds. The backend is what it always was — a batch pipeline — and runs as a
+scheduled GitHub Action rather than a service.
+
+A push redeploys from data already in the database; the nightly run pulls fresh
+observations, rescores the season, and republishes.
 
 ## Pages
 

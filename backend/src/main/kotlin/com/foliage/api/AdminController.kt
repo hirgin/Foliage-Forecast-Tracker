@@ -26,6 +26,7 @@ class AdminController(
     private val gridBootstrap: GridBootstrap,
     private val weatherIngest: WeatherIngest,
     private val forecastService: ForecastService,
+    private val staticExporter: StaticExporter,
 ) {
 
     @PostMapping("/bootstrap-grid")
@@ -46,4 +47,11 @@ class AdminController(
     @PostMapping("/compute-forecast")
     fun computeForecast(@RequestParam stateFips: String): ForecastRunResult =
         forecastService.computeState(stateFips)
+
+    /** Writes the season out as static JSON for CDN publishing. */
+    @PostMapping("/export")
+    fun export(
+        @RequestParam stateFips: String,
+        @RequestParam(defaultValue = "build/site-data") path: String,
+    ): ExportResult = staticExporter.export(java.nio.file.Path.of(path), stateFips)
 }

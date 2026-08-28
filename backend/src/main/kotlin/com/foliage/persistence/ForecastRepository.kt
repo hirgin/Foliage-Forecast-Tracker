@@ -73,6 +73,21 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
         h3,
     )
 
+    /**
+     * Every cell's whole season in one query, grouped by cell.
+     *
+     * The static export needs all 649 timelines; fetching them one at a time
+     * is 649 round trips to a hosted database, which dominated the first
+     * export run.
+     */
+    fun allTimelines(): Map<Long, List<StoredForecast>> = jdbc.query(
+        """
+        SELECT h3, day, progression, intensity, stage, confidence
+        FROM foliage_forecast ORDER BY h3, day
+        """.trimIndent(),
+        { rs, _ -> map(rs) },
+    ).groupBy { it.h3 }
+
     /** Season bounds and row count, for /meta. */
     fun coverage(): Coverage? = jdbc.query(
         "SELECT MIN(day) lo, MAX(day) hi, COUNT(*) n, COUNT(DISTINCT h3) cells FROM foliage_forecast",

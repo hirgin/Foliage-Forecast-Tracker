@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  // GitHub Pages serves a project site under /<repo>/, so asset URLs need that
+  // prefix. Set BASE_PATH in CI; it stays '/' for local development.
+  base: process.env.BASE_PATH || '/',
   plugins: [react()],
   server: {
     port: 5173,

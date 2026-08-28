@@ -18,22 +18,26 @@ function addDays(iso, n) {
 
 export default function MapView({ nav }) {
   const meta = useMeta();
-  const [date, setDate] = useState(isoToday);
+  const [date, setDate] = useState(null);
   const [selected, setSelected] = useState(null);
+
+  // Season bounds come from meta, not from a forecast response. Today is
+  // usually outside the season, and a static build has no file for a date
+  // outside it to clamp against — there would be nothing to fall back from.
+  const seasonStart = meta.data?.seasonStart;
+  const seasonEnd = meta.data?.seasonEnd;
+
+  useEffect(() => {
+    if (!seasonStart || date) return;
+    const today = isoToday();
+    setDate(today < seasonStart ? seasonStart : today > seasonEnd ? seasonEnd : today);
+  }, [seasonStart, seasonEnd, date]);
 
   const { data, error, isLoading } = useForecast(date);
   const cells = data?.cells ?? [];
 
-  // The season bounds come back with the forecast, so today may sit outside
-  // them on first load. Clamp once we know.
-  useEffect(() => {
-    if (!data?.seasonStart) return;
-    if (date < data.seasonStart) setDate(data.seasonStart);
-    else if (date > data.seasonEnd) setDate(data.seasonEnd);
-  }, [data?.seasonStart, data?.seasonEnd]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const horizonDate = useMemo(() => addDays(isoToday(), FORECAST_HORIZON_DAYS), []);
-  const beyondHorizon = date > horizonDate;
+  const beyondHorizon = Boolean(date) && date > horizonDate;
 
   const counts = useMemo(() => {
     const out = {};
@@ -56,15 +60,17 @@ export default function MapView({ nav }) {
 
         {nav}
 
-        {isLoading && !cells.length && <p className="note">Loading forecast…</p>}
-        {error && (
-          <p className="note note--bad">{error.message} Is the backend running on :8080?</p>
+        {(meta.isLoading || (isLoading && !cells.length)) && (
+          <p className="note">Loading forecast…</p>
+        )}
+        {(error || meta.error) && (
+          <p className="note note--bad">{(error ?? meta.error).message}</p>
         )}
 
         {Boolean(cells.length) && (
           <>
             <div className="headline">
-              <span className="headline__date">{formatDay(date)}</span>
+              <span className="headline__date">{date ? formatDay(date) : '—'}</span>
               <span className="headline__peak">
                 {peakCount
                   ? `${peakCount} of ${cells.length} at or near peak`
@@ -108,10 +114,10 @@ export default function MapView({ nav }) {
         </footer>
       </aside>
 
-      {data?.seasonStart && (
+      {seasonStart && date && (
         <TimeSlider
-          seasonStart={data.seasonStart}
-          seasonEnd={data.seasonEnd}
+          seasonStart={seasonStart}
+          seasonEnd={seasonEnd}
           value={date}
           onChange={setDate}
           horizonDate={horizonDate}

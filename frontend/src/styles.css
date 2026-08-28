@@ -439,3 +439,5 @@ footer a { color: var(--accent); }
   font: inherit;
   font-size: 13px;
 }
+
+.factors__note { margin: -4px 0 10px; font-size: 11px; color: var(--muted); line-height: 1.4; }

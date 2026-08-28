@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchMeta, fetchCells, fetchForecast, fetchTimeline, fetchExplain } from './client';
+import { fetchMeta, fetchForecast, fetchTimeline, fetchExplain } from './client';
 
 export function useMeta() {
   return useQuery({
@@ -10,20 +10,11 @@ export function useMeta() {
   });
 }
 
-export function useCells(state, minCanopy) {
-  return useQuery({
-    queryKey: ['cells', state, minCanopy],
-    queryFn: () => fetchCells(state, minCanopy),
-    retry: false,
-    // The grid only changes when a bootstrap runs.
-    staleTime: Infinity,
-  });
-}
-
 export function useForecast(date) {
   return useQuery({
     queryKey: ['forecast', date],
     queryFn: () => fetchForecast(date),
+    enabled: Boolean(date),
     retry: false,
     // Scrubbing the slider revisits dates constantly; keeping them resident
     // is what makes dragging feel instant after the first pass.

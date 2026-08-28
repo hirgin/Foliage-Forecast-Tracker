@@ -1,0 +1,106 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 09:00 UTC daily — after overnight observations have landed upstream.
+    # A scheduled run refreshes the data first; a push run only re-exports
+    # what is already in the database.
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      refresh:
+        description: 'Pull fresh weather and rescore before exporting'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; let a newer commit supersede an in-flight run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '23'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The backend is a batch pipeline, not a server: it boots, exports the
+      # season as static JSON, and exits. Nothing is hosted.
+      - name: Export forecast data
+        working-directory: backend
+        env:
+          FOLIAGE_DB_URL: ${{ secrets.FOLIAGE_DB_URL }}
+          FOLIAGE_DB_USER: ${{ secrets.FOLIAGE_DB_USER }}
+          FOLIAGE_DB_PASSWORD: ${{ secrets.FOLIAGE_DB_PASSWORD }}
+        run: |
+          REFRESH=false
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.refresh }}" = "true" ]; then
+            REFRESH=true
+          fi
+          echo "refresh=$REFRESH"
+          ./gradlew bootRun --no-daemon --args="\
+            --foliage.export.path=${{ github.workspace }}/site-data \
+            --foliage.export.state=50 \
+            --foliage.export.refresh=$REFRESH"
+
+      - name: Check the export produced data
+        run: |
+          test -f site-data/meta.json || { echo "meta.json missing"; exit 1; }
+          COUNT=$(ls site-data/forecast | wc -l)
+          echo "exported $COUNT daily files, $(du -sh site-data | cut -f1) total"
+          # A season is 76 days; anything much smaller means a partial export,
+          # which must not be published over a good one.
+          [ "$COUNT" -ge 70 ] || { echo "only $COUNT daily files"; exit 1; }
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_DATA_MODE: static
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: |
+          npm ci
+          npm run build
+
+      - name: Assemble site
+        run: |
+          cp -r site-data frontend/dist/data
+          # Pages runs Jekyll by default, which ignores files beginning with
+          # an underscore and would silently drop parts of the build.
+          touch frontend/dist/.nojekyll
+          du -sh frontend/dist
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

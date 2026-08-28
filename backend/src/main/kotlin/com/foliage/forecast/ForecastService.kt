@@ -133,6 +133,47 @@ class ForecastService(
         )
     }
 
+    /**
+     * Factor breakdowns for every cell at its own peak day, loading the shared
+     * reference data once.
+     *
+     * Calling [explain] in a loop re-reads every normal and re-queries weather
+     * per cell -- an N+1 that took four minutes over 649 cells during the first
+     * static export. This does the same work with a handful of queries.
+     */
+    fun peakFactors(stateFips: String, peakDays: Map<Long, LocalDate>, year: Int): Map<Long, List<Factor>> {
+        val grid = cells.findByState(stateFips, minCanopyPct = 0)
+        val parents = grid.map { it.parentRes5 }.distinct()
+        val series = weather.seriesByCell(parents)
+        val precipNormals = normals.precipNormalsByCell()
+        val chillNormals = normals.chillUnitsByCell()
+        val seasonDays = season.days(year)
+        val seasonStart = season.start(year)
+
+        val referenceElevation: Map<Long, Double> = grid
+            .groupBy { it.parentRes5 }
+            .mapValues { (_, children) ->
+                children.mapNotNull { it.elevationM }.takeIf { it.isNotEmpty() }?.average() ?: 0.0
+            }
+
+        return grid.mapNotNull { cell ->
+            val day = peakDays[cell.h3] ?: return@mapNotNull null
+            val parentSeries = series[cell.parentRes5] ?: return@mapNotNull null
+            val inputs = parentSeries.map {
+                it.downscaledTo(cell, referenceElevation[cell.parentRes5], chillNormals[cell.parentRes5])
+            }
+            val cumulative = cumulativePrecip(precipNormals[cell.parentRes5], seasonDays)
+            val score = PhenologyModel.score(
+                cell = CellInput(cell.centroidLat, cell.elevationM),
+                days = inputs,
+                target = day,
+                normalPrecipMm = cumulative[day],
+                precipFrom = seasonStart,
+            )
+            cell.h3 to score.factors
+        }.toMap()
+    }
+
     /** Normal precipitation accumulated from season start to each day. */
     private fun cumulativePrecip(
         byMonthDay: Map<MonthDay, Double>?,
