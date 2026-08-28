@@ -74,6 +74,12 @@ foliage:
     # the recent past and the next couple of days at 3 km. Open-Meteo keeps the
     # 16-day horizon and the climatology.
     enabled: ${FOLIAGE_HRRR_ENABLED:false}
+    # A guard, not a preference. Each day is 24 hourly analyses of ~1.2 MB,
+    # so ~29 MB per day; 90 days would be 2,160 requests and ~2.5 GB.
+    max-days: 5
+    # Below this many hours the daily max/min is wrong rather than imprecise,
+    # so the day is dropped and Open-Meteo supplies it.
+    min-hours-per-day: 18
   season:
     # Foliage season bounds, month-day. Everything outside this is not modelled.
     start: "09-01"

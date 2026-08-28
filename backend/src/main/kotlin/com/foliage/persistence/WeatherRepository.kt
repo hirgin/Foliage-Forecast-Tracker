@@ -27,17 +27,30 @@ class WeatherRepository(private val jdbc: JdbcTemplate) {
 
         val newRank = rank.format("VALUES(kind)")
         val oldRank = rank.format("kind")
-        val better = "$newRank >= $oldRank"
 
+        // Provenance wins first; resolution breaks the tie.
+        //
+        // Two sources now write here. Open-Meteo lands at H3 resolution 5 and
+        // HRRR at resolution 6, and where they overlap the finer one should
+        // win -- but only for the same provenance. A resolution 6 CLIMATOLOGY
+        // estimate must never displace a resolution 5 OBSERVED reading.
+        // See ADR-0005 and ADR-0006.
+        val better = "($newRank > $oldRank OR ($newRank = $oldRank AND VALUES(resolution) >= resolution))"
+
+        // COALESCE on every measurement, because a winning source may not
+        // carry every field. HRRR's surface analysis has no precipitation
+        // accumulation, so without this an HRRR row would blank the
+        // precipitation Open-Meteo had already supplied -- silently turning
+        // wet days dry and disabling the drought term for those dates.
         val sql = """
             INSERT INTO weather_daily
                 (h3, day, resolution, kind, tmax_c, tmin_c, precip_mm, radiation_mj)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-                tmax_c       = IF($better, VALUES(tmax_c),       tmax_c),
-                tmin_c       = IF($better, VALUES(tmin_c),       tmin_c),
-                precip_mm    = IF($better, VALUES(precip_mm),    precip_mm),
-                radiation_mj = IF($better, VALUES(radiation_mj), radiation_mj),
+                tmax_c       = IF($better, COALESCE(VALUES(tmax_c),       tmax_c),       tmax_c),
+                tmin_c       = IF($better, COALESCE(VALUES(tmin_c),       tmin_c),       tmin_c),
+                precip_mm    = IF($better, COALESCE(VALUES(precip_mm),    precip_mm),    precip_mm),
+                radiation_mj = IF($better, COALESCE(VALUES(radiation_mj), radiation_mj), radiation_mj),
                 resolution   = IF($better, VALUES(resolution),   resolution),
                 fetched_at   = IF($better, NOW(6),               fetched_at),
                 kind         = IF($better, VALUES(kind),         kind)

@@ -43,6 +43,13 @@ class AdminController(
     fun ingestClimatology(@RequestParam stateFips: String): WeatherIngestResult =
         weatherIngest.buildClimatology(stateFips)
 
+    /** Refines the recent window with HRRR at 3 km. Bandwidth-heavy; see ADR-0006. */
+    @PostMapping("/ingest-hrrr")
+    fun ingestHrrr(
+        @RequestParam stateFips: String,
+        @RequestParam(defaultValue = "2") days: Int,
+    ): WeatherIngestResult = weatherIngest.refreshHrrr(stateFips, days)
+
     /** Scores the whole season for a state. Cheap; rerun after any ingest. */
     @PostMapping("/compute-forecast")
     fun computeForecast(@RequestParam stateFips: String): ForecastRunResult =

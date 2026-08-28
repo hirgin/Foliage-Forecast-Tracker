@@ -6,6 +6,8 @@ import com.foliage.domain.WeatherKind
 import com.foliage.domain.WeatherNormal
 import com.foliage.forecast.PhenologyModel
 import com.foliage.grid.H3Grid
+import com.foliage.grid.LonLat
+import com.foliage.ingest.weather.hrrr.HrrrWeatherSource
 import com.foliage.ingest.audit.IngestRunRecorder
 import com.foliage.persistence.CellRepository
 import com.foliage.persistence.NormalRepository
@@ -30,6 +32,7 @@ class WeatherIngest(
     private val weather: WeatherRepository,
     private val normals: NormalRepository,
     private val source: OpenMeteoWeatherSource,
+    private val hrrr: HrrrWeatherSource,
     private val season: Season,
     private val audit: IngestRunRecorder,
     @Value("\${foliage.weather.climatology-years}") private val climatologyYears: Int,
@@ -57,6 +60,66 @@ class WeatherIngest(
             audit.succeed(runId, written)
 
             return result(stateFips, parents.size, series, written)
+        } catch (e: Exception) {
+            audit.fail(runId, written, e)
+            throw e
+        }
+    }
+
+    /**
+     * Refines the recent window with HRRR at native 3 km.
+     *
+     * Unlike the other jobs this samples **res 6 cells directly** -- 649 of
+     * them for Vermont rather than 110 res 5 parents -- because that is the
+     * entire point: those cells get their own weather instead of a lapse-rate
+     * downscale. Bandwidth is bounded by hours, not cells, since one fetched
+     * hour is sampled at every point.
+     *
+     * Runs after the Open-Meteo pass. The upsert prefers the finer resolution
+     * within the same provenance and merges field-wise, so HRRR's temperatures
+     * win while Open-Meteo's precipitation survives -- HRRR's surface analysis
+     * carries none.
+     */
+    fun refreshHrrr(stateFips: String, days: Int, today: LocalDate = LocalDate.now()): WeatherIngestResult {
+        val runId = audit.start("noaa-hrrr", "weather-hrrr:$stateFips")
+        var written = 0L
+        try {
+            val cells6 = cells.findByState(stateFips, minCanopyPct = 0)
+            val points = cells6.map { LonLat(it.centroidLon, it.centroidLat) }
+            // Yesterday backwards: today's later hours have not been published.
+            val to = today.minusDays(1)
+            val from = to.minusDays((days - 1).toLong())
+            log.info("HRRR {} to {} at {} res 6 cells", from, to, points.size)
+
+            val series = hrrr.daily(points, from, to)
+
+            val rows = cells6.flatMapIndexed { i, cell ->
+                series[i].map { r ->
+                    WeatherDay(
+                        h3 = cell.h3,
+                        day = r.day,
+                        resolution = hrrr.nativeResolution,
+                        kind = WeatherKind.OBSERVED,
+                        tmaxC = r.tmaxC,
+                        tminC = r.tminC,
+                        precipMm = r.precipMm,
+                        radiationMj = r.radiationMj,
+                    )
+                }
+            }
+            written = weather.upsertAll(rows).toLong()
+            audit.succeed(runId, written)
+
+            return WeatherIngestResult(
+                stateFips = stateFips,
+                cellsRequested = points.size,
+                cellsWithData = series.count { it.isNotEmpty() },
+                rowsWritten = written,
+                yearsAveraged = null,
+                byKind = weather.countByKind(),
+                coverageFrom = rows.minOfOrNull { it.day }?.toString(),
+                coverageTo = rows.maxOfOrNull { it.day }?.toString(),
+            )
         } catch (e: Exception) {
             audit.fail(runId, written, e)
             throw e

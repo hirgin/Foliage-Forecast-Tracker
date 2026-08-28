@@ -46,6 +46,11 @@ class ForecastService(
 
             val parents = grid.map { it.parentRes5 }.distinct()
             val series = weather.seriesByCell(parents)
+            // HRRR writes at res 6 under each cell's own index, so its rows
+            // never collide with Open-Meteo's res 5 parent rows -- they are
+            // separate keys. The two sources are therefore merged on read,
+            // not on write. See ADR-0006.
+            val fineSeries = weather.seriesByCell(grid.map { it.h3 })
             val precipNormals = normals.precipNormalsByCell()
             val chillNormals = normals.chillUnitsByCell()
 
@@ -68,7 +73,13 @@ class ForecastService(
                     val parentSeries = series[cell.parentRes5] ?: continue
                     val reference = referenceElevation[cell.parentRes5]
                     val chill = chillNormals[cell.parentRes5]
-                    val inputs = parentSeries.map { it.downscaledTo(cell, reference, chill) }
+                    val inputs = mergeSources(
+                        coarse = parentSeries,
+                        fine = fineSeries[cell.h3].orEmpty(),
+                        cell = cell,
+                        reference = reference,
+                        chillNormals = chill,
+                    )
                     val cumulativeNormal = cumulativePrecip(precipNormals[cell.parentRes5], days)
 
                     for (day in days) {
@@ -121,7 +132,15 @@ class ForecastService(
         val siblings = cells.findByParent(cell.parentRes5)
         val reference = siblings.mapNotNull { it.elevationM }.takeIf { it.isNotEmpty() }?.average()
         val chill = normals.chillUnitsByCell()[cell.parentRes5]
-        val inputs = parentSeries.map { it.downscaledTo(cell, reference, chill) }
+        // Same merge as computeState, or the explanation would describe
+        // different inputs from the ones that produced the score on the map.
+        val inputs = mergeSources(
+            coarse = parentSeries,
+            fine = weather.seriesByCell(listOf(cell.h3))[cell.h3].orEmpty(),
+            cell = cell,
+            reference = reference,
+            chillNormals = chill,
+        )
         val cumulative = cumulativePrecip(normals.precipNormalsByCell()[cell.parentRes5], season.days(year))
 
         return PhenologyModel.score(
@@ -145,6 +164,7 @@ class ForecastService(
         val grid = cells.findByState(stateFips, minCanopyPct = 0)
         val parents = grid.map { it.parentRes5 }.distinct()
         val series = weather.seriesByCell(parents)
+        val fine = weather.seriesByCell(grid.map { it.h3 })
         val precipNormals = normals.precipNormalsByCell()
         val chillNormals = normals.chillUnitsByCell()
         val seasonDays = season.days(year)
@@ -159,9 +179,13 @@ class ForecastService(
         return grid.mapNotNull { cell ->
             val day = peakDays[cell.h3] ?: return@mapNotNull null
             val parentSeries = series[cell.parentRes5] ?: return@mapNotNull null
-            val inputs = parentSeries.map {
-                it.downscaledTo(cell, referenceElevation[cell.parentRes5], chillNormals[cell.parentRes5])
-            }
+            val inputs = mergeSources(
+                coarse = parentSeries,
+                fine = fine[cell.h3].orEmpty(),
+                cell = cell,
+                reference = referenceElevation[cell.parentRes5],
+                chillNormals = chillNormals[cell.parentRes5],
+            )
             val cumulative = cumulativePrecip(precipNormals[cell.parentRes5], seasonDays)
             val score = PhenologyModel.score(
                 cell = CellInput(cell.centroidLat, cell.elevationM),
@@ -172,6 +196,43 @@ class ForecastService(
             )
             cell.h3 to score.factors
         }.toMap()
+    }
+
+    /**
+     * Combines a cell's own 3 km readings with its parent's ~9 km series.
+     *
+     * Field-wise on purpose. HRRR supplies temperature at the cell's own
+     * resolution and needs no lapse-rate correction; it carries no
+     * precipitation at all, so that still comes from Open-Meteo. Replacing the
+     * whole day with the finer row would blank the precipitation and silently
+     * disable the drought term for exactly the recent days that matter most.
+     */
+    private fun mergeSources(
+        coarse: List<WeatherDay>,
+        fine: List<WeatherDay>,
+        cell: Cell,
+        reference: Double?,
+        chillNormals: Map<MonthDay, Double>?,
+    ): List<DayInput> {
+        val downscaled = coarse.associate { it.day to it.downscaledTo(cell, reference, chillNormals) }
+        if (fine.isEmpty()) return downscaled.values.sortedBy { it.day }
+
+        val merged = downscaled.toMutableMap()
+        for (row in fine) {
+            val existing = merged[row.day]
+            merged[row.day] = DayInput(
+                day = row.day,
+                // The finer source is more trustworthy about provenance too:
+                // it is an analysis of what happened, not a forecast.
+                kind = row.kind,
+                // Native resolution: no lapse-rate correction applied.
+                tmaxC = row.tmaxC ?: existing?.tmaxC,
+                tminC = row.tminC ?: existing?.tminC,
+                precipMm = row.precipMm ?: existing?.precipMm,
+                chillUnits = existing?.chillUnits.takeIf { row.tminC == null },
+            )
+        }
+        return merged.values.sortedBy { it.day }
     }
 
     /** Normal precipitation accumulated from season start to each day. */
