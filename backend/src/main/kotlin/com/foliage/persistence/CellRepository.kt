@@ -179,6 +179,24 @@ class CellRepository(private val jdbc: JdbcTemplate) {
         { rs, _ -> rs.getString("bucket") to rs.getLong("n") },
     ).toMap()
 
+    /**
+     * Distinct res 5 parents at or above a canopy floor.
+     *
+     * This is what sizes weather ingest, and it is not the cell count divided
+     * by seven: forested cells are clustered, so a parent is often only
+     * partly forested and still has to be fetched. Vermont's 649 cells sit
+     * under 110 parents, a spread of 5.9 rather than 7.
+     */
+    fun countRes5Parents(minCanopyPct: Int): Long = jdbc.queryForObject(
+        "SELECT COUNT(DISTINCT parent_res5) FROM cell WHERE canopy_pct >= ?",
+        Long::class.java, minCanopyPct,
+    ) ?: 0
+
+    /** Every res 5 parent in the grid, forested or not. */
+    fun countRes5ParentsAll(): Long = jdbc.queryForObject(
+        "SELECT COUNT(DISTINCT parent_res5) FROM cell", Long::class.java,
+    ) ?: 0
+
     /** Cells at or above the forest threshold -- what a forecast actually covers. */
     fun countForested(minCanopyPct: Int): Long = jdbc.queryForObject(
         "SELECT COUNT(*) FROM cell WHERE canopy_pct >= ?",

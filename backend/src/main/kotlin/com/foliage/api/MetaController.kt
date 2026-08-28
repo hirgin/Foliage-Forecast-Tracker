@@ -42,6 +42,10 @@ class MetaController(
         // without re-sampling, so the total overstates how much work a
         // forecast is. Forested is the number that sizes scoring and export.
         val forested = runCatching { cells.countForested(minCanopyPct) }.getOrNull()
+        // Weather is fetched per res 5 parent, so this -- not the cell count --
+        // is what a national ingest actually costs against a metered API.
+        val parents = runCatching { cells.countRes5Parents(minCanopyPct) }.getOrNull()
+        val parentsAll = runCatching { cells.countRes5ParentsAll() }.getOrNull()
 
         return MetaResponse(
             service = "foliage-forecast",
@@ -51,6 +55,8 @@ class MetaController(
             cellCount = grid,
             forestedCellCount = forested,
             minCanopyPct = minCanopyPct,
+            weatherCellsForested = parents,
+            weatherCellsAll = parentsAll,
             weather = coverage,
             weatherByKind = byKind,
             // The UI needs these before it can request a forecast at all, so
@@ -70,6 +76,9 @@ data class MetaResponse(
     /** Cells at or above [minCanopyPct] -- what a forecast actually covers. */
     val forestedCellCount: Long?,
     val minCanopyPct: Int,
+    /** Res 5 parents to fetch weather for, forested-only and total. */
+    val weatherCellsForested: Long?,
+    val weatherCellsAll: Long?,
     val weather: Coverage?,
     val weatherByKind: Map<String, Long>,
     val seasonStart: String,
