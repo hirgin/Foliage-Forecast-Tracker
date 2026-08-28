@@ -38,19 +38,42 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
   resumable — the historical backfill is too large to restart from zero.
 - New weather sources implement `WeatherSource` and nothing downstream changes.
   That seam is deliberate; do not leak source-specific types past it. The same
-  applies to `CanopySource` and `ElevationSource`.
+  applies to `CanopySource` and `ElevationSource` — both were swapped from
+  point sampling to bulk rasters with no change downstream. See ADR-0007.
+- **Terrain is read as tiles, not points.** Group cells by the raster tile they
+  fall in and fetch each tile once. Point-sampling CONUS was ~71 h of elevation
+  and ~10 h of canopy; tiles make elevation effectively free (649 Vermont cells
+  in 664 ms). If you add a terrain source, do the same.
+- **Sample a tile and release it inside the fetch**, never collect tiles and
+  read them afterwards. A canopy tile decodes to ~13 MB and a large state spans
+  dozens; peak memory must stay at `threads x tile` however much ground one
+  call covers.
 - **Every phase ships tests.** No Testcontainers — there is no Docker here, so
   a container-backed test could never run. Instead, split every external
   client into a thin transport half and a **pure parsing function**, and test
   the parser against a real response captured into
   `src/test/resources/fixtures/`. See `docs/testing.md`.
 - Parsers must degrade, not throw: a short, empty, or malformed response
-  becomes nulls so that one bad batch cannot abort a whole bootstrap.
+  becomes nulls so that one bad batch cannot abort a whole bootstrap. The same
+  goes for a failed tile.
+- **When you replace a data source, test the two against each other**, not the
+  new one against hardcoded values — it can drift in step with the service.
+  The equivalence is the claim being made; assert it. See `docs/testing.md`.
 
 ## Gotchas
 
 - Kotlin's Spring plugin opens all `@Component` classes, so `private set` on a
   mutable property fails to compile. Mark the property `final`.
+- **`FOLIAGE_ADMIN_ENABLED=true` is required for the bootstrap endpoints.**
+  They are `@ConditionalOnProperty` and simply 404 without it, which reads as
+  a routing bug rather than a missing flag.
+- **Check nothing is already on :8080 before trusting a run.** A stale backend
+  from an earlier session keeps answering `/actuator/health` while `bootRun`
+  fails with "port already in use" in a log you are not reading — so a
+  bootstrap appears to work and silently exercises the *old* code.
+- **The canopy ImageServer throttles concurrent renders.** More threads is not
+  more throughput: 6 threads measured *worse* per tile than 4. Tune against
+  measured tiles-per-second, not intuition.
 - **There is no local database.** No Docker, no local MySQL. Development runs
   against a hosted MySQL-compatible instance, configured in
   `application-local.yml` (gitignored — copy the `.example`) and activated with

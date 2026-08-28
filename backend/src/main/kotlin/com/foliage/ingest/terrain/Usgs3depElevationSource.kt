@@ -5,7 +5,6 @@ import com.foliage.grid.LonLat
 import com.foliage.ingest.RetryPolicy
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.context.annotation.Primary
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
@@ -35,7 +34,6 @@ import org.springframework.web.client.RestClient
  * bulk DEM, which would be both faster and entirely sufficient.
  */
 @Component
-@Primary
 class Usgs3depElevationSource(
     private val restClient: RestClient,
     @Value("\${foliage.terrain.elevation-3dep-url}") private val url: String,

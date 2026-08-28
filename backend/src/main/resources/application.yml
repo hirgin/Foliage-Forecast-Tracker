@@ -46,6 +46,17 @@ foliage:
     # query time, never at ingest, so it can be retuned without re-sampling.
     min-canopy-pct: 20
   terrain:
+    # AWS public Terrarium terrain tiles -- keyless, and the reason CONUS
+    # elevation is minutes rather than 71 hours: cells are grouped by tile, so
+    # under 4,000 fetches cover the country. See TerrainTileElevationSource.
+    terrain-tile-url: https://s3.amazonaws.com/elevation-tiles-prod/terrarium
+    # A plain CDN read with no per-account metering, so modest parallelism is
+    # intended usage. Capped in code at 16.
+    terrain-tile-threads: 8
+    terrain-tile-zoom: 9
+    # Tiles decode to ~13 MB each, so parallelism is bounded by memory rather
+    # than by politeness: peak heap is roughly threads x 13 MB.
+    canopy-tile-threads: 4
     canopy-url: https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_NLCD_TCC_CONUS/ImageServer
     # Points per request. Large enough to keep round trips down, small enough
     # that one failed batch loses little work.

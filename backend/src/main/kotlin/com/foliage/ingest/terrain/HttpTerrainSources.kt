@@ -16,6 +16,10 @@ import org.springframework.web.util.UriComponentsBuilder
  *
  * Points are POSTed in batches: the geometry payload for a few hundred points
  * exceeds what a URL can carry, and GET would silently truncate.
+ *
+ * Superseded at CONUS scale by [NlcdTileCanopySource], which reads the same
+ * raster as tiles and is the @Primary source. Retained as a fallback, and as
+ * the reference this implementation was validated against.
  */
 @Component
 class NlcdCanopySource(

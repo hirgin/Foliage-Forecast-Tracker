@@ -36,10 +36,14 @@ class GridBootstrap(
     /**
      * Bootstraps a whole region, one state at a time.
      *
-     * States already carrying cells are skipped unless [force] is set. A full
-     * CONUS run is many hours of third-party sampling -- roughly 1,500 3DEP
-     * requests and 2,100 canopy requests -- so it has to survive being
-     * interrupted and resumed rather than restarting from zero.
+     * States already carrying cells are skipped unless [force] is set.
+     *
+     * That resumability used to be the difference between a feasible and an
+     * infeasible run: point sampling put CONUS at roughly 71 hours of elevation
+     * and 10 hours of canopy. Both now read bulk rasters instead and the whole
+     * country is minutes, but the skip logic stays -- a run that dies partway
+     * still should not redo the states it finished, and it is what makes
+     * bootstrapping a region at a time safe.
      */
     fun bootstrapRegion(region: String, force: Boolean = false): RegionBootstrapResult {
         val states = ConusStates.resolve(region)
@@ -50,10 +54,20 @@ class GridBootstrap(
         val elapsed = measureTimeMillis {
             for (state in states) {
                 val existing = runCatching { cells.countByStateName(state) }.getOrDefault(0L)
-                if (existing > 0 && !force) {
-                    log.info("{} already has {} cells, skipping", state, existing)
+                // Complete, not merely present. Terrain sources degrade rather
+                // than abort, so a state can hold rows and still be missing
+                // terrain for a quarter of them -- which is exactly how the
+                // first CONUS load left Oregon and California. Skipping on row
+                // count alone would make those holes permanent, because every
+                // later run would see cells and move on.
+                val gaps = runCatching { cells.countIncompleteByStateName(state) }.getOrDefault(0L)
+                if (existing > 0 && gaps == 0L && !force) {
+                    log.info("{} already has {} complete cells, skipping", state, existing)
                     skipped += state
                     continue
+                }
+                if (gaps > 0) {
+                    log.info("{} has {} of {} cells missing terrain, re-sampling", state, gaps, existing)
                 }
                 try {
                     done += bootstrapState(state)
@@ -78,7 +92,7 @@ class GridBootstrap(
     }
 
     fun bootstrapState(stateName: String): GridBootstrapResult {
-        val runId = audit.start(source = "tigerweb+nlcd+open-meteo", job = "grid-bootstrap:$stateName")
+        val runId = audit.start(source = "tigerweb+nlcd-tiles+terrarium", job = "grid-bootstrap:$stateName")
         var written = 0L
         try {
             val boundary = boundaries.stateBoundary(stateName)
