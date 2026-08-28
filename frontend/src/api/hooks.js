@@ -43,10 +43,23 @@ export function useExplain(h3, date) {
   });
 }
 
-export function usePlaces() {
+/**
+ * The searchable place index, fetched only once it is wanted.
+ *
+ * Nationally this file is 10 MB raw and ~2.5 MB gzipped -- five times the rest
+ * of a first page load put together, for a search box most visitors never
+ * touch. It was eager while the grid was one state and the file was 142 KB,
+ * which cost nothing; at national scale it dominates.
+ *
+ * [enabled] defers it until the search input is first focused. The trade is a
+ * pause on that first focus instead of a slower map for everyone, which is the
+ * right way round: the map is why people arrive.
+ */
+export function usePlaces(enabled = true) {
   return useQuery({
     queryKey: ['places'],
     queryFn: fetchPlaces,
+    enabled,
     retry: false,
     // Changes only when the grid or the GeoNames dump does.
     staleTime: Infinity,

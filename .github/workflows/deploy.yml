@@ -7,6 +7,11 @@ on:
     # 09:00 UTC daily — after overnight observations have landed upstream.
     # A scheduled run refreshes the data first; a push run only re-exports
     # what is already in the database.
+    #
+    # The export covers the whole grid, but the nightly refresh is scoped
+    # separately: it pulls weather per res 5 parent from an API metered by
+    # request weight, and going national unscoped would be 19,904 cells inside
+    # a job with a six hour ceiling. Widen REFRESH_STATE as weather lands.
     - cron: '0 9 * * *'
   workflow_dispatch:
     inputs:
@@ -92,11 +97,16 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.refresh }}" = "true" ]; then
             REFRESH=true
           fi
-          echo "refresh=$REFRESH"
+          # States the nightly refresh pulls weather for. The export itself is
+          # unscoped and publishes whatever the grid holds; this is only the
+          # third-party fetch, which is metered. Widen it as weather lands, and
+          # blank it once the country is covered.
+          REFRESH_STATE=50
+          echo "refresh=$REFRESH scope=${REFRESH_STATE:-whole grid}"
           # Kept on one line: the indented backslash continuations produced
           # runs of whitespace inside --args, which Gradle splits into empty
           # arguments.
-          ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.state=50 --foliage.export.refresh=$REFRESH"
+          ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.refresh=$REFRESH --foliage.export.refresh-state=$REFRESH_STATE"
 
       - name: Check the export produced data
         run: |

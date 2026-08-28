@@ -45,7 +45,28 @@ class ExportRunner(
     fun run() {
         val env = context.environment
         val path = env.getProperty("foliage.export.path")!!
-        val state = env.getProperty("foliage.export.state", "50")
+        // Absent or blank means the whole grid. It defaulted to "50" -- Vermont
+        // -- from when that was the only state loaded, which meant a deploy
+        // published one state no matter how much of the country was in the
+        // database. Null is the value both the exporter and the forecast
+        // service already understand as "national".
+        val state = env.getProperty("foliage.export.state")?.takeIf { it.isNotBlank() }
+
+        // What to *refresh* is deliberately separate from what to export.
+        // Exporting is a local read and costs nothing extra as it widens;
+        // refreshing pulls weather for every res 5 parent in scope, which
+        // nationally is 19,904 cells against an API metered by request weight.
+        // Tying the two together would have turned the nightly deploy into a
+        // national ingest the moment the export was unpinned -- inside a job
+        // with a six hour ceiling. This widens as weather actually lands.
+        val refreshState = env.getProperty("foliage.export.refresh-state")?.takeIf { it.isNotBlank() }
+            ?: state
+
+        log.info(
+            "exporting {}, refresh scope {}",
+            state?.let { "state $it" } ?: "the whole grid",
+            refreshState?.let { "state $it" } ?: "the whole grid",
+        )
 
         // On a scheduled run the data is refreshed first: pull the latest
         // observations and forecast, rescore the season, then export. On a
@@ -71,9 +92,9 @@ class ExportRunner(
 
         val code = try {
             if (refresh) {
-                val ingest = weatherIngest.refreshForecast(state)
+                val ingest = weatherIngest.refreshForecast(refreshState)
                 log.info("refreshed weather: {} rows, kinds {}", ingest.rowsWritten, ingest.byKind)
-                val scored = forecastService.computeState(state)
+                val scored = forecastService.computeState(refreshState)
                 log.info("rescored: {} rows in {} ms", scored.rowsWritten, scored.scoringMs)
             }
             val result = exporter.export(Path.of(path), state)

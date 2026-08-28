@@ -45,6 +45,7 @@ class StaticExporter(
     private val grid: H3Grid,
     private val season: Season,
     @Value("\${foliage.model-version}") private val modelVersion: String,
+    @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -68,7 +69,13 @@ class StaticExporter(
     /** [stateFips] null exports the whole loaded grid. */
     fun export(target: Path, stateFips: String?, year: Int = LocalDate.now().year): ExportResult {
         val days = season.days(year)
-        val grid6 = (if (stateFips == null) cells.findAll(0) else cells.findByState(stateFips, 0))
+        // Forest only, the same floor the forecast scores at, for the same
+        // reason plus a second one: every exported cell costs three bytes per
+        // day in each daily file, so shipping the unforested two thirds would
+        // roughly double the payload to draw hexagons that can never carry a
+        // colour.
+        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct)
+                     else cells.findByState(stateFips, minCanopyPct))
             .sortedBy { it.h3 }
         require(grid6.isNotEmpty()) { "no cells for ${stateFips ?: "the grid"}" }
 

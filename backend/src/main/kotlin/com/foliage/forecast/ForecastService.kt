@@ -33,6 +33,7 @@ class ForecastService(
     private val season: Season,
     private val audit: IngestRunRecorder,
     @Value("\${foliage.model-version}") private val modelVersion: String,
+    @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -43,7 +44,15 @@ class ForecastService(
         val runId = audit.start("model", "forecast:$scope")
         var written = 0L
         try {
-            val grid = if (stateFips == null) cells.findAll(0) else cells.findByState(stateFips, 0)
+            // Forest only. The grid stores every tiled cell so the canopy
+            // floor can be retuned without re-sampling terrain, but scoring
+            // ground with no trees is meaningless -- nationally that is
+            // 126,516 of 217,412 cells, some 9.6M rows describing when the
+            // Nevada desert changes colour. findAll keeps cells whose canopy
+            // is unsampled, so a terrain gap leaves a cell uncoloured rather
+            // than deleting it from the map.
+            val grid = if (stateFips == null) cells.findAll(minCanopyPct)
+                       else cells.findByState(stateFips, minCanopyPct)
             require(grid.isNotEmpty()) { "no cells for $scope -- run the grid bootstrap first" }
 
             val parents = grid.map { it.parentRes5 }.distinct()
@@ -163,7 +172,9 @@ class ForecastService(
      * static export. This does the same work with a handful of queries.
      */
     fun peakFactors(stateFips: String?, peakDays: Map<Long, LocalDate>, year: Int): Map<Long, List<Factor>> {
-        val grid = if (stateFips == null) cells.findAll(0) else cells.findByState(stateFips, 0)
+        // Same forest floor as scoring; see computeState.
+        val grid = if (stateFips == null) cells.findAll(minCanopyPct)
+                   else cells.findByState(stateFips, minCanopyPct)
         val parents = grid.map { it.parentRes5 }.distinct()
         val series = weather.seriesByCell(parents)
         val fine = weather.seriesByCell(grid.map { it.h3 })

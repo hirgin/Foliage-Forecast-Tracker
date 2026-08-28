@@ -18,7 +18,11 @@ const KIND_ICON = {
  * kilobytes; a round trip would cost more than the scan.
  */
 export default function PlaceSearch({ onSelect }) {
-  const { data: places } = usePlaces();
+  // The index is ~2.5 MB gzipped nationally, so it is not fetched until
+  // someone actually reaches for search. Once true this stays true, so the
+  // fetch happens once and later focuses are instant.
+  const [wanted, setWanted] = useState(false);
+  const { data: places, isLoading } = usePlaces(wanted);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [active, setActive] = useState(0);
@@ -78,7 +82,10 @@ export default function PlaceSearch({ onSelect }) {
           setQuery(e.target.value);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setWanted(true);
+          setOpen(true);
+        }}
         onKeyDown={onKeyDown}
         aria-label="Search for a place"
         aria-expanded={showList}
@@ -106,7 +113,11 @@ export default function PlaceSearch({ onSelect }) {
         </ul>
       )}
 
-      {open && query.trim().length >= 2 && results.length === 0 && (
+      {open && isLoading && (
+        <div className="search__empty">Loading places…</div>
+      )}
+
+      {open && !isLoading && query.trim().length >= 2 && results.length === 0 && (
         <div className="search__empty">
           Nothing found. Only places inside the forecast grid are listed.
         </div>
