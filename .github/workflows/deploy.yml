@@ -39,6 +39,29 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Fail with a readable message rather than a JDBC stack trace 40 lines
+      # into a Gradle log. Missing secrets are the likeliest first-run failure.
+      - name: Check database secrets are present
+        env:
+          URL: ${{ secrets.FOLIAGE_DB_URL }}
+          USER: ${{ secrets.FOLIAGE_DB_USER }}
+          PASSWORD: ${{ secrets.FOLIAGE_DB_PASSWORD }}
+        run: |
+          missing=""
+          [ -n "$URL" ] || missing="$missing FOLIAGE_DB_URL"
+          [ -n "$USER" ] || missing="$missing FOLIAGE_DB_USER"
+          [ -n "$PASSWORD" ] || missing="$missing FOLIAGE_DB_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"
+            echo "Add them under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          case "$URL" in
+            jdbc:mysql://*) ;;
+            *) echo "::error::FOLIAGE_DB_URL must start with jdbc:mysql:// (check for stray quotes)"; exit 1 ;;
+          esac
+          echo "All three secrets present, URL well-formed."
+
       # The backend is a batch pipeline, not a server: it boots, exports the
       # season as static JSON, and exits. Nothing is hosted.
       - name: Export forecast data
