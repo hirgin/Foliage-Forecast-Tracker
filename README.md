@@ -81,8 +81,19 @@ times slower.
 - [x] **Phase 2** — weather pipeline (Open-Meteo) *(Vermont: 18,920 cell-days)*
 - [x] **Phase 3** — phenology model *(Vermont: 49,324 scored cell-days)*
 - [x] **Phase 4** — map experience *(time slider, detail panel, factor breakdown)*
-- [ ] **Phase 5** — polish and deploy
+- [~] **Phase 5** — polish *(pages, code-splitting, CI done; deploy pending)*
 - [ ] **Phase 6** — NOAA GRIB2 pipeline
+
+## Pages
+
+| Route | |
+|---|---|
+| `#/` | The map — time slider, stage ramp, per-cell detail |
+| `#/how-it-works` | The model, its provenance rules, and what it cannot do |
+| `#/about-the-build` | How this was built, and the bugs that only surfaced against real data |
+
+The map is code-split: deck.gl and h3-js load only on the map route, so the
+content pages ship **60 KB gzipped** rather than 353 KB.
 
 ## Testing
 
