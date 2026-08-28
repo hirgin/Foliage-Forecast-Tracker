@@ -1,68 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import DeckGL from '@deck.gl/react';
-import { WebMercatorViewport } from '@deck.gl/core';
-import { H3HexagonLayer, TileLayer } from '@deck.gl/geo-layers';
-import { BitmapLayer } from '@deck.gl/layers';
+import maplibregl from 'maplibre-gl';
+import { MapboxOverlay } from '@deck.gl/mapbox';
+import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { cellToLatLng } from 'h3-js';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { foliageColor, stageLabel } from './colors';
 
-// Fallback only. The view is normally fitted to whatever cells are loaded, so
-// adding a second state needs no code change here.
-const FALLBACK_VIEW = { longitude: -72.65, latitude: 43.92, zoom: 7, pitch: 0, bearing: 0 };
-
-// Esri's Dark Gray Canvas: keyless, and purpose-built as a muted backdrop for
-// data overlays. CARTO's raster tiles now stamp "API KEY REQUIRED" across
-// themselves. A raster tile layer also keeps the whole map inside deck.gl --
-// react-map-gl was dropped here, since it pulled ~1 MB of MapLibre for a
-// backdrop and its v8 API no longer loaded a style under a DeckGL parent.
-// Note the {z}/{y}/{x} order: Esri puts row before column.
-const ESRI = 'https://services.arcgisonline.com/arcgis/rest/services/Canvas';
-const BASEMAP_TILES = `${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`;
-
-// Labels and boundaries as a separate transparent layer, drawn ABOVE the
-// hexagons. Esri publishes it for exactly this: place names painted under a
-// data overlay are unreadable, and thinning the data enough to see through
-// them costs more than it buys.
-const REFERENCE_TILES = `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`;
+/**
+ * Vector basemap, with the hexagons drawn *inside* its layer stack.
+ *
+ * The previous version stacked raster tiles: terrain below, hexagons, then a
+ * second raster layer of labels on top. Labels were never sharp, and extra
+ * tile resolution did not fix it -- raster text pushed through a WebGL texture
+ * has no subpixel antialiasing and lands at non-integer scales, so fetching a
+ * bigger image only produces a bigger blurry one.
+ *
+ * Vector tiles render glyphs natively at whatever the device pixel ratio is,
+ * and arrive faster because a tile of label geometry is smaller than a PNG of
+ * the same labels.
+ *
+ * The composition matters too, and it was backwards before: MapLibre is the
+ * map and deck.gl is an overlay on it, not the reverse. Nesting a MapLibre
+ * component inside DeckGL is why a style once silently failed to load.
+ */
+const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
 /**
- * On a HiDPI screen the browser draws two device pixels per CSS pixel, but a
- * tile layer still fetches tiles for the CSS-pixel zoom -- so a 256 px tile is
- * stretched over 512 device pixels and text goes soft. Fetching one zoom level
- * deeper restores it.
- *
- * Only worth paying for where the display can show it: it quadruples tile
- * count, and on a 1x screen buys nothing.
+ * Hexagons are inserted beneath the first symbol layer, so all fifteen of the
+ * style's label layers paint over them natively -- no second tile fetch, and
+ * the style's own label collision handling still applies.
  */
-const RETINA_ZOOM_OFFSET = typeof window !== 'undefined' && window.devicePixelRatio > 1 ? 1 : 0;
+const BEFORE_LAYER = 'water_name';
 
-/** A raster basemap layer. Used twice: terrain below the data, labels above. */
-function rasterLayer(id, url, opacity, { sharpen = false } = {}) {
-  return new TileLayer({
-    id,
-    data: url,
-    minZoom: 0,
-    maxZoom: 19,
-    tileSize: 256,
-    opacity,
-    zoomOffset: sharpen ? RETINA_ZOOM_OFFSET : 0,
-    // Default is 6, shared across layers. Two raster layers plus the data
-    // meant labels queued behind everything else and arrived last.
-    maxRequests: 16,
-    // Show a coarser tile immediately and refine, rather than leaving a gap
-    // until the exact tile lands. Text appearing late reads as slowness even
-    // when total load time is unchanged.
-    refinementStrategy: 'best-available',
-    renderSubLayers: (props) => {
-      const { boundingBox } = props.tile;
-      return new BitmapLayer(props, {
-        data: null,
-        image: props.data,
-        bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]],
-      });
-    },
-  });
-}
+const FALLBACK_VIEW = { longitude: -72.65, latitude: 43.92, zoom: 7 };
 
 /** Bounding box of the loaded cells, from their H3 indexes. */
 function boundsOf(cells) {
@@ -80,44 +50,48 @@ function boundsOf(cells) {
 
 export default function FoliageMap({ cells, selected, onSelect }) {
   const [hovered, setHovered] = useState(null);
-  const [viewState, setViewState] = useState(null);
   const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const overlayRef = useRef(null);
   const fitted = useRef(false);
 
-  // Fit once, then hand control to the user. Hardcoding a zoom only ever looks
-  // right at one window size.
+  // Created once. Rebuilding the map on re-render would refetch every tile and
+  // throw away the user's pan and zoom.
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !cells.length || fitted.current) return;
+    if (!containerRef.current || mapRef.current) return undefined;
 
-    const { clientWidth: width, clientHeight: height } = el;
-    const bounds = boundsOf(cells);
-    if (!width || !height || !bounds) return;
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: STYLE_URL,
+      center: [FALLBACK_VIEW.longitude, FALLBACK_VIEW.latitude],
+      zoom: FALLBACK_VIEW.zoom,
+      attributionControl: false,
+    });
+    const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
+    map.addControl(overlay);
 
-    const view = new WebMercatorViewport({ width, height }).fitBounds(bounds, {
-      padding: { top: 40, bottom: 110, left: width > 720 ? 330 : 40, right: 40 },
-    });
-    setViewState({
-      longitude: view.longitude,
-      latitude: view.latitude,
-      zoom: view.zoom,
-      pitch: 0,
-      bearing: 0,
-    });
-    fitted.current = true;
-  }, [cells]);
+    mapRef.current = map;
+    overlayRef.current = overlay;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      overlayRef.current = null;
+    };
+  }, []);
 
   const layers = useMemo(
     () => [
-      rasterLayer('basemap', BASEMAP_TILES, 0.9),
       new H3HexagonLayer({
         id: 'foliage',
         data: cells,
+        // Under the style's label layers rather than over them.
+        beforeId: BEFORE_LAYER,
         // Indexes arrive as hex strings: they are 64-bit and would lose
         // precision as JSON numbers.
         getHexagon: (d) => d.h3,
         getFillColor: foliageColor,
-        getLineColor: (d) => (d.h3 === selected ? [255, 255, 255, 230] : [10, 12, 9, 120]),
+        getLineColor: (d) => (d.h3 === selected ? [255, 255, 255, 230] : [10, 12, 9, 90]),
         getLineWidth: (d) => (d.h3 === selected ? 3 : 1),
         lineWidthUnits: 'pixels',
         lineWidthMinPixels: 0.5,
@@ -133,24 +107,34 @@ export default function FoliageMap({ cells, selected, onSelect }) {
           getLineWidth: [selected],
         },
       }),
-      // Last in the array means last drawn: names and boundaries sit above the
-      // data rather than under it.
-      // Sharpened: this is the layer carrying text, so it is the one that
-      // visibly suffers on a HiDPI display.
-      rasterLayer('reference', REFERENCE_TILES, 0.9, { sharpen: true }),
     ],
     [cells, selected, onSelect],
   );
 
+  useEffect(() => {
+    overlayRef.current?.setProps({ layers });
+  }, [layers]);
+
+  // Fit once, then leave the view alone. A hardcoded zoom only ever looks
+  // right at one window size.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !cells.length || fitted.current) return;
+
+    const bounds = boundsOf(cells);
+    if (!bounds) return;
+
+    const width = containerRef.current?.clientWidth ?? 0;
+    map.fitBounds(bounds, {
+      padding: { top: 40, bottom: 110, left: width > 720 ? 330 : 40, right: 40 },
+      duration: 0,
+    });
+    fitted.current = true;
+  }, [cells]);
+
   return (
-    <div className="map" ref={containerRef}>
-      <DeckGL
-        viewState={viewState ?? FALLBACK_VIEW}
-        onViewStateChange={({ viewState: v }) => setViewState(v)}
-        controller={true}
-        layers={layers}
-        getCursor={({ isDragging }) => (isDragging ? 'grabbing' : hovered ? 'pointer' : 'grab')}
-      />
+    <div className="map">
+      <div className="map__canvas" ref={containerRef} />
 
       {hovered && hovered.h3 !== selected && (
         <div className="hovercard">
@@ -159,7 +143,9 @@ export default function FoliageMap({ cells, selected, onSelect }) {
         </div>
       )}
 
-      <div className="attribution">Basemap © Esri · Canopy: USFS/NLCD · Weather: Open-Meteo</div>
+      <div className="attribution">
+        © OpenFreeMap · © OpenMapTiles · © OpenStreetMap · Canopy: USFS/NLCD · Weather: Open-Meteo
+      </div>
     </div>
   );
 }

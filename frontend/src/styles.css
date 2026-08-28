@@ -441,3 +441,9 @@ footer a { color: var(--accent); }
 }
 
 .factors__note { margin: -4px 0 10px; font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+/* MapLibre's stylesheet sets position: relative on its own container and is
+   imported after this file, so inset alone collapsed the div to zero height.
+   Size it explicitly instead of fighting over position. */
+.map > .map__canvas { width: 100%; height: 100%; }
+.maplibregl-canvas { outline: none; }
