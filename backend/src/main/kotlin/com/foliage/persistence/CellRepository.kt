@@ -65,6 +65,24 @@ class CellRepository(private val jdbc: JdbcTemplate) {
         Long::class.java, stateName,
     ) ?: 0
 
+    /**
+     * Cells in a state that are missing terrain.
+     *
+     * Presence of rows is not evidence a state finished. Terrain sources
+     * degrade rather than abort -- a tile that times out after its retries
+     * leaves its cells unsampled and the run continues -- so a state can be
+     * written, counted, and still be full of holes. The CONUS load ended with
+     * Oregon and California at ~23% of their canopy samples lost to a service
+     * that had been under load for two hours, and both looked complete to a
+     * check that only counted rows.
+     *
+     * This is what makes a re-run converge instead of skipping the damage.
+     */
+    fun countIncompleteByStateName(stateName: String): Long = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM cell WHERE state_name = ? AND (canopy_pct IS NULL OR elevation_m IS NULL)",
+        Long::class.java, stateName,
+    ) ?: 0
+
     /** Every cell in the grid, across all loaded states. */
     fun findAll(minCanopyPct: Int): List<Cell> = jdbc.query(
         "$selectCell WHERE canopy_pct IS NULL OR canopy_pct >= ? ORDER BY h3",

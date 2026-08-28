@@ -54,10 +54,20 @@ class GridBootstrap(
         val elapsed = measureTimeMillis {
             for (state in states) {
                 val existing = runCatching { cells.countByStateName(state) }.getOrDefault(0L)
-                if (existing > 0 && !force) {
-                    log.info("{} already has {} cells, skipping", state, existing)
+                // Complete, not merely present. Terrain sources degrade rather
+                // than abort, so a state can hold rows and still be missing
+                // terrain for a quarter of them -- which is exactly how the
+                // first CONUS load left Oregon and California. Skipping on row
+                // count alone would make those holes permanent, because every
+                // later run would see cells and move on.
+                val gaps = runCatching { cells.countIncompleteByStateName(state) }.getOrDefault(0L)
+                if (existing > 0 && gaps == 0L && !force) {
+                    log.info("{} already has {} complete cells, skipping", state, existing)
                     skipped += state
                     continue
+                }
+                if (gaps > 0) {
+                    log.info("{} has {} of {} cells missing terrain, re-sampling", state, gaps, existing)
                 }
                 try {
                     done += bootstrapState(state)

@@ -110,11 +110,38 @@ finished with the moment it is read. Peak memory is `threads x tile` no matter
 how much ground one call covers, which is what lets a single call bootstrap
 Texas as safely as Vermont.
 
-### What did not change
+### Resumability had to get stricter
 
-Per-state resumability stays. It was load-bearing when a run was 71 hours; at
-minutes it is merely prudent, but a run that dies partway still should not redo
-the states it finished.
+Per-state resumability stays, but the check on it was wrong, and the CONUS load
+is what exposed it.
+
+Terrain sources degrade rather than abort: a tile that times out after its
+retries leaves its cells unsampled and the run carries on. So a state can be
+written, counted, and still be full of holes. The first national run finished
+with **48 of 49 states bootstrapped, zero failures, and real gaps** — Oregon
+and California each lost ~23% of their canopy samples to a service that had
+been under load for two hours.
+
+The resume check asked only "does this state have cells?", which those states
+answered yes to. That would have made the holes permanent: every later run
+would skip them for the same reason. It now asks whether a state is
+*complete* — no cell missing canopy or elevation — so a repeat run converges
+instead of freezing the damage in place.
+
+The distinction is on **cells, not samples**. Each cell takes seven samples and
+averages the ones that return, so a state can lose sample points and still be
+whole; North Dakota lost 33 points and every cell survived.
+
+### The canopy service throttles, and it degrades over a long run
+
+Rate limiting appeared once tiles were being pulled continuously, and more
+threads made it worse rather than better — six measured worse per tile than
+four. By the end of a two-hour run nearly every request needed a retry, and a
+follow-up pass minutes later was throttled on effectively every tile.
+
+Plan around it: the country loads in roughly two hours on a rested service, and
+filling residual gaps is a job for a later run, not for pushing harder at the
+same one. Elevation has no such limit — Terrarium is a plain CDN read.
 
 ## Sources
 
