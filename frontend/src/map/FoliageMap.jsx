@@ -32,6 +32,30 @@ const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
  */
 const BEFORE_LAYER = 'water_name';
 
+/**
+ * The style ships muted grey labels, tuned for a bare dark map. Here they have
+ * to stay readable over saturated foliage colours as well, so every text layer
+ * is repainted white with a dark halo.
+ *
+ * The halo does the real work: white text alone disappears against a pale
+ * near-peak hexagon. An outline keeps it legible over anything the ramp can
+ * produce, dark ground included.
+ */
+const LABEL_COLOR = '#ffffff';
+const LABEL_HALO = 'rgba(6, 8, 5, 0.92)';
+const LABEL_HALO_WIDTH = 1.8;
+
+function brightenLabels(map) {
+  for (const layer of map.getStyle().layers) {
+    // Only layers that actually draw text; symbol layers also cover icons and
+    // road shields, which have their own colouring and should be left alone.
+    if (layer.type !== 'symbol' || !layer.layout?.['text-field']) continue;
+    map.setPaintProperty(layer.id, 'text-color', LABEL_COLOR);
+    map.setPaintProperty(layer.id, 'text-halo-color', LABEL_HALO);
+    map.setPaintProperty(layer.id, 'text-halo-width', LABEL_HALO_WIDTH);
+  }
+}
+
 const FALLBACK_VIEW = { longitude: -72.65, latitude: 43.92, zoom: 7 };
 
 /** Bounding box of the loaded cells, from their H3 indexes. */
@@ -69,6 +93,10 @@ export default function FoliageMap({ cells, selected, onSelect }) {
     });
     const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
     map.addControl(overlay);
+
+    // Repaint after the style is in place; the layer list does not exist
+    // before then.
+    map.on('load', () => brightenLabels(map));
 
     mapRef.current = map;
     overlayRef.current = overlay;
