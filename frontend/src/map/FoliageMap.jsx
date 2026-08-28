@@ -25,8 +25,19 @@ const BASEMAP_TILES = `${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`;
 // them costs more than it buys.
 const REFERENCE_TILES = `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`;
 
+/**
+ * On a HiDPI screen the browser draws two device pixels per CSS pixel, but a
+ * tile layer still fetches tiles for the CSS-pixel zoom -- so a 256 px tile is
+ * stretched over 512 device pixels and text goes soft. Fetching one zoom level
+ * deeper restores it.
+ *
+ * Only worth paying for where the display can show it: it quadruples tile
+ * count, and on a 1x screen buys nothing.
+ */
+const RETINA_ZOOM_OFFSET = typeof window !== 'undefined' && window.devicePixelRatio > 1 ? 1 : 0;
+
 /** A raster basemap layer. Used twice: terrain below the data, labels above. */
-function rasterLayer(id, url, opacity) {
+function rasterLayer(id, url, opacity, { sharpen = false } = {}) {
   return new TileLayer({
     id,
     data: url,
@@ -34,6 +45,14 @@ function rasterLayer(id, url, opacity) {
     maxZoom: 19,
     tileSize: 256,
     opacity,
+    zoomOffset: sharpen ? RETINA_ZOOM_OFFSET : 0,
+    // Default is 6, shared across layers. Two raster layers plus the data
+    // meant labels queued behind everything else and arrived last.
+    maxRequests: 16,
+    // Show a coarser tile immediately and refine, rather than leaving a gap
+    // until the exact tile lands. Text appearing late reads as slowness even
+    // when total load time is unchanged.
+    refinementStrategy: 'best-available',
     renderSubLayers: (props) => {
       const { boundingBox } = props.tile;
       return new BitmapLayer(props, {
@@ -116,7 +135,9 @@ export default function FoliageMap({ cells, selected, onSelect }) {
       }),
       // Last in the array means last drawn: names and boundaries sit above the
       // data rather than under it.
-      rasterLayer('reference', REFERENCE_TILES, 0.85),
+      // Sharpened: this is the layer carrying text, so it is the one that
+      // visibly suffers on a HiDPI display.
+      rasterLayer('reference', REFERENCE_TILES, 0.9, { sharpen: true }),
     ],
     [cells, selected, onSelect],
   );
