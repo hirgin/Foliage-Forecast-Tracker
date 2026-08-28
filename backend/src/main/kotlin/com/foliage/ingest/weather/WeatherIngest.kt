@@ -3,9 +3,11 @@ package com.foliage.ingest.weather
 import com.foliage.domain.DailyRecord
 import com.foliage.domain.WeatherDay
 import com.foliage.domain.WeatherKind
+import com.foliage.domain.WeatherNormal
 import com.foliage.grid.H3Grid
 import com.foliage.ingest.audit.IngestRunRecorder
 import com.foliage.persistence.CellRepository
+import com.foliage.persistence.NormalRepository
 import com.foliage.persistence.WeatherRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -25,6 +27,7 @@ class WeatherIngest(
     private val grid: H3Grid,
     private val cells: CellRepository,
     private val weather: WeatherRepository,
+    private val normals: NormalRepository,
     private val source: OpenMeteoWeatherSource,
     private val season: Season,
     private val audit: IngestRunRecorder,
@@ -87,6 +90,26 @@ class WeatherIngest(
                 }
             }
 
+            // Normals go to their own table and are never overwritten by daily
+            // ingest -- the drought term needs them on days we also have
+            // observations for. See the amendment to ADR-0005.
+            val normalRows = sums.map { (key, recs) ->
+                val (i, md) = key
+                WeatherNormal(
+                    h3 = parents[i],
+                    monthDay = md,
+                    resolution = source.nativeResolution,
+                    tmaxC = recs.meanOf { it.tmaxC },
+                    tminC = recs.meanOf { it.tminC },
+                    precipMm = recs.meanOf { it.precipMm },
+                    yearsAveraged = climatologyYears,
+                )
+            }
+            val normalsWritten = normals.upsertAll(normalRows)
+            log.info("wrote {} climatological normals", normalsWritten)
+
+            // The same means also seed weather_daily as a fallback estimate,
+            // under the usual precedence rule.
             val rows = sums.mapNotNull { (key, recs) ->
                 val (i, md) = key
                 val day = runCatching { md.atYear(year) }.getOrNull() ?: return@mapNotNull null

@@ -35,9 +35,10 @@ estimate meaningful in August — see [ADR-0005](adr/0005-three-kinds-of-weather
 
 ### Chilling — the accelerator
 
-Nights below **7 °C** amplify that day's photoperiod forcing, by 9% per degree
+Nights below **7 °C** amplify that day's photoperiod forcing, by 30% per degree
 below the threshold. Cold nights are why a sharp early-autumn cold snap brings
-colour forward.
+colour forward — and, because temperature falls with altitude, this is the
+channel through which elevation does its work. See [calibration](#calibration).
 
 ### Warmth — the brake
 
@@ -93,15 +94,57 @@ panel can explain *why* a hexagon is the colour it is. These are recomputed on
 demand rather than stored; persisting them would nearly triple the forecast
 table (see [ADR-0004](adr/0004-mysql.md)).
 
+## Turning forcing into progression
+
+Progression **saturates** rather than growing linearly with accumulated
+forcing:
+
+```
+progression = 100 * (1 - exp(-SENESCENCE_RATE * forcing))
+```
+
+A linear form was tried first and rejected against real data. Cumulative
+forcing accelerates through October, so a linear model that peaked on the
+right date reached past-peak only **five days later**. A canopy can only turn
+once; further chilling after the leaves have changed cannot keep pushing at
+the same rate. The saturating form yields a peak window of eight or nine days,
+which is what a real season looks like.
+
 ## Calibration
 
-One constant sets *when* peak lands: `FORCING_FULL`, the accumulated forcing
-corresponding to a fully turned canopy, currently **62.0**. It is tuned so a
-typical Vermont season reaches peak in the first half of October, matching the
-published norm.
+Two constants were fitted against the ingested Vermont data, in this order:
 
-That is guarded by a test. Changing the constant without moving the test will
-fail the build.
+| Constant | Value | Sets |
+|---|---|---|
+| `CHILL_GAIN` | 0.30 | How far apart valley and ridge run |
+| `SENESCENCE_RATE` | 0.0558 | When peak lands |
+
+`CHILL_GAIN` came first because it controls *spread*. At its original 0.09 the
+model had the right direction — elevation-to-progression correlation of 0.79 —
+but far too small a magnitude: 954 m of elevation moved peak by about two days,
+against a field rule of thumb of roughly a week per 300 m. Raising it to 0.30
+widened the statewide spread from 5 days to 9.
+
+`SENESCENCE_RATE` was then solved for directly by inverting the curve at the
+median cell, so median peak lands on 8 October.
+
+The resulting season, computed over all 649 Vermont cells:
+
+| Date | State of the canopy |
+|---|---|
+| 15 Sep | Mostly no change, some patchy |
+| 25 Sep | Entirely partial |
+| 1 Oct | Predominantly near peak |
+| **8 Oct** | **Half the state at peak** |
+| 12 Oct | 547 of 649 cells at peak |
+| 18 Oct | Effectively all past peak |
+
+Elevation-to-progression correlation is **0.718**, with the highest 80 cells
+averaging 73.0 against 65.6 for the lowest 80 — so the lapse-rate downscale is
+doing real work.
+
+The calibration is guarded by a test. Changing a constant without moving the
+test fails the build.
 
 ## A deliberate negative result
 
@@ -125,6 +168,14 @@ later "fixes" the model into claiming something photoperiod does not support.
   times and in different colours. Only canopy density is currently modelled,
   not composition, so a maple stand and an oak stand at the same elevation
   score identically. This is the largest single gap.
+- **The spread is too narrow.** Vermont's real season runs two to three weeks
+  from the Northeast Kingdom to the southern valleys; this model produces
+  about nine days. The *direction* is right and elevation clearly drives it,
+  but the magnitude is understated — most likely because species composition,
+  the missing driver above, accounts for much of the real variation.
+  Widening it further by inflating `CHILL_GAIN` would be fitting the model to
+  an anecdote rather than to data, so it has been left honest and documented
+  instead.
 - **It does not model cloud cover or wind.** Both affect how a display is
   actually experienced, and a windstorm can end a season overnight.
 - **Beyond 16 days it is climatology.** Not a forecast. A weak claim about a

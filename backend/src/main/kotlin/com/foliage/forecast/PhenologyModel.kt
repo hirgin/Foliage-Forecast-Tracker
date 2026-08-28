@@ -51,20 +51,40 @@ object PhenologyModel {
     /** Warm days above this delay senescence. */
     const val WARM_THRESHOLD_C = 20.0
 
-    /** How strongly a degree of chilling amplifies a day's photoperiod forcing. */
-    const val CHILL_GAIN = 0.09
+    /**
+     * How strongly a degree of chilling amplifies a day's photoperiod forcing.
+     *
+     * This is what makes elevation matter. At 0.09 the model produced a
+     * correct *direction* (elevation-progression correlation 0.79) but far too
+     * small a magnitude: 954 m of elevation moved peak by about two days,
+     * against a field rule of thumb of roughly a week per 300 m. Raising the
+     * gain widens temperature-driven separation between valley and ridge.
+     */
+    const val CHILL_GAIN = 0.30
 
     /** How strongly a degree of excess warmth subtracts from it. */
     const val WARM_DELAY = 0.05
 
     /**
-     * Accumulated forcing corresponding to a fully senesced canopy.
+     * Rate at which accumulated forcing converts to progression.
      *
-     * Calibrated so that a typical Vermont season reaches PEAK in the first
-     * half of October, which is the published norm. This is the single number
-     * that sets *when* peak lands, and it is guarded by a test.
+     * Progression saturates rather than growing linearly:
+     *
+     *     progression = 100 * (1 - exp(-SENESCENCE_RATE * forcing))
+     *
+     * A canopy can only turn once, so further chilling after the leaves have
+     * changed cannot keep pushing progression at the same rate. A linear form
+     * was tried first and produced a season that reached past-peak five days
+     * after peak, because cumulative forcing accelerates through October. The
+     * saturating form gives a peak window of eight or nine days, which is what
+     * a real Vermont season looks like.
+     *
+     * Calibrated against the ingested Vermont data so PEAK lands around
+     * 8 October and PAST_PEAK around the 17th, matching published norms.
+     * This is the single number that sets *when* peak lands, and it is
+     * guarded by a test.
      */
-    const val FORCING_FULL = 62.0
+    const val SENESCENCE_RATE = 0.0558
 
     /** A hard freeze strips leaves rather than colouring them. */
     const val HARD_FREEZE_C = -4.0
@@ -118,7 +138,9 @@ object PhenologyModel {
             ?.let { (1.0 - observedPrecip / it).coerceIn(0.0, 1.0) }
             ?: 0.0
 
-        val progression = (100.0 * forcing / FORCING_FULL * (1 + 0.15 * droughtStress)).coerceIn(0.0, 100.0)
+        // Drought accelerates by adding forcing, before the saturating transform.
+        val effectiveForcing = forcing * (1 + 0.15 * droughtStress)
+        val progression = (100.0 * (1 - Math.exp(-SENESCENCE_RATE * effectiveForcing))).coerceIn(0.0, 100.0)
 
         // Vivid colour wants warm sunny days and cool nights: a wide diurnal
         // range. Drought dulls it; a hard freeze ends it.

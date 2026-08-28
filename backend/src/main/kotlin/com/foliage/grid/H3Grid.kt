@@ -43,4 +43,8 @@ class H3Grid {
 
     /** Debug/logging helper -- the canonical hex string form, e.g. "862baac7fffffff". */
     fun toAddress(h3Index: Long): String = h3.h3ToString(h3Index)
+
+    /** Parses the hex form back to an index. Null if it is not a valid cell. */
+    fun fromAddress(address: String): Long? =
+        runCatching { h3.stringToH3(address) }.getOrNull()?.takeIf { h3.isValidCell(it) }
 }

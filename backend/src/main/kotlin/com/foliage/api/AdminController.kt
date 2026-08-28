@@ -2,6 +2,8 @@ package com.foliage.api
 
 import com.foliage.ingest.GridBootstrap
 import com.foliage.ingest.GridBootstrapResult
+import com.foliage.forecast.ForecastRunResult
+import com.foliage.forecast.ForecastService
 import com.foliage.ingest.weather.WeatherIngest
 import com.foliage.ingest.weather.WeatherIngestResult
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController
 class AdminController(
     private val gridBootstrap: GridBootstrap,
     private val weatherIngest: WeatherIngest,
+    private val forecastService: ForecastService,
 ) {
 
     @PostMapping("/bootstrap-grid")
@@ -38,4 +41,9 @@ class AdminController(
     @PostMapping("/ingest-climatology")
     fun ingestClimatology(@RequestParam stateFips: String): WeatherIngestResult =
         weatherIngest.buildClimatology(stateFips)
+
+    /** Scores the whole season for a state. Cheap; rerun after any ingest. */
+    @PostMapping("/compute-forecast")
+    fun computeForecast(@RequestParam stateFips: String): ForecastRunResult =
+        forecastService.computeState(stateFips)
 }

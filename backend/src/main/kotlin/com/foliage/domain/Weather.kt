@@ -29,3 +29,21 @@ data class DailyRecord(
     val precipMm: Double?,
     val radiationMj: Double?,
 )
+
+/**
+ * A climatological normal: what a calendar day is usually like at a cell.
+ *
+ * Year-independent by definition, which is why it is keyed by [monthDay]
+ * rather than a date. Distinct from a CLIMATOLOGY row in `weather_daily`,
+ * which is a fallback *estimate* for one specific day and gets replaced as
+ * real data arrives. See the amendment to ADR-0005.
+ */
+data class WeatherNormal(
+    val h3: Long,
+    val monthDay: java.time.MonthDay,
+    val resolution: Int,
+    val tmaxC: Double?,
+    val tminC: Double?,
+    val precipMm: Double?,
+    val yearsAveraged: Int,
+)

@@ -2,6 +2,7 @@ package com.foliage.persistence
 
 import com.foliage.domain.Cell
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Repository
 import java.sql.PreparedStatement
 import java.sql.Types
@@ -59,31 +60,39 @@ class CellRepository(private val jdbc: JdbcTemplate) {
             Long::class.java, stateFips, minCanopyPct,
         )
 
-    /** Full cell rows for a state, optionally masked to forest. */
-    fun findByState(stateFips: String, minCanopyPct: Int): List<Cell> = jdbc.query(
-        """
+    private val selectCell = """
         SELECT h3, resolution, parent_res5, parent_res4, parent_res3,
                centroid_lat, centroid_lon, elevation_m, canopy_pct, state_fips
         FROM cell
-        WHERE state_fips = ? AND (canopy_pct IS NULL OR canopy_pct >= ?)
-        ORDER BY h3
-        """.trimIndent(),
-        { rs, _ ->
-            Cell(
-                h3 = rs.getLong("h3"),
-                resolution = rs.getInt("resolution"),
-                parentRes5 = rs.getLong("parent_res5"),
-                parentRes4 = rs.getLong("parent_res4"),
-                parentRes3 = rs.getLong("parent_res3"),
-                centroidLat = rs.getDouble("centroid_lat"),
-                centroidLon = rs.getDouble("centroid_lon"),
-                elevationM = rs.getInt("elevation_m").takeUnless { rs.wasNull() },
-                canopyPct = rs.getInt("canopy_pct").takeUnless { rs.wasNull() },
-                stateFips = rs.getString("state_fips"),
-            )
-        },
-        stateFips, minCanopyPct,
+    """.trimIndent()
+
+    private val cellMapper = RowMapper { rs, _ ->
+        Cell(
+            h3 = rs.getLong("h3"),
+            resolution = rs.getInt("resolution"),
+            parentRes5 = rs.getLong("parent_res5"),
+            parentRes4 = rs.getLong("parent_res4"),
+            parentRes3 = rs.getLong("parent_res3"),
+            centroidLat = rs.getDouble("centroid_lat"),
+            centroidLon = rs.getDouble("centroid_lon"),
+            elevationM = rs.getInt("elevation_m").takeUnless { rs.wasNull() },
+            canopyPct = rs.getInt("canopy_pct").takeUnless { rs.wasNull() },
+            stateFips = rs.getString("state_fips"),
+        )
+    }
+
+    /** Full cell rows for a state, optionally masked to forest. */
+    fun findByState(stateFips: String, minCanopyPct: Int): List<Cell> = jdbc.query(
+        "$selectCell WHERE state_fips = ? AND (canopy_pct IS NULL OR canopy_pct >= ?) ORDER BY h3",
+        cellMapper, stateFips, minCanopyPct,
     )
+
+    fun findByH3(h3: Long): Cell? =
+        jdbc.query("$selectCell WHERE h3 = ?", cellMapper, h3).firstOrNull()
+
+    /** Sibling cells sharing a res 5 parent, for computing its reference elevation. */
+    fun findByParent(parentRes5: Long): List<Cell> =
+        jdbc.query("$selectCell WHERE parent_res5 = ?", cellMapper, parentRes5)
 
     /**
      * Distinct res 5 ancestors of a state's cells.

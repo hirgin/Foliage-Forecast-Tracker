@@ -59,6 +59,34 @@ class WeatherRepository(private val jdbc: JdbcTemplate) {
     private fun setDouble(ps: PreparedStatement, i: Int, v: Double?) =
         v?.let { ps.setDouble(i, it) } ?: ps.setNull(i, Types.DECIMAL)
 
+    /** Every stored day for the given cells, grouped by cell and ordered. */
+    fun seriesByCell(h3s: List<Long>): Map<Long, List<WeatherDay>> {
+        if (h3s.isEmpty()) return emptyMap()
+        val placeholders = h3s.joinToString(",") { "?" }
+        val rows = jdbc.query(
+            """
+            SELECT h3, day, resolution, kind, tmax_c, tmin_c, precip_mm, radiation_mj
+            FROM weather_daily
+            WHERE h3 IN ($placeholders)
+            ORDER BY h3, day
+            """.trimIndent(),
+            { rs, _ ->
+                WeatherDay(
+                    h3 = rs.getLong("h3"),
+                    day = rs.getDate("day").toLocalDate(),
+                    resolution = rs.getInt("resolution"),
+                    kind = com.foliage.domain.WeatherKind.valueOf(rs.getString("kind")),
+                    tmaxC = rs.getObject("tmax_c")?.let { rs.getDouble("tmax_c") },
+                    tminC = rs.getObject("tmin_c")?.let { rs.getDouble("tmin_c") },
+                    precipMm = rs.getObject("precip_mm")?.let { rs.getDouble("precip_mm") },
+                    radiationMj = rs.getObject("radiation_mj")?.let { rs.getDouble("radiation_mj") },
+                )
+            },
+            *h3s.toTypedArray(),
+        )
+        return rows.groupBy { it.h3 }
+    }
+
     fun countByKind(): Map<String, Long> = jdbc.query(
         "SELECT kind, COUNT(*) n FROM weather_daily GROUP BY kind",
         { rs, _ -> rs.getString("kind") to rs.getLong("n") },

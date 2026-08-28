@@ -63,3 +63,28 @@ observed September.
   drought or a warm September never shows up.
 - **Separate tables per provenance.** Pushes a three-way union into every read
   path and into the model, for no gain: the columns are identical.
+
+## Amendment: normals are not the same as the fallback
+
+**Added 2026-08-27, while wiring the model to the data.**
+
+The decision above conflated two distinct things under "climatology":
+
+1. **A fallback estimate** for days past the forecast horizon — deliberately
+   replaced by forecast and then observed data as the season approaches.
+2. **A normal**: what a given calendar day is *usually* like, used as the
+   baseline for anomaly terms such as drought.
+
+The precedence rule handles (1) correctly and is fatal to (2). Once the
+forecast job had written Sept 1–12, the climatological rows for those days
+were gone — so the drought term had nothing to compare the observed rainfall
+against, precisely on the days where the comparison matters most.
+
+Normals therefore live in their own table, `weather_normal`, keyed by
+`(h3, month_day)` and never overwritten by daily ingest. The climatology job
+writes both: normals unconditionally, and `CLIMATOLOGY` fallback rows into
+`weather_daily` under the usual precedence rule.
+
+The tell was that `weather_normal` is keyed by **calendar day** rather than
+date. A normal is year-independent by definition; anything year-keyed is an
+estimate of a particular day, not a baseline.
