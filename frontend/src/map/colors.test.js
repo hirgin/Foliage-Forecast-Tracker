@@ -1,0 +1,130 @@
+import { describe, it, expect } from 'vitest';
+import {
+  STAGES,
+  stageColor,
+  stageLabel,
+  progressionColor,
+  foliageColor,
+  canopyColor,
+} from './colors';
+
+const PEAK = [204, 62, 44];
+const NEAR_PEAK = [224, 124, 42];
+
+describe('progressionColor', () => {
+  it('sits on the stage anchor at the bottom of its band', () => {
+    // NEAR_PEAK spans 55-75, so 55 is exactly the anchor.
+    expect(progressionColor(55, 'NEAR_PEAK')).toEqual(NEAR_PEAK);
+  });
+
+  it('reaches the next stage anchor at the top of its band', () => {
+    // 75 is the boundary: NEAR_PEAK has blended fully into PEAK.
+    expect(progressionColor(75, 'NEAR_PEAK')).toEqual(PEAK);
+  });
+
+  it('is continuous across a stage boundary', () => {
+    // The top of one band and the bottom of the next must agree, or the map
+    // shows banding artefacts where none exist in the data.
+    expect(progressionColor(75, 'NEAR_PEAK')).toEqual(progressionColor(75, 'PEAK'));
+    expect(progressionColor(55, 'PARTIAL')).toEqual(progressionColor(55, 'NEAR_PEAK'));
+    expect(progressionColor(30, 'PATCHY')).toEqual(progressionColor(30, 'PARTIAL'));
+  });
+
+  it('distinguishes two cells inside the same stage', () => {
+    // THE REGRESSION. Northern Vermont scores 85.4 and the south 79.2 --
+    // both PEAK. Flat-filling the stage rendered the whole state one red and
+    // hid a real north-to-south march. These must not be equal.
+    const south = progressionColor(79.2, 'PEAK');
+    const north = progressionColor(85.4, 'PEAK');
+    expect(north).not.toEqual(south);
+  });
+
+  it('advances monotonically through a band', () => {
+    const samples = [75, 79, 83, 87, 90].map((p) => progressionColor(p, 'PEAK'));
+    for (let i = 1; i < samples.length; i++) {
+      expect(samples[i]).not.toEqual(samples[i - 1]);
+    }
+  });
+
+  it('deepens rather than jumping in the final stage', () => {
+    // PAST_PEAK has no successor to blend toward, so it darkens instead.
+    const start = progressionColor(90, 'PAST_PEAK');
+    const end = progressionColor(100, 'PAST_PEAK');
+    expect(end.every((c, i) => c <= start[i])).toBe(true);
+    expect(end).not.toEqual(start);
+  });
+
+  it('clamps progression outside the band rather than extrapolating', () => {
+    // Out-of-band values must not produce colours outside the ramp.
+    expect(progressionColor(-20, 'PEAK')).toEqual(progressionColor(75, 'PEAK'));
+    expect(progressionColor(999, 'PEAK')).toEqual(progressionColor(90, 'PEAK'));
+  });
+
+  it('returns a neutral grey for an unknown stage', () => {
+    expect(progressionColor(50, 'NOT_A_STAGE')).toEqual([70, 66, 60]);
+  });
+
+  it('always returns three integer channels in range', () => {
+    for (const stage of STAGES) {
+      for (let p = 0; p <= 100; p += 3) {
+        const c = progressionColor(p, stage.key);
+        expect(c).toHaveLength(3);
+        c.forEach((ch) => {
+          expect(Number.isInteger(ch)).toBe(true);
+          expect(ch).toBeGreaterThanOrEqual(0);
+          expect(ch).toBeLessThanOrEqual(255);
+        });
+      }
+    }
+  });
+});
+
+describe('foliageColor', () => {
+  it('carries confidence in the alpha channel', () => {
+    const certain = foliageColor({ progression: 80, stage: 'PEAK', confidence: 1 });
+    const vague = foliageColor({ progression: 80, stage: 'PEAK', confidence: 0.4 });
+    expect(certain[3]).toBeGreaterThan(vague[3]);
+    // The three colour channels must be identical: confidence is not allowed
+    // to masquerade as a different stage.
+    expect(certain.slice(0, 3)).toEqual(vague.slice(0, 3));
+  });
+
+  it('keeps low-confidence cells legible', () => {
+    // A climatological October is a weak claim, not an invisible one.
+    const [, , , alpha] = foliageColor({ progression: 80, stage: 'PEAK', confidence: 0 });
+    expect(alpha).toBeGreaterThan(100);
+  });
+
+  it('treats missing confidence as certain', () => {
+    const a = foliageColor({ progression: 80, stage: 'PEAK' });
+    const b = foliageColor({ progression: 80, stage: 'PEAK', confidence: 1 });
+    expect(a).toEqual(b);
+  });
+});
+
+describe('stage metadata', () => {
+  it('names every stage the backend can emit', () => {
+    const expected = ['NO_CHANGE', 'PATCHY', 'PARTIAL', 'NEAR_PEAK', 'PEAK', 'PAST_PEAK'];
+    expect(STAGES.map((s) => s.key)).toEqual(expected);
+    expected.forEach((k) => expect(stageLabel(k)).not.toBe('Unknown'));
+  });
+
+  it('falls back rather than throwing on an unknown stage', () => {
+    expect(stageLabel('WAT')).toBe('Unknown');
+    expect(stageColor('WAT')).toEqual([70, 66, 60]);
+  });
+});
+
+describe('canopyColor', () => {
+  it('is a monotonic ramp with density', () => {
+    const light = canopyColor(10);
+    const dense = canopyColor(90);
+    expect(dense[1]).toBeGreaterThan(light[1]); // greener
+  });
+
+  it('distinguishes unsampled from bare ground', () => {
+    // Zero canopy is a real measurement; null means off-raster. Rendering
+    // them the same would paint lakes as bare forest.
+    expect(canopyColor(null)).not.toEqual(canopyColor(0));
+  });
+});

@@ -30,6 +30,25 @@ only tier that gates every build.
 | Lapse-rate downscale | `forecast/LapseRateTest` | 6.5 °C per 1000 m, and a Vermont valley-to-ridge span exceeding 7 °C |
 | Phenology model | `forecast/PhenologyModelTest` | Bounded 0–100 under extremes, stages never move backwards, monotonic in every driver, and a calibration test pinning peak to the first half of October |
 
+### Frontend
+
+Vitest, pure logic only — no DOM, no component rendering. The bugs that have
+actually occurred here were in colour mapping and date handling, not in markup.
+
+```bash
+npm test --prefix frontend
+```
+
+| Area | Covered by | What it proves |
+|---|---|---|
+| Foliage colour ramp | `map/colors.test.js` | Continuity across stage boundaries, monotonic advance within a band, clamping instead of extrapolation, and confidence altering only alpha |
+| Date formatting | `components/dates.test.js` | `yyyy-mm-dd` is parsed as UTC. Local parsing shifts every slider date by one day, and only for users west of Greenwich |
+
+The colour suite carries an explicit regression: progression 79.2 and 85.4 are
+both `PEAK`, and must render as **different** colours. Flat-filling the stage
+hid a real north-to-south gradient across Vermont — the model was right and the
+map was lying. See [`model.md`](model.md).
+
 ## Tier 2 — Fixture-backed tests (always run)
 
 External services are **captured once as real responses** into
