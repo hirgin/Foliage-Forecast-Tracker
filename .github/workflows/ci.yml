@@ -23,6 +23,28 @@ jobs:
       # fixture-backed by design -- external services are covered by responses
       # captured into src/test/resources/fixtures, and the tests that need a
       # real schema skip themselves unless one is configured. See docs/testing.md.
+      # Probe for ADR-0006: the local Oracle JDK cannot establish TLS to
+      # Unidata's Maven repository because its cacerts lacks Sectigo Public
+      # Server Authentication Root R46. Temurin builds cacerts from Mozilla's
+      # bundle, which should carry it. If this passes, GRIB2 ingest is viable
+      # in the pipeline even though it cannot be developed locally.
+      - name: Probe Unidata TLS trust from this JVM
+        continue-on-error: true
+        run: |
+          cat > Probe.java <<'JAVA'
+          import java.net.*;
+          public class Probe {
+            public static void main(String[] a) throws Exception {
+              var url = "https://artifacts.unidata.ucar.edu/all/edu/ucar/grib/5.10.0/grib-5.10.0.pom";
+              var c = (HttpURLConnection) URI.create(url).toURL().openConnection();
+              c.setConnectTimeout(15000);
+              c.setReadTimeout(15000);
+              System.out.println("ADR-0006 probe: HTTP " + c.getResponseCode() + " -- this JVM trusts the chain");
+            }
+          }
+          JAVA
+          java Probe.java || echo "ADR-0006 probe: FAILED -- this JVM does not trust the chain either"
+
       - name: Test
         working-directory: backend
         run: ./gradlew test --no-daemon
