@@ -30,7 +30,7 @@ See [ADR-0002](docs/adr/0002-h3-hexagons-not-counties.md).
 |---|---|
 | Backend | Kotlin, Spring Boot 3, plain JDBC ([ADR-0003](docs/adr/0003-jdbc-not-jpa.md)) |
 | Database | MySQL 8, Flyway — **no spatial extension**, the H3 index is the spatial index ([ADR-0004](docs/adr/0004-mysql.md)) |
-| Frontend | React 18 + Vite (JavaScript), MapLibre GL + deck.gl `H3HexagonLayer` |
+| Frontend | React 18 + Vite (JavaScript), deck.gl `H3HexagonLayer` over raster tiles |
 | Weather | Open-Meteo, swapping to NOAA HRRR GRIB2 from public S3 |
 
 ## Running it
@@ -77,7 +77,7 @@ times slower.
 ## Build status
 
 - [x] **Phase 0** — foundations, health endpoint, status page
-- [ ] **Phase 1** — H3 grid, canopy masking, terrain attributes
+- [x] **Phase 1** — H3 grid, canopy masking, terrain attributes *(Vermont: 649 cells)*
 - [ ] **Phase 2** — weather pipeline (Open-Meteo)
 - [ ] **Phase 3** — phenology model
 - [ ] **Phase 4** — map experience

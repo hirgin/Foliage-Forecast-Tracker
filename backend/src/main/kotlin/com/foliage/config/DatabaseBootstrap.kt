@@ -31,10 +31,14 @@ class DatabaseBootstrap(private val dataSource: DataSource) {
                 .locations("classpath:db/migration")
                 .load()
             val result = flyway.migrate()
-            log.info("Migrations applied: {} (schema now at {})", result.migrationsExecuted, result.targetSchemaVersion)
+            // targetSchemaVersion is null when nothing ran this boot, which is
+            // the normal steady state. Report where the schema actually *is*,
+            // not what this particular run happened to move it to.
+            val current = flyway.info().current()?.version?.version ?: "none"
+            log.info("Migrations applied: {} (schema at {})", result.migrationsExecuted, current)
             DatabaseStatus(
                 state = "connected",
-                schemaVersion = result.targetSchemaVersion ?: "none",
+                schemaVersion = current,
                 migrationsApplied = result.migrationsExecuted,
             )
         } catch (e: Exception) {

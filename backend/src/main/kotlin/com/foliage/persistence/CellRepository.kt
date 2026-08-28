@@ -59,6 +59,32 @@ class CellRepository(private val jdbc: JdbcTemplate) {
             Long::class.java, stateFips, minCanopyPct,
         )
 
+    /** Full cell rows for a state, optionally masked to forest. */
+    fun findByState(stateFips: String, minCanopyPct: Int): List<Cell> = jdbc.query(
+        """
+        SELECT h3, resolution, parent_res5, parent_res4, parent_res3,
+               centroid_lat, centroid_lon, elevation_m, canopy_pct, state_fips
+        FROM cell
+        WHERE state_fips = ? AND (canopy_pct IS NULL OR canopy_pct >= ?)
+        ORDER BY h3
+        """.trimIndent(),
+        { rs, _ ->
+            Cell(
+                h3 = rs.getLong("h3"),
+                resolution = rs.getInt("resolution"),
+                parentRes5 = rs.getLong("parent_res5"),
+                parentRes4 = rs.getLong("parent_res4"),
+                parentRes3 = rs.getLong("parent_res3"),
+                centroidLat = rs.getDouble("centroid_lat"),
+                centroidLon = rs.getDouble("centroid_lon"),
+                elevationM = rs.getInt("elevation_m").takeUnless { rs.wasNull() },
+                canopyPct = rs.getInt("canopy_pct").takeUnless { rs.wasNull() },
+                stateFips = rs.getString("state_fips"),
+            )
+        },
+        stateFips, minCanopyPct,
+    )
+
     fun canopyHistogram(stateFips: String): Map<String, Long> = jdbc.query(
         """
         SELECT CASE WHEN canopy_pct IS NULL THEN 'unsampled'

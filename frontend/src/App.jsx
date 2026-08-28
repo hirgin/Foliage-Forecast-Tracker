@@ -1,83 +1,89 @@
-import { useMeta } from './api/hooks';
+import { useMeta, useCells } from './api/hooks';
+import FoliageMap from './map/FoliageMap';
+import { CANOPY_STOPS } from './map/colors';
 
-const STATE_LABELS = {
-  connected: { label: 'Connected', tone: 'ok' },
-  unavailable: { label: 'Unavailable', tone: 'bad' },
-  starting: { label: 'Starting', tone: 'warn' },
-};
+const VERMONT = '50';
 
-function StatusDot({ tone }) {
-  return <span className={`dot dot--${tone}`} aria-hidden="true" />;
-}
-
-function Row({ label, value, tone }) {
+function Stat({ label, value }) {
   return (
-    <div className="row">
+    <div className="stat">
       <dt>{label}</dt>
-      <dd>
-        {tone && <StatusDot tone={tone} />}
-        {value}
-      </dd>
+      <dd>{value}</dd>
     </div>
   );
 }
 
 export default function App() {
-  const { data, error, isLoading } = useMeta();
+  const meta = useMeta();
+  const { data, error, isLoading } = useCells(VERMONT, 0);
 
-  const backendTone = error ? 'bad' : isLoading ? 'warn' : 'ok';
-  const db = data?.database;
-  const dbInfo = db ? STATE_LABELS[db.state] ?? { label: db.state, tone: 'warn' } : null;
+  const cells = data?.cells ?? [];
+  const forested = cells.filter((c) => c.canopyPct != null && c.canopyPct >= 50).length;
+  const elevations = cells.map((c) => c.elevationM).filter((e) => e != null);
 
   return (
-    <div className="page">
-      <main className="card">
-        <header className="card__head">
+    <div className="app">
+      <FoliageMap cells={cells} />
+
+      <aside className="panel">
+        <header>
           <h1>Foliage Forecast</h1>
-          <p className="sub">US fall colour, forecast on a 3&nbsp;km hexagon grid</p>
+          <p className="sub">Vermont · H3 resolution {data?.resolution ?? 6} · ~3 km hexagons</p>
         </header>
 
-        <section>
-          <h2>System status</h2>
-          <dl className="rows">
-            <Row
-              label="Backend"
-              tone={backendTone}
-              value={error ? 'Unreachable' : isLoading ? 'Checking…' : 'Healthy'}
-            />
-            {data && (
-              <>
-                <Row label="Database" tone={dbInfo.tone} value={dbInfo.label} />
-                {db.schemaVersion && <Row label="Schema" value={`v${db.schemaVersion}`} />}
-                <Row label="Model" value={data.modelVersion} />
-                <Row label="Grid" value={`H3 resolution ${data.gridResolution}`} />
-                <Row
-                  label="Cells loaded"
-                  value={data.cellCount?.toLocaleString() ?? 'None yet'}
-                />
-              </>
-            )}
-          </dl>
-
-          {error && (
-            <p className="note note--bad">
-              {error.message} Start the backend with <code>./gradlew bootRun</code>.
-            </p>
-          )}
-          {db?.state === 'unavailable' && (
-            <p className="note note--bad">
-              Database unreachable: {db.error ?? 'unknown error'}
-            </p>
-          )}
-        </section>
-
-        <footer className="card__foot">
-          <p>
-            Phase&nbsp;0 — foundations. The map arrives in Phase&nbsp;1, once the
-            hexagon grid is built and masked to forest cover.
+        {isLoading && <p className="note">Loading grid…</p>}
+        {error && (
+          <p className="note note--bad">
+            {error.message} Is the backend running on :8080?
           </p>
+        )}
+
+        {data && (
+          <>
+            <dl className="stats">
+              <Stat label="Cells" value={data.count.toLocaleString()} />
+              <Stat label="50%+ canopy" value={forested.toLocaleString()} />
+              <Stat
+                label="Elevation"
+                value={
+                  elevations.length
+                    ? `${Math.min(...elevations)}–${Math.max(...elevations)} m`
+                    : '—'
+                }
+              />
+            </dl>
+
+            <section className="legend">
+              <h2>Tree canopy</h2>
+              {CANOPY_STOPS.map((s) => (
+                <div className="legend__row" key={s.min}>
+                  <span
+                    className="swatch"
+                    style={{ background: `rgb(${s.rgb.join(',')})` }}
+                  />
+                  {s.label}
+                </div>
+              ))}
+              <div className="legend__row">
+                <span className="swatch swatch--none" />
+                Not sampled
+              </div>
+            </section>
+          </>
+        )}
+
+        <footer>
+          <p>
+            Phase 1 — the grid. Colour shows <strong>canopy density</strong>, not
+            foliage: the phenology model arrives in Phase 3.
+          </p>
+          {meta.data && (
+            <p className="build">
+              model {meta.data.modelVersion} · schema v{meta.data.database?.schemaVersion ?? '?'}
+            </p>
+          )}
         </footer>
-      </main>
+      </aside>
     </div>
   );
 }

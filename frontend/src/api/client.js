@@ -23,3 +23,7 @@ export async function get(path) {
 }
 
 export const fetchMeta = () => get('/meta');
+
+// state is a FIPS code; 50 is Vermont, the only state bootstrapped so far.
+export const fetchCells = (state = '50', minCanopy = 0) =>
+  get(`/cells?state=${state}&minCanopy=${minCanopy}`);
