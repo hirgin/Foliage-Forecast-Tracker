@@ -1,0 +1,10 @@
+# Copy to application-local.yml (gitignored) and fill in real values, then run:
+#   ./gradlew bootRun --args='--spring.profiles.active=local'
+#
+# For a hosted MySQL (TiDB Cloud Starter, Aiven, etc.) TLS is required,
+# so keep sslMode=REQUIRED. Port is 4000 on TiDB, 3306 on stock MySQL.
+spring:
+  datasource:
+    url: jdbc:mysql://HOST:4000/foliage?rewriteBatchedStatements=true&connectionTimeZone=UTC&sslMode=REQUIRED
+    username: YOUR_USERNAME
+    password: YOUR_PASSWORD

@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: foliage-forecast
+  datasource:
+    # rewriteBatchedStatements is the bulk-load lever on MySQL: it collapses a
+    # JDBC batch into multi-row INSERTs. Without it, ingest is an order of
+    # magnitude slower. See ADR-0004.
+    url: ${FOLIAGE_DB_URL:jdbc:mysql://localhost:3306/foliage?rewriteBatchedStatements=true&connectionTimeZone=UTC&cachePrepStmts=true&useServerPrepStmts=true}
+    username: ${FOLIAGE_DB_USER:foliage}
+    password: ${FOLIAGE_DB_PASSWORD:foliage}
+    hikari:
+      # Never block startup on an unreachable database; DatabaseBootstrap
+      # reports the failure through /api/v1/meta instead.
+      initialization-fail-timeout: -1
+      # Fail fast when the database is absent so /api/v1/meta settles in
+      # seconds instead of blocking on the 30s default.
+      connection-timeout: 5000
+      maximum-pool-size: 10
+  flyway:
+    # Disabled here on purpose -- DatabaseBootstrap runs migrations so that
+    # failures degrade rather than abort startup.
+    enabled: false
+
+server:
+  port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 1024
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+foliage:
+  model-version: "0.1.0-dev"
+  grid:
+    # H3 resolution the forecast is computed at (~3 km edge). See ADR-0002.
+    resolution: 6
+  cors:
+    allowed-origins: http://localhost:5173
+
+logging:
+  level:
+    com.foliage: DEBUG

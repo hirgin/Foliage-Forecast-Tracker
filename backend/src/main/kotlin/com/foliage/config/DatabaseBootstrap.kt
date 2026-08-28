@@ -1,0 +1,52 @@
+package com.foliage.config
+
+import org.flywaydb.core.Flyway
+import org.slf4j.LoggerFactory
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
+import org.springframework.stereotype.Component
+import javax.sql.DataSource
+
+/**
+ * Runs Flyway migrations manually rather than via Spring Boot's auto-configuration.
+ *
+ * The point is that an unreachable database degrades the app instead of killing it:
+ * the process still starts, serves /api/v1/meta, and reports exactly what is wrong.
+ * A dev with no database running should see a clear status page, not a stack trace.
+ */
+@Component
+class DatabaseBootstrap(private val dataSource: DataSource) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @Volatile
+    final var status: DatabaseStatus = DatabaseStatus(state = "starting")
+        private set
+
+    @EventListener(ApplicationReadyEvent::class)
+    fun migrate() {
+        status = try {
+            val flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .load()
+            val result = flyway.migrate()
+            log.info("Migrations applied: {} (schema now at {})", result.migrationsExecuted, result.targetSchemaVersion)
+            DatabaseStatus(
+                state = "connected",
+                schemaVersion = result.targetSchemaVersion ?: "none",
+                migrationsApplied = result.migrationsExecuted,
+            )
+        } catch (e: Exception) {
+            log.warn("Database unavailable -- running in degraded mode: {}", e.message)
+            DatabaseStatus(state = "unavailable", error = e.message?.lines()?.firstOrNull())
+        }
+    }
+}
+
+data class DatabaseStatus(
+    val state: String,
+    val schemaVersion: String? = null,
+    val migrationsApplied: Int? = null,
+    val error: String? = null,
+)
