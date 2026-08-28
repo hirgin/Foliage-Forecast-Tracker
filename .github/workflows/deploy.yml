@@ -60,6 +60,23 @@ jobs:
             jdbc:mysql://*) ;;
             *) echo "::error::FOLIAGE_DB_URL must start with jdbc:mysql:// (check for stray quotes)"; exit 1 ;;
           esac
+          # Shape only -- never the values. A trailing newline from copying
+          # out of a file, or a username missing its TiDB cluster prefix, both
+          # present as a plain "Access denied".
+          echo "url length:      ${#URL}"
+          echo "username length: ${#USER}"
+          echo "password length: ${#PASSWORD}"
+          case "$USER" in
+            *.*) echo "username contains a '.' prefix separator: yes" ;;
+            *) echo "::warning::username has no '.' -- TiDB Serverless usernames are <prefix>.<user>" ;;
+          esac
+          for name in URL USER PASSWORD; do
+            eval "v=\$$name"
+            case "$v" in
+              *[[:space:]]) echo "::error::$name has trailing whitespace" ; exit 1 ;;
+              [[:space:]]*) echo "::error::$name has leading whitespace" ; exit 1 ;;
+            esac
+          done
           echo "All three secrets present, URL well-formed."
 
       # The backend is a batch pipeline, not a server: it boots, exports the
