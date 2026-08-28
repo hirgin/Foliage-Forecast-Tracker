@@ -1,6 +1,6 @@
 # ADR-0006: NOAA GRIB2 ingest — blocked on a JVM truststore gap
 
-**Status:** blocked, not abandoned
+**Status:** blocked locally; viable in CI
 
 ## Context
 
@@ -54,6 +54,19 @@ Maven Central is unaffected, so this is specific to that one root.
 - **An older `edu.ucar` release from Maven Central.** Only 4.x is mirrored
   there, predating the current GRIB2 support.
 
+## It is a local problem, not a project problem
+
+Measured after the fact:
+
+| JVM | Result |
+|---|---|
+| Oracle JDK 19, 21, 22, 23 (local) | `PKIX path building failed` — all four |
+| Temurin 23 (GitHub runner) | **HTTP 200 — trusts the chain** |
+
+Temurin builds `cacerts` from Mozilla's CA bundle, which carries the Sectigo
+root; Oracle's bundle here does not. So the dependency is obtainable in CI
+today, and the blocker is confined to this development machine.
+
 ## Decision
 
 Defer. Open-Meteo remains the `WeatherSource`, and the seam it sits behind is
@@ -62,14 +75,15 @@ that seam, and it still can once the dependency is obtainable.
 
 Reasonable ways forward, in preference order:
 
-1. **Check whether CI is affected at all.** Temurin on Ubuntu ships a different
-   `cacerts`, and GitHub runners may trust the root already. If so, GRIB
-   ingest can run in the scheduled pipeline even if local development cannot.
-2. Add the root to the project's own truststore and point Gradle at it, so the
-   fix travels with the repository rather than living on one machine.
-3. Decode GRIB2 without NetCDF-Java. The subset needed here is one simple
-   packing template on one grid, but this is real work and easy to get subtly
-   wrong.
+1. **Install Temurin locally and build against it.** One package, matches what
+   CI already uses, and needs no repository-level workaround. The preferred
+   fix, but it is a change to the development machine rather than to this
+   project, so it is the owner's call.
+2. Ship a project truststore merging the JDK's `cacerts` with the Sectigo root
+   and point Gradle at it. Travels with the repository, but has to be
+   generated on first checkout, which is awkward.
+3. Decode GRIB2 without NetCDF-Java. The subset needed here is one packing
+   template on one grid, but it is real work and easy to get subtly wrong.
 
 ## Consequence for the forecast
 
