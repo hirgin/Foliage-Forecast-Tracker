@@ -39,7 +39,7 @@ class NormalRepository(private val jdbc: JdbcTemplate) {
                 computed_at     = NOW(6)
         """.trimIndent()
 
-        val counts = jdbc.batchUpdate(sql, normals, normals.size) { ps: PreparedStatement, n: WeatherNormal ->
+        val counts = jdbc.batchUpdate(sql, normals, JDBC_BATCH_SIZE) { ps: PreparedStatement, n: WeatherNormal ->
             ps.setLong(1, n.h3)
             ps.setString(2, key(n.monthDay))
             ps.setInt(3, n.resolution)

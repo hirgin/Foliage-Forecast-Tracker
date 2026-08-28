@@ -37,7 +37,7 @@ class CellRepository(private val jdbc: JdbcTemplate) {
                 state_name  = COALESCE(VALUES(state_name), state_name)
         """.trimIndent()
 
-        val counts = jdbc.batchUpdate(sql, cells, cells.size) { ps: PreparedStatement, c: Cell ->
+        val counts = jdbc.batchUpdate(sql, cells, JDBC_BATCH_SIZE) { ps: PreparedStatement, c: Cell ->
             ps.setLong(1, c.h3)
             ps.setInt(2, c.resolution)
             ps.setLong(3, c.parentRes5)

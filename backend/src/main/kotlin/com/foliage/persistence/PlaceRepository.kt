@@ -28,7 +28,7 @@ class PlaceRepository(private val jdbc: JdbcTemplate) {
                 ingested_at = NOW(6)
         """.trimIndent()
 
-        val counts = jdbc.batchUpdate(sql, places, places.size) { ps: PreparedStatement, p: Place ->
+        val counts = jdbc.batchUpdate(sql, places, JDBC_BATCH_SIZE) { ps: PreparedStatement, p: Place ->
             ps.setInt(1, p.geonameId)
             ps.setString(2, p.name)
             p.stateCode?.let { ps.setString(3, it) } ?: ps.setNull(3, Types.CHAR)

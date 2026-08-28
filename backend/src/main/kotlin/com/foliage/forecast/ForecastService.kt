@@ -117,7 +117,10 @@ class ForecastService(
             written = forecasts.upsertAll(rows, modelVersion).toLong()
             audit.succeed(runId, written)
 
-            val peaks = forecasts.peakDayByCell()
+            // Scoped to the state that was just scored. Unscoped, every run
+            // reported the whole table's peaks, which made each state look
+            // identical to the last.
+            val peaks = forecasts.peakDayByCell(stateFips)
             return ForecastRunResult(
                 stateFips = scope,
                 cells = grid.size,
@@ -171,6 +174,9 @@ class ForecastService(
      * per cell -- an N+1 that took four minutes over 649 cells during the first
      * static export. This does the same work with a handful of queries.
      */
+    /** Drops a state's scores; see ForecastRepository.deleteByState. */
+    fun clearState(stateFips: String): Int = forecasts.deleteByState(stateFips)
+
     fun peakFactors(stateFips: String?, peakDays: Map<Long, LocalDate>, year: Int): Map<Long, List<Factor>> {
         // Same forest floor as scoring; see computeState.
         val grid = if (stateFips == null) cells.findAll(minCanopyPct)

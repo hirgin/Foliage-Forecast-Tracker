@@ -88,6 +88,14 @@ class AdminController(
     @PostMapping("/ingest-places")
     fun ingestPlaces(): PlaceIngestResult = placeIngest.ingest()
 
+    /**
+     * Removes a state's scores, for one computed against incomplete weather.
+     * See ForecastRepository.deleteByState.
+     */
+    @PostMapping("/clear-forecast")
+    fun clearForecast(@RequestParam stateFips: String): Map<String, Any> =
+        mapOf("stateFips" to stateFips, "rowsDeleted" to forecastService.clearState(stateFips))
+
     /** Writes the season out as static JSON for CDN publishing. */
     @PostMapping("/export")
     fun export(

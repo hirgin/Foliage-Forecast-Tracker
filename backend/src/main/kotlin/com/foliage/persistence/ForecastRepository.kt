@@ -20,10 +20,20 @@ data class StoredForecast(
 @Repository
 class ForecastRepository(private val jdbc: JdbcTemplate) {
 
+
     /**
      * Recomputing a season replaces it wholesale: the model is deterministic
      * given its inputs, so a rerun with the same weather converges, and a
      * rerun after new observations arrive should overwrite.
+     *
+     * Writes go out in fixed-size batches rather than one batch of everything.
+     * With `rewriteBatchedStatements=true` the driver folds a batch into a
+     * single multi-row INSERT, so passing `rows.size` made the statement scale
+     * with the state: Vermont's 47,000 rows and Maine's 170,000 were fine,
+     * and New York's 284,392 exceeded what the server would accept and dropped
+     * the connection mid-write with a bare EOF. Batching is what makes the
+     * write fast (ADR-0003); leaving the batch unbounded is what broke it.
+     * See [JDBC_BATCH_SIZE].
      */
     fun upsertAll(rows: List<StoredForecast>, modelVersion: String): Int {
         if (rows.isEmpty()) return 0
@@ -41,7 +51,7 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
                 computed_at   = NOW(6)
         """.trimIndent()
 
-        val counts = jdbc.batchUpdate(sql, rows, rows.size) { ps: PreparedStatement, r: StoredForecast ->
+        val counts = jdbc.batchUpdate(sql, rows, JDBC_BATCH_SIZE) { ps: PreparedStatement, r: StoredForecast ->
             ps.setLong(1, r.h3)
             ps.setDate(2, Date.valueOf(r.day))
             ps.setDouble(3, r.progression)
@@ -109,14 +119,68 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
         Date.valueOf(day),
     ).toMap()
 
-    /** The day each cell first reaches peak — the question the site exists to answer. */
-    fun peakDayByCell(): Map<Long, LocalDate> = jdbc.query(
+    /**
+     * The day each cell first reaches peak — the question the site exists to
+     * answer.
+     *
+     * [stateFips] null covers the whole grid. Scoping matters for the summary a
+     * run reports back: without it, every state returned peak statistics for
+     * the entire table, so a national grid had Maine and Connecticut both
+     * reporting a median of 10 October and an identical range. That reads as a
+     * model with no latitude gradient when the model is fine and the query was
+     * simply unscoped.
+     */
+    fun peakDayByCell(stateFips: String? = null): Map<Long, LocalDate> {
+        val mapper = { rs: java.sql.ResultSet, _: Int ->
+            rs.getLong("h3") to rs.getDate("peak").toLocalDate()
+        }
+
+        if (stateFips == null) {
+            return jdbc.query(
+                """
+                SELECT h3, MIN(day) peak FROM foliage_forecast
+                WHERE stage = 'PEAK' GROUP BY h3
+                """.trimIndent(),
+                mapper,
+            ).toMap()
+        }
+
+        // Joined rather than filtered by a stored state column, because the
+        // forecast table deliberately holds no geography -- cell does.
+        return jdbc.query(
+            """
+            SELECT f.h3, MIN(f.day) peak
+            FROM foliage_forecast f
+            JOIN cell c ON c.h3 = f.h3
+            WHERE f.stage = 'PEAK' AND c.state_fips = ?
+            GROUP BY f.h3
+            """.trimIndent(),
+            mapper,
+            stateFips,
+        ).toMap()
+    }
+
+    /**
+     * Drops a state's scores.
+     *
+     * For a state scored against incomplete weather. Climatology is not
+     * optional decoration: the forecast horizon reaches about 12 September and
+     * climatology supplies the rest of the season (ADR-0005), so a state with
+     * observations but no normals has no weather for most of autumn. It scores
+     * without error and never reaches peak, which renders as "no change" all
+     * October -- a confident, wrong answer rather than a visible gap.
+     *
+     * Deleting is better than publishing that: an absent cell draws grey and
+     * reads as "not computed yet", which is the truth.
+     */
+    fun deleteByState(stateFips: String): Int = jdbc.update(
         """
-        SELECT h3, MIN(day) peak FROM foliage_forecast
-        WHERE stage = 'PEAK' GROUP BY h3
+        DELETE f FROM foliage_forecast f
+        JOIN cell c ON c.h3 = f.h3
+        WHERE c.state_fips = ?
         """.trimIndent(),
-        { rs, _ -> rs.getLong("h3") to rs.getDate("peak").toLocalDate() },
-    ).toMap()
+        stateFips,
+    )
 
     private fun map(rs: java.sql.ResultSet) = StoredForecast(
         h3 = rs.getLong("h3"),

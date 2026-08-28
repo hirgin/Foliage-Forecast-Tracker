@@ -56,7 +56,7 @@ class WeatherRepository(private val jdbc: JdbcTemplate) {
                 kind         = IF($better, VALUES(kind),         kind)
         """.trimIndent()
 
-        val counts = jdbc.batchUpdate(sql, rows, rows.size) { ps: PreparedStatement, r: WeatherDay ->
+        val counts = jdbc.batchUpdate(sql, rows, JDBC_BATCH_SIZE) { ps: PreparedStatement, r: WeatherDay ->
             ps.setLong(1, r.h3)
             ps.setDate(2, Date.valueOf(r.day))
             ps.setInt(3, r.resolution)
