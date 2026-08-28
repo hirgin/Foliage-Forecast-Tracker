@@ -91,6 +91,68 @@ class GridBootstrap(
         )
     }
 
+    /**
+     * Re-derives elevation for a state that is already tiled, leaving canopy
+     * and the tiling alone.
+     *
+     * Exists because the two attributes have very different costs and very
+     * different reasons to change. Canopy is the slow half -- 13 MB tiles
+     * rendered on demand, minutes per state -- and it is the half that almost
+     * never needs redoing. Elevation reads a CDN and takes about a second per
+     * state.
+     *
+     * When the bathymetry bug was found, re-running the full bootstrap for the
+     * eleven affected states would have re-fetched every canopy tile to change
+     * one column: roughly two hours against about two minutes. Correcting one
+     * derived attribute should not cost a full re-sample.
+     *
+     * Idempotent like the bootstrap it complements: it reads the cells that
+     * exist and upserts them back with a new elevation.
+     */
+    fun refreshElevation(stateFips: String): ElevationRefreshResult {
+        val runId = audit.start(source = "terrarium", job = "elevation-refresh:$stateFips")
+        var written = 0L
+        try {
+            val existing = cells.findByState(stateFips, 0)
+            require(existing.isNotEmpty()) { "no cells loaded for state $stateFips" }
+
+            // Same seven points per cell the canopy sampling uses, so a coastal
+            // cell whose centroid sits offshore still has land to average.
+            val points = existing.flatMap { CellSampling.points(grid, it.h3) }
+            val perCell = points.size / existing.size
+
+            var samples: List<Int?>
+            val ms = measureTimeMillis { samples = elevation.elevation(points) }
+            log.info("re-sampled elevation at {} points in {} ms", points.size, ms)
+
+            val before = existing.count { (it.elevationM ?: 0) < 0 }
+            val rows = existing.mapIndexed { i, cell ->
+                cell.copy(
+                    elevationM = CellSampling.landElevation(
+                        samples.subList(i * perCell, minOf((i + 1) * perCell, samples.size)),
+                        hasCanopy = (cell.canopyPct ?: 0) > 0,
+                    ),
+                )
+            }
+            val after = rows.count { (it.elevationM ?: 0) < 0 }
+
+            written = cells.upsertAll(rows).toLong()
+            audit.succeed(runId, written)
+
+            return ElevationRefreshResult(
+                stateFips = stateFips,
+                cells = rows.size,
+                rowsWritten = written,
+                belowSeaLevelBefore = before,
+                belowSeaLevelAfter = after,
+                elapsedMs = ms,
+            )
+        } catch (e: Exception) {
+            audit.fail(runId, written, e)
+            throw e
+        }
+    }
+
     fun bootstrapState(stateName: String): GridBootstrapResult {
         val runId = audit.start(source = "tigerweb+nlcd-tiles+terrarium", job = "grid-bootstrap:$stateName")
         var written = 0L
@@ -124,6 +186,9 @@ class GridBootstrap(
 
             val rows = tiled.mapIndexed { i, h3 ->
                 val centroid = grid.centroid(h3)
+                val canopyForCell = CellSampling.average(
+                    canopyValues.subList(i * perCell, minOf((i + 1) * perCell, canopyValues.size)),
+                )
                 Cell(
                     h3 = h3,
                     resolution = resolution,
@@ -134,10 +199,9 @@ class GridBootstrap(
                     centroidLon = centroid.lon,
                     elevationM = CellSampling.landElevation(
                         elevationSamples.subList(i * perCell, minOf((i + 1) * perCell, elevationSamples.size)),
+                        hasCanopy = (canopyForCell ?: 0) > 0,
                     ),
-                    canopyPct = CellSampling.average(
-                        canopyValues.subList(i * perCell, minOf((i + 1) * perCell, canopyValues.size)),
-                    ),
+                    canopyPct = canopyForCell,
                     stateFips = boundary.fips,
                     stateName = boundary.name,
                 )
@@ -180,4 +244,14 @@ data class GridBootstrapResult(
     val canopySampled: Int,
     val elevationSampled: Int,
     val canopyHistogram: Map<String, Long>,
+)
+
+data class ElevationRefreshResult(
+    val stateFips: String,
+    val cells: Int,
+    val rowsWritten: Long,
+    /** Cells reading below sea level before and after; the point of the run. */
+    val belowSeaLevelBefore: Int,
+    val belowSeaLevelAfter: Int,
+    val elapsedMs: Long,
 )

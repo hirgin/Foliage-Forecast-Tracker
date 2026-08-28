@@ -103,4 +103,27 @@ class CellSamplingTest {
         // test missed this. Inland cells must be unaffected by the fix.
         assertEquals(371, CellSampling.landElevation(listOf(340, 355, 371, 388, 401)))
     }
+
+    @Test
+    fun `forest is never below sea level`() {
+        // At ~300 m per pixel a shoreline pixel averages land and sea, so real
+        // coastal forest read slightly negative even after preferring land.
+        // NLCD derives canopy from land imagery, so trees are evidence of
+        // ground: 370 Atlantic cells, some at 74% canopy, read down to -74 m.
+        assertEquals(0, CellSampling.landElevation(listOf(-30, -20, -25), hasCanopy = true))
+    }
+
+    @Test
+    fun `bare ground below sea level is left alone`() {
+        // What keeps Death Valley and the Salton Sea honest. Nothing grows
+        // there, so nothing vouches for the ground being above water.
+        assertEquals(-70, CellSampling.landElevation(listOf(-72, -68, -70), hasCanopy = false))
+    }
+
+    @Test
+    fun `canopy does not raise a cell that is already above water`() {
+        // The clamp is a floor, not an adjustment: it must never move a cell
+        // that was reading correctly.
+        assertEquals(371, CellSampling.landElevation(listOf(340, 371, 402), hasCanopy = true))
+    }
 }

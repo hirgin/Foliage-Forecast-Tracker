@@ -50,11 +50,26 @@ object CellSampling {
      * clamped: Death Valley and the Salton Sea really are below sea level, and
      * a blanket clamp would quietly invent ground there.
      */
-    fun landElevation(samples: List<Int?>): Int? {
+    fun landElevation(samples: List<Int?>, hasCanopy: Boolean = false): Int? {
         val present = samples.filterNotNull()
         if (present.isEmpty()) return null
         val land = present.filter { it >= 0 }
-        return Math.round((if (land.isNotEmpty()) land else present).average()).toInt()
+        val mean = Math.round((if (land.isNotEmpty()) land else present).average()).toInt()
+
+        // Preferring land samples halves the problem but does not end it: at
+        // ~300 m per pixel a shoreline pixel averages land and sea together, so
+        // genuinely forested cells still read slightly negative, and a few sit
+        // mostly over water. 370 cells across the Atlantic states survived the
+        // first fix, some at 74% canopy and -74 m.
+        //
+        // Canopy settles it. NLCD derives tree cover from land imagery, so a
+        // cell it says is forested has ground above water whatever a smoothed
+        // bathymetry pixel reports. Trees are the evidence; the floor is zero.
+        //
+        // This deliberately does not apply to cells with no canopy, which is
+        // what keeps Death Valley and the Salton Sea honest -- nothing grows
+        // there, nothing is clamped, and they stay below sea level.
+        return if (hasCanopy && mean < 0) 0 else mean
     }
 
     /**

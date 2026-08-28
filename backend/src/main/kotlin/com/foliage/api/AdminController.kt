@@ -1,6 +1,7 @@
 package com.foliage.api
 
 import com.foliage.ingest.GridBootstrap
+import com.foliage.ingest.ElevationRefreshResult
 import com.foliage.ingest.GridBootstrapResult
 import com.foliage.ingest.RegionBootstrapResult
 import com.foliage.ingest.places.PlaceIngest
@@ -47,6 +48,15 @@ class AdminController(
         @RequestParam region: String,
         @RequestParam(defaultValue = "false") force: Boolean,
     ): RegionBootstrapResult = gridBootstrap.bootstrapRegion(region, force)
+
+    /**
+     * Re-derives elevation for an already-tiled state without touching canopy.
+     * Seconds rather than the minutes a full re-bootstrap costs; see
+     * GridBootstrap.refreshElevation.
+     */
+    @PostMapping("/refresh-elevation")
+    fun refreshElevation(@RequestParam stateFips: String): ElevationRefreshResult =
+        gridBootstrap.refreshElevation(stateFips)
 
     /** Observed trailing window plus the 16-day forecast. Cheap; run daily. */
     @PostMapping("/ingest-forecast")
