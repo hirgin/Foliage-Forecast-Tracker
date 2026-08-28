@@ -12,7 +12,17 @@ java {
     toolchain { languageVersion = JavaLanguageVersion.of(23) }
 }
 
-repositories { mavenCentral() }
+repositories {
+    mavenCentral()
+    // NetCDF-Java is published only to Unidata's own repository. Note this
+    // needs a JVM whose cacerts carries Sectigo Public Server Authentication
+    // Root R46 -- Temurin does, Oracle's bundle does not. See ADR-0006.
+    maven {
+        name = "unidata"
+        url = uri("https://artifacts.unidata.ucar.edu/all/")
+        content { includeGroup("edu.ucar") }
+    }
+}
 
 dependencies {
     // Web + ops
@@ -40,6 +50,10 @@ dependencies {
     // Read-path caching for forecast snapshots
     implementation("com.github.ben-manes.caffeine:caffeine")
 
+    // GRIB2 decoding for NOAA HRRR -- JVM-native, no shelling out to wgrib2.
+    implementation("edu.ucar:grib:5.10.0")
+    implementation("edu.ucar:cdm-core:5.10.0")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     // No Testcontainers: this environment has no Docker, so a container-backed
@@ -55,3 +69,10 @@ kotlin {
 }
 
 tasks.withType<Test> { useJUnitPlatform() }
+
+// Convenience for spikes: prints the runtime classpath so a scratch program
+// can be run against the resolved dependency tree.
+tasks.register("printRuntimeClasspath") {
+    val cp = configurations.runtimeClasspath
+    doLast { println(cp.get().asPath) }
+}

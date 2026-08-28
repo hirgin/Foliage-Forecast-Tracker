@@ -14,12 +14,12 @@ Every external input, where it comes from, and what it costs.
 - Escape hatch if limits bite: Open-Meteo is open source and self-hostable via
   Docker, which removes them entirely.
 
-### NOAA HRRR — *phase 6, blocked (see [ADR-0006](adr/0006-grib2-blocked.md))*
+### NOAA HRRR — *phase 6 (see [ADR-0006](adr/0006-grib2.md))*
 - `s3://noaa-hrrr-bdp-pds` (full archive), `s3://noaa-hrrr-pds` (rolling week)
 - **Auth:** none — AWS Open Data.
-- **Format:** GRIB2. Decoding needs UCAR NetCDF-Java, which no JVM here can
-  download: Unidata's repository chains to a Sectigo root missing from this
-  JDK's `cacerts`. See ADR-0006.
+- **Format:** GRIB2, decoded on the JVM with UCAR NetCDF-Java. **The build
+  requires Temurin** — Oracle's JDK cacerts cannot reach Unidata's Maven
+  repository at all. See ADR-0006.
 - **Byte-range access works.** Each file has an `.idx` sidecar listing record
   offsets, so a single variable costs **1.19 MB against a 133.5 MB file**.
 - **Native resolution:** 3 km, matching H3 resolution 6 exactly.
