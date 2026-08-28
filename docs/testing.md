@@ -24,7 +24,9 @@ only tier that gates every build.
 | Retry and backoff | `ingest/RetryPolicyTest` | Backoff doubles, stops at maxAttempts, and never retries a non-transient error. Sleeping is injected, so the suite stays fast |
 | Weather parsing and provenance | `ingest/weather/WeatherParserTest` | Both response shapes parse; missing locations hold their position; nulls stay null rather than becoming zero; the 16-day forecast boundary is exact |
 | Season bounds | `ingest/weather/SeasonTest` | 76 inclusive days, stable across leap years, and substantially longer than the forecast horizon |
-| Phenology model *(phase 3)* | `forecast/` | Scoring is monotonic in each driver and bounded 0–100 |
+| Photoperiod | `forecast/PhotoperiodTest` | Checked against *published* day lengths, not just self-consistency: equinox ~12 h at every latitude, Vermont solstices 15.4 h / 8.9 h |
+| Lapse-rate downscale | `forecast/LapseRateTest` | 6.5 °C per 1000 m, and a Vermont valley-to-ridge span exceeding 7 °C |
+| Phenology model | `forecast/PhenologyModelTest` | Bounded 0–100 under extremes, stages never move backwards, monotonic in every driver, and a calibration test pinning peak to the first half of October |
 
 ## Tier 2 — Fixture-backed tests (always run)
 
