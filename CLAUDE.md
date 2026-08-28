@@ -63,6 +63,12 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 - **Never persist per-factor model contributions.** It nearly triples the
   forecast table and blows the 5 GiB free tier. `explain` recomputes them for
   a single cell on demand. See ADR-0004.
+- **The forecast horizon is 16 days; the season is ~75.** Most of the season
+  is climatology until it draws close. Never present a `CLIMATOLOGY` day as a
+  forecast in the UI. See ADR-0005.
+- Open-Meteo returns a JSON **object** for one coordinate and an **array** for
+  several. Code that handles only the array form works until a batch of size
+  one appears at the end of a run.
 - **Open-Meteo meters by request weight, not count.** Seven 100-coordinate
   batches in under two seconds trips its minutely limit. Clients retry on 429
   via `RetryPolicy`; do not remove that, and do not raise batch sizes hoping
