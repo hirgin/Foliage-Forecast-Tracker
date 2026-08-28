@@ -2,6 +2,8 @@ package com.foliage.api
 
 import com.foliage.ingest.GridBootstrap
 import com.foliage.ingest.GridBootstrapResult
+import com.foliage.ingest.weather.WeatherIngest
+import com.foliage.ingest.weather.WeatherIngestResult
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -18,9 +20,22 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/admin")
 @ConditionalOnProperty("foliage.admin.enabled", havingValue = "true")
-class AdminController(private val gridBootstrap: GridBootstrap) {
+class AdminController(
+    private val gridBootstrap: GridBootstrap,
+    private val weatherIngest: WeatherIngest,
+) {
 
     @PostMapping("/bootstrap-grid")
     fun bootstrapGrid(@RequestParam state: String): GridBootstrapResult =
         gridBootstrap.bootstrapState(state)
+
+    /** Observed trailing window plus the 16-day forecast. Cheap; run daily. */
+    @PostMapping("/ingest-forecast")
+    fun ingestForecast(@RequestParam stateFips: String): WeatherIngestResult =
+        weatherIngest.refreshForecast(stateFips)
+
+    /** Multi-year archive mean for the far season. Expensive; run once a season. */
+    @PostMapping("/ingest-climatology")
+    fun ingestClimatology(@RequestParam stateFips: String): WeatherIngestResult =
+        weatherIngest.buildClimatology(stateFips)
 }

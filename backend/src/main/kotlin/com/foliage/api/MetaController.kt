@@ -2,6 +2,9 @@ package com.foliage.api
 
 import com.foliage.config.DatabaseBootstrap
 import com.foliage.config.DatabaseStatus
+import com.foliage.persistence.CellRepository
+import com.foliage.persistence.Coverage
+import com.foliage.persistence.WeatherRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -15,22 +18,31 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1")
 class MetaController(
     private val databaseBootstrap: DatabaseBootstrap,
+    private val cells: CellRepository,
+    private val weather: WeatherRepository,
     @Value("\${foliage.model-version}") private val modelVersion: String,
     @Value("\${foliage.grid.resolution}") private val gridResolution: Int,
 ) {
 
     @GetMapping("/meta")
-    fun meta(): MetaResponse = MetaResponse(
-        service = "foliage-forecast",
-        modelVersion = modelVersion,
-        gridResolution = gridResolution,
-        database = databaseBootstrap.status,
-        // Populated in Phase 1+; null here means "no grid loaded yet".
-        cellCount = null,
-        seasonStart = null,
-        seasonEnd = null,
-        lastIngestAt = null,
-    )
+    fun meta(): MetaResponse {
+        // Degrade rather than 500: meta is what the UI uses to decide whether
+        // it can render anything at all, so it must answer even when the
+        // database is unreachable.
+        val grid = runCatching { cells.countByState("50") }.getOrNull()
+        val coverage = runCatching { weather.coverage() }.getOrNull()
+        val byKind = runCatching { weather.countByKind() }.getOrDefault(emptyMap())
+
+        return MetaResponse(
+            service = "foliage-forecast",
+            modelVersion = modelVersion,
+            gridResolution = gridResolution,
+            database = databaseBootstrap.status,
+            cellCount = grid,
+            weather = coverage,
+            weatherByKind = byKind,
+        )
+    }
 }
 
 data class MetaResponse(
@@ -39,7 +51,6 @@ data class MetaResponse(
     val gridResolution: Int,
     val database: DatabaseStatus,
     val cellCount: Long?,
-    val seasonStart: String?,
-    val seasonEnd: String?,
-    val lastIngestAt: String?,
+    val weather: Coverage?,
+    val weatherByKind: Map<String, Long>,
 )

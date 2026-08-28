@@ -78,7 +78,7 @@ times slower.
 
 - [x] **Phase 0** — foundations, health endpoint, status page
 - [x] **Phase 1** — H3 grid, canopy masking, terrain attributes *(Vermont: 649 cells)*
-- [ ] **Phase 2** — weather pipeline (Open-Meteo)
+- [x] **Phase 2** — weather pipeline (Open-Meteo) *(Vermont: 18,920 cell-days)*
 - [ ] **Phase 3** — phenology model
 - [ ] **Phase 4** — map experience
 - [ ] **Phase 5** — polish and deploy

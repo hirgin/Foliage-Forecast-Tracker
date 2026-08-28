@@ -54,6 +54,23 @@ foliage:
     # Open-Meteo caps the elevation endpoint at 100 coordinates per call.
     elevation-batch-size: 100
     boundary-url: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0/query
+  weather:
+    forecast-url: https://api.open-meteo.com/v1/forecast
+    archive-url: https://archive-api.open-meteo.com/v1/archive
+    # Coordinates per request. Open-Meteo meters by weight, so this trades
+    # round trips against how much work a single 429 costs.
+    batch-size: 50
+    # Open-Meteo's hard cap; forecast_days=17 returns HTTP 400. See ADR-0005.
+    forecast-days: 16
+    # Trailing observed window pulled alongside the forecast, enough to seed
+    # chilling and drought accumulation from the start of the season.
+    past-days: 92
+    # Years of archive averaged into the climatological fallback.
+    climatology-years: 5
+  season:
+    # Foliage season bounds, month-day. Everything outside this is not modelled.
+    start: "09-01"
+    end: "11-15"
   admin:
     # Guards the bootstrap trigger. Off by default; enabled in the local profile.
     enabled: ${FOLIAGE_ADMIN_ENABLED:false}

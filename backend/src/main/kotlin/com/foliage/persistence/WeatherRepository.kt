@@ -1,0 +1,84 @@
+package com.foliage.persistence
+
+import com.foliage.domain.WeatherDay
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.stereotype.Repository
+import java.sql.Date
+import java.sql.PreparedStatement
+import java.sql.Types
+
+/**
+ * Bulk writes for daily weather.
+ *
+ * The upsert enforces the provenance ordering from ADR-0005: a row may be
+ * replaced by an equal or *better* kind, never a worse one. Climatology may
+ * become forecast and forecast may become observed; nothing goes backwards.
+ * Without this, a climatology rebuild run after the daily refresh would
+ * quietly overwrite real observations with long-run averages.
+ */
+@Repository
+class WeatherRepository(private val jdbc: JdbcTemplate) {
+
+    /** Ordering must match [com.foliage.domain.WeatherKind] precedence. */
+    private val rank = "FIELD(%s, 'CLIMATOLOGY', 'FORECAST', 'OBSERVED')"
+
+    fun upsertAll(rows: List<WeatherDay>): Int {
+        if (rows.isEmpty()) return 0
+
+        val newRank = rank.format("VALUES(kind)")
+        val oldRank = rank.format("kind")
+        val better = "$newRank >= $oldRank"
+
+        val sql = """
+            INSERT INTO weather_daily
+                (h3, day, resolution, kind, tmax_c, tmin_c, precip_mm, radiation_mj)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                tmax_c       = IF($better, VALUES(tmax_c),       tmax_c),
+                tmin_c       = IF($better, VALUES(tmin_c),       tmin_c),
+                precip_mm    = IF($better, VALUES(precip_mm),    precip_mm),
+                radiation_mj = IF($better, VALUES(radiation_mj), radiation_mj),
+                resolution   = IF($better, VALUES(resolution),   resolution),
+                fetched_at   = IF($better, NOW(6),               fetched_at),
+                kind         = IF($better, VALUES(kind),         kind)
+        """.trimIndent()
+
+        val counts = jdbc.batchUpdate(sql, rows, rows.size) { ps: PreparedStatement, r: WeatherDay ->
+            ps.setLong(1, r.h3)
+            ps.setDate(2, Date.valueOf(r.day))
+            ps.setInt(3, r.resolution)
+            ps.setString(4, r.kind.name)
+            setDouble(ps, 5, r.tmaxC)
+            setDouble(ps, 6, r.tminC)
+            setDouble(ps, 7, r.precipMm)
+            setDouble(ps, 8, r.radiationMj)
+        }
+        return counts.sumOf { it.size }
+    }
+
+    private fun setDouble(ps: PreparedStatement, i: Int, v: Double?) =
+        v?.let { ps.setDouble(i, it) } ?: ps.setNull(i, Types.DECIMAL)
+
+    fun countByKind(): Map<String, Long> = jdbc.query(
+        "SELECT kind, COUNT(*) n FROM weather_daily GROUP BY kind",
+        { rs, _ -> rs.getString("kind") to rs.getLong("n") },
+    ).toMap()
+
+    fun coverage(): Coverage? = jdbc.query(
+        """
+        SELECT MIN(day) lo, MAX(day) hi, COUNT(*) n, COUNT(DISTINCT h3) cells
+        FROM weather_daily
+        """.trimIndent(),
+        { rs, _ ->
+            val lo = rs.getDate("lo") ?: return@query null
+            Coverage(
+                from = lo.toLocalDate().toString(),
+                to = rs.getDate("hi").toLocalDate().toString(),
+                rows = rs.getLong("n"),
+                cells = rs.getLong("cells"),
+            )
+        },
+    ).firstOrNull()
+}
+
+data class Coverage(val from: String, val to: String, val rows: Long, val cells: Long)

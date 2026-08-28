@@ -85,6 +85,18 @@ class CellRepository(private val jdbc: JdbcTemplate) {
         stateFips, minCanopyPct,
     )
 
+    /**
+     * Distinct res 5 ancestors of a state's cells.
+     *
+     * Weather is fetched at res 5 because that is what Open-Meteo is natively
+     * accurate at; roughly seven res 6 cells share each one, so this cuts the
+     * number of API calls by about 7x with no loss of real information.
+     */
+    fun distinctRes5Parents(stateFips: String): List<Long> = jdbc.queryForList(
+        "SELECT DISTINCT parent_res5 FROM cell WHERE state_fips = ? ORDER BY parent_res5",
+        Long::class.java, stateFips,
+    )
+
     fun canopyHistogram(stateFips: String): Map<String, Long> = jdbc.query(
         """
         SELECT CASE WHEN canopy_pct IS NULL THEN 'unsampled'
