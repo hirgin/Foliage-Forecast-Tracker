@@ -48,6 +48,18 @@ class StaticExporter(
     private val log = LoggerFactory.getLogger(javaClass)
     private val mapper = ObjectMapper()
 
+    /**
+     * "Vermont", "Vermont and Maine", "6 states", "the contiguous United States".
+     * Naming every state once the grid is national would be unreadable.
+     */
+    private fun coverageLabel(states: List<String>): String = when {
+        states.isEmpty() -> "United States"
+        states.size == 1 -> states.single()
+        states.size == 2 -> "${states[0]} and ${states[1]}"
+        states.size >= 45 -> "the contiguous United States"
+        else -> "${states.size} states"
+    }
+
     /** Shard key: the res 3 ancestor, up to ~343 res 6 cells per shard. */
     private fun shardOf(h3: Long): String = grid.toAddress(grid.parent(h3, 3))
 
@@ -157,6 +169,10 @@ class StaticExporter(
                 "gridResolution" to 6,
                 "shardResolution" to 3,
                 "stateFips" to (stateFips ?: "all"),
+                // Human-readable coverage for the UI header, derived from the
+                // states actually loaded rather than hardcoded.
+                "coverage" to coverageLabel(grid6.mapNotNull { it.stateName }.distinct().sorted()),
+                "stateCount" to grid6.mapNotNull { it.stateName }.distinct().size,
                 "cellCount" to grid6.size,
                 "shardCount" to shards.size,
                 "seasonStart" to season.start(year).toString(),

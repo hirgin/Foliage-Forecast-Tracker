@@ -55,7 +55,10 @@ export default function MapView({ nav }) {
       <aside className="panel">
         <header>
           <h1>Foliage Forecast</h1>
-          <p className="sub">Vermont · {cells.length || '—'} hexagons at ~3 km</p>
+          <p className="sub">
+            {meta.data?.coverage ?? 'United States'} ·{' '}
+            {cells.length ? cells.length.toLocaleString() : '—'} hexagons at ~3 km
+          </p>
         </header>
 
         {nav}
@@ -73,7 +76,7 @@ export default function MapView({ nav }) {
               <span className="headline__date">{date ? formatDay(date) : '—'}</span>
               <span className="headline__peak">
                 {peakCount
-                  ? `${peakCount} of ${cells.length} at or near peak`
+                  ? `${peakCount.toLocaleString()} of ${cells.length.toLocaleString()} at or near peak`
                   : 'No cells near peak yet'}
               </span>
             </div>
@@ -84,7 +87,7 @@ export default function MapView({ nav }) {
                 <div className="legend__row" key={s.key}>
                   <span className="swatch" style={{ background: `rgb(${s.rgb.join(',')})` }} />
                   <span className="legend__label">{s.label}</span>
-                  <span className="legend__count">{counts[s.key] ?? 0}</span>
+                  <span className="legend__count">{(counts[s.key] ?? 0).toLocaleString()}</span>
                 </div>
               ))}
             </section>
