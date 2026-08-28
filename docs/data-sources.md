@@ -26,61 +26,98 @@ Every external input, where it comes from, and what it costs.
 
 ## Terrain and land cover
 
-### NLCD / USFS Tree Canopy Cover (CONUS)
+### Canopy — NLCD / USFS Tree Canopy Cover (CONUS)
 - <https://www.mrlc.gov/data/nlcd-all-usfs-tree-canopy-cover-conus>
-- 30 m raster, public domain. Defines which hexagons are forest.
-- Downloaded and processed **once**, offline, in the bootstrap job.
+- Served from an ArcGIS ImageServer. 30 m raster, public domain. Defines which
+  hexagons are forest.
+- **Read as tiles via `exportImage`**, one degree at 3,700 px, which is the
+  raster's native 30 m. Cells are grouped by tile so each is fetched once.
 
-### Elevation — USGS 3DEP
+Two traps, both found only by comparing against the point service:
+
+- **`format=png` is not data.** It returns four RGBA bands with a colour ramp
+  applied. The numbers look like plausible percentages and are not canopy.
+  Only `format=tiff` is the raw single band.
+- **Resolution has to be asked for.** At 108 m per pixel, nearest-neighbour
+  picks one arbitrary 30 m cell out of thirteen; Mount Mansfield read 0%
+  canopy against the point service's 45%.
+
+**Why native resolution and not coarser.** Measured over 962 points on a 3 km
+lattice across Vermont, coarser averaged rasters agree on *mean* canopy exactly
+— 65% at every resolution tried — but disagree on the decision that matters:
+**5.5% of cells cross the forest threshold at 90 m, and 12.6% at 250 m.**
+Sampling natively keeps the tile source a drop-in for the point service rather
+than a silent redraw of the map. The cost is 13 MB per tile, streamed and
+discarded.
+
+### Elevation — AWS Terrain Tiles (Terrarium)
+- <https://registry.opendata.aws/terrain-tiles/> —
+  `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`
+- **Auth:** none. Ordinary PNGs with height packed into the channels:
+  `height = (R * 256 + G + B / 256) - 32768`. The offset is what allows
+  below-sea-level terrain; Death Valley decodes negative rather than clamping.
+- **Zoom 9**, ~300 m per pixel, under 4,000 tiles for CONUS.
+
+**Why zoom 9.** Over 1,755 Vermont points, zoom 9 differs from zoom 11 by a
+median of 8 m and a p90 of 23 m, with near-identical distributions. Each zoom
+step quadruples the tile count, so zoom 11 would be ~60,000 tiles for detail no
+3 km hexagon can express. Narrow summits do read low — Mansfield comes back
+~80 m under its published height — which is smoothing in the tail, not bias.
+
+**It matches the source it replaced.** Against 3DEP over 60 spread Vermont
+points: bias 8.0 m, median 7 m, p90 22 m. Eight metres is 0.05 °C of lapse
+rate, so re-running the bootstrap does not move any forecast date.
+
+### Why both moved to bulk rasters
+
+Point sampling worked at state scale and could not reach the country. Measured:
+
+| | Vermont (649 cells) | CONUS (223,650 cells) |
+|---|---|---|
+| Elevation, 3DEP point sampling | 13 batches, ~12 min | 4,473 batches, **~71 h** |
+| Canopy, NLCD point sampling | 19 batches | 6,264 batches, **~10 h** |
+| Elevation, terrain tiles | **664 ms** (16 tiles) | under 4,000 tiles |
+| Canopy, `exportImage` tiles | **53 s** (10 tiles) | ~1,500 tiles |
+
+Seventy-one hours is not a slow job but an impossible one. See ADR-0007.
+
+Canopy is now the bottleneck: its tiles are 13 MB and rendered on demand, so
+it gains far less than elevation, which collapses 649 cells onto 16 tiles.
+
+#### Previously: USGS 3DEP point sampling
 - <https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer>
-- **Auth:** none. Batched `getSamples`, same interface as the canopy service.
-- **Batch size 50, measured not guessed.** 3DEP is slow when points span many
-  raster tiles: 0.36 s/point at 50, but 0.73 s/point at both 25 and 100, and
-  CloudFront returns 504 Gateway Timeout above roughly 200 spread points.
+- Batched `getSamples`, batch size 50 — measured, not guessed: 0.36 s/point at
+  50, but 0.73 s/point at both 25 and 100, and CloudFront returns 504 above
+  roughly 200 spread points.
 
-**Its resolution advantage is illusory at this grid scale.** Across all 649
-Vermont cells, 3DEP (1 m) and Open-Meteo (~90 m) agree closely — min/median/max
+Chosen because it is **not rate-limited**, not because it is finer: across all
+649 Vermont cells, 3DEP (1 m) and Open-Meteo (~90 m) agreed to min/median/max
 of 30/371/967 against 27/380/981. One centroid sample per 36 km² hexagon cannot
-exploit metre-scale detail. 3DEP is used because it is **not rate-limited**,
-not because it is finer.
+exploit metre-scale detail.
 
-**Neither is right for CONUS, and the real figure is far worse than the clean
-path suggests.** Measured during the New England bootstrap: 21 batches in 20
-minutes, or **~57 s per batch**, because most batches need one or two retries
-after a 504. The isolated measurement of 18 s assumed no retries.
+The real rate was worse than the clean path suggested. During the New England
+bootstrap: 21 batches in 20 minutes, **~57 s per batch**, because most needed a
+retry after a 504. The isolated 18 s measurement assumed none, and the earlier
+estimate of 7.6 hours was optimistic by roughly an order of magnitude.
 
-At that rate a full CONUS pass is 4,473 batches and **roughly 71 hours**, and
-that is before canopy sampling. Point-sampling elevation does not scale to a
-national grid.
-
-For the record, the earlier estimate of 7.6 hours was optimistic by roughly an order of magnitude.
-
-A bulk DEM is therefore not an optimisation but a prerequisite. At ~1 km it
-would be faster, entirely sufficient given the resolution comparison above,
-and more correct — each cell would get a true *mean* elevation rather than a
-centroid point sample, which is the right input to a lapse-rate correction.
-NetCDF-Java is already on the classpath from the GRIB work and can read one.
-
-**Also worth reconsidering: what gets sampled at all.** The grid currently
-stores every tiled cell so the forest threshold can be retuned without
-re-sampling, which is right at state scale. Nationally that is 223,650 cells
-against 76,041 forested ones — three times the elevation work for cells that
-will never be forecast. Sampling canopy first and elevation only above a low
-canopy floor would cut it by two thirds without losing the ability to retune.
+Retained as a fallback and as the reference the tile source is validated
+against — keeping it is what caught both `exportImage` traps above.
 
 #### Previously: Open-Meteo elevation
 
-**Measured rate limit.** Open-Meteo meters by request *weight*, not request
-count: a batch of 100 coordinates costs far more than a single lookup. The
-first Vermont bootstrap fired 7 batches of 100 in 1.9 s and the seventh came
-back `429 Minutely API request limit exceeded`. Clients now retry on 429 with
-exponential backoff, which recovered the batch on re-run at a cost of ~74 s.
+**Metered by request *weight*, not count.** The first Vermont bootstrap fired 7
+batches of 100 in 1.9 s and the seventh returned `429 Minutely API request
+limit exceeded`. Clients retry on 429 with backoff, which recovered the batch
+at a cost of ~74 s. This was the original reason for moving to 3DEP.
 
-**This does not scale to CONUS.** 224,000 cells is 2,240 batches; at the
-observed throttle that is hours of mostly-waiting. Before the grid leaves the
-state scale, elevation needs a bulk source (a DEM tile set processed offline)
-rather than a metered API. The `ElevationSource` seam exists for exactly this
-swap.
+### Still open: sampling cells that will never be forecast
+
+The grid stores every tiled cell so the forest threshold can be retuned without
+re-sampling, which is right at state scale. Nationally that is 223,650 cells
+against 76,041 forested ones — three times the terrain work for cells that will
+never be forecast. Sampling canopy first and elevation only above a low canopy
+floor would cut it substantially without losing the ability to retune. Less
+urgent now that both sources are bulk, but the waste is real.
 
 ## Places
 

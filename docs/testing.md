@@ -77,7 +77,9 @@ Some invariants are only meaningful against a real database, and were checked
 by running the pipeline and reconciling the counts:
 
 - **Grid bootstrap is idempotent.** Re-running Vermont produced an identical
-  canopy histogram rather than duplicate rows.
+  canopy histogram rather than duplicate rows. Re-run again on the bulk raster
+  sources (ADR-0007): 649 cells, 649 rows written, and 100% coverage on both
+  canopy and elevation.
 - **Provenance never downgrades** (ADR-0005). The climatology job attempted
   8,360 rows over the 76-day season for 110 cells. 1,320 of those (Sept 1–12,
   110 cells x 12 days) already held `FORECAST` rows from the forecast job.
@@ -103,6 +105,40 @@ the parsing, which is where the bugs actually live.
 Its assertions are deliberately loose on values and strict on structure —
 Miami must out-warm Vermont (a transposed grid index would fail that), and a
 point outside CONUS must return null rather than a clamped edge cell.
+
+### Terrain tiles against the services they replaced
+
+`TerrainTileLiveTest` and `CanopyTileLiveTest` cover the bulk-raster sources
+(ADR-0007). Enable both with `FOLIAGE_TERRAIN_LIVE_TEST=true`. Fixtures were
+rejected for the same reason as GRIB2: a canopy tile is 13 MB.
+
+**These tests assert equivalence, not plausibility.** The claim behind the swap
+is not that the tile sources return numbers — it is that they return *the same
+numbers* as the point services, so replacing one with the other does not
+silently redraw the forest mask or move a forecast date. So both sources are
+run against the same coordinates and compared to each other, rather than the
+new one being checked against hardcoded values it could drift from together
+with the service:
+
+- Canopy tiles against `getSamples`: same values within a pixel, and the
+  **same forest-mask decision** at every point — including a pair straddling a
+  tile edge, which is where a misaligned pixel mapping would show up first.
+- Terrarium against 3DEP over 60 spread Vermont points: **bias 8.0 m, median
+  7 m, p90 22 m**. Held to a bound on *bias* rather than on any single point,
+  because a constant offset would shift a whole state's timing while scatter
+  at summits averages out across 649 cells.
+
+Landmark assertions exist too, but with honest tolerances: a ~300 m pixel
+averages the ground around a peak, so Mount Mansfield reads ~80 m low. Valley
+and lakeshore points, which is what most cells actually are, are held tight.
+Death Valley gets its own assertion on *sign* — a dropped `-32768` offset would
+put the entire country 32 km in the air, and a tolerance wide enough for
+summits could absorb it.
+
+The offline halves (`TerrariumTest`, `RasterGridTest`) carry the tiling and
+decoding arithmetic and always run. Their failure modes are the silent ones: an
+inverted latitude axis mirrors every tile while leaving mean canopy unchanged,
+so each is asserted directly.
 
 
 Tests that need a real database run against a real MySQL schema, and **skip

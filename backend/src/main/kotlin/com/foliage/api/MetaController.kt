@@ -31,7 +31,10 @@ class MetaController(
         // Degrade rather than 500: meta is what the UI uses to decide whether
         // it can render anything at all, so it must answer even when the
         // database is unreachable.
-        val grid = runCatching { cells.countByState("50") }.getOrNull()
+        // Every cell in the grid, not one state's. This counted FIPS 50 while
+        // the grid was Vermont-only, which would have reported 649 cells for
+        // the whole country once CONUS landed.
+        val grid = runCatching { cells.countAll() }.getOrNull()
         val coverage = runCatching { weather.coverage() }.getOrNull()
         val byKind = runCatching { weather.countByKind() }.getOrDefault(emptyMap())
 
