@@ -24,6 +24,7 @@ class MetaController(
     private val season: Season,
     @Value("\${foliage.model-version}") private val modelVersion: String,
     @Value("\${foliage.grid.resolution}") private val gridResolution: Int,
+    @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
 ) {
 
     @GetMapping("/meta")
@@ -37,6 +38,10 @@ class MetaController(
         val grid = runCatching { cells.countAll() }.getOrNull()
         val coverage = runCatching { weather.coverage() }.getOrNull()
         val byKind = runCatching { weather.countByKind() }.getOrDefault(emptyMap())
+        // The grid holds every tiled cell so the threshold can be retuned
+        // without re-sampling, so the total overstates how much work a
+        // forecast is. Forested is the number that sizes scoring and export.
+        val forested = runCatching { cells.countForested(minCanopyPct) }.getOrNull()
 
         return MetaResponse(
             service = "foliage-forecast",
@@ -44,6 +49,8 @@ class MetaController(
             gridResolution = gridResolution,
             database = databaseBootstrap.status,
             cellCount = grid,
+            forestedCellCount = forested,
+            minCanopyPct = minCanopyPct,
             weather = coverage,
             weatherByKind = byKind,
             // The UI needs these before it can request a forecast at all, so
@@ -60,6 +67,9 @@ data class MetaResponse(
     val gridResolution: Int,
     val database: DatabaseStatus,
     val cellCount: Long?,
+    /** Cells at or above [minCanopyPct] -- what a forecast actually covers. */
+    val forestedCellCount: Long?,
+    val minCanopyPct: Int,
     val weather: Coverage?,
     val weatherByKind: Map<String, Long>,
     val seasonStart: String,

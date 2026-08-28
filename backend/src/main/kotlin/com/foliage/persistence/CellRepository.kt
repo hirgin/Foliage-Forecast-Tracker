@@ -156,6 +156,35 @@ class CellRepository(private val jdbc: JdbcTemplate) {
         Long::class.java, stateFips,
     )
 
+    /**
+     * Canopy distribution across the whole grid.
+     *
+     * The grid stores every tiled cell, not only forested ones, so the
+     * threshold can be retuned without re-sampling. That makes "how many cells
+     * are there" a poor guide to how much work a national forecast is: scoring
+     * and exporting are only meaningful above the canopy floor, and the gap
+     * between the two numbers is the size of the waste. See docs/data-sources.md.
+     */
+    fun canopyHistogram(): Map<String, Long> = jdbc.query(
+        """
+        SELECT CASE WHEN canopy_pct IS NULL THEN 'unsampled'
+                    WHEN canopy_pct = 0 THEN '0'
+                    WHEN canopy_pct < 25 THEN '1-24'
+                    WHEN canopy_pct < 50 THEN '25-49'
+                    WHEN canopy_pct < 75 THEN '50-74'
+                    ELSE '75-100' END AS bucket,
+               COUNT(*) AS n
+        FROM cell GROUP BY bucket
+        """.trimIndent(),
+        { rs, _ -> rs.getString("bucket") to rs.getLong("n") },
+    ).toMap()
+
+    /** Cells at or above the forest threshold -- what a forecast actually covers. */
+    fun countForested(minCanopyPct: Int): Long = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM cell WHERE canopy_pct >= ?",
+        Long::class.java, minCanopyPct,
+    ) ?: 0
+
     fun canopyHistogram(stateFips: String): Map<String, Long> = jdbc.query(
         """
         SELECT CASE WHEN canopy_pct IS NULL THEN 'unsampled'
