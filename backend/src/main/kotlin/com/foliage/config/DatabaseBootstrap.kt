@@ -4,6 +4,8 @@ import org.flywaydb.core.Flyway
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import javax.sql.DataSource
 
@@ -23,6 +25,11 @@ class DatabaseBootstrap(private val dataSource: DataSource) {
     final var status: DatabaseStatus = DatabaseStatus(state = "starting")
         private set
 
+    // Ordered first: other ApplicationReadyEvent listeners -- notably the
+    // static export runner -- must not observe the database before migrations
+    // have run. Spring gives no ordering guarantee without this, and the
+    // resulting race passed locally and failed on a CI runner.
+    @Order(Ordered.HIGHEST_PRECEDENCE)
     @EventListener(ApplicationReadyEvent::class)
     fun migrate() {
         status = try {

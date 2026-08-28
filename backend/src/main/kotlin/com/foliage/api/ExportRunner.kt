@@ -10,6 +10,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.ApplicationContext
 import org.springframework.context.event.EventListener
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import java.nio.file.Path
 
@@ -35,6 +37,10 @@ class ExportRunner(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    // Ordered last, after DatabaseBootstrap has migrated. Without an explicit
+    // order these two listeners race, and this one won on CI -- reporting the
+    // database as "starting" and exporting nothing.
+    @Order(Ordered.LOWEST_PRECEDENCE)
     @EventListener(ApplicationReadyEvent::class)
     fun run() {
         val env = context.environment
