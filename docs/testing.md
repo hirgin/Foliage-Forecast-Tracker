@@ -22,6 +22,8 @@ only tier that gates every build.
 | H3 tiling and ancestry | `grid/H3GridTest` | Cell counts are the right order of magnitude, resolutions are exact, ancestry is transitive, no res 5 parent exceeds 7 children |
 | Per-cell terrain sampling | `ingest/terrain/CellSamplingTest` | Seven samples per hexagon, all strictly inside the boundary; no samples averages to null, not zero |
 | Retry and backoff | `ingest/RetryPolicyTest` | Backoff doubles, stops at maxAttempts, and never retries a non-transient error. Sleeping is injected, so the suite stays fast |
+| HRRR index parsing | `ingest/weather/hrrr/HrrrIndexParserTest` | Byte ranges are exclusive of the next record, the final record is open-ended, ordering prevents negative ranges, and the same variable at different levels is distinguished |
+| HRRR run addressing | `ingest/weather/hrrr/HrrrRunTest` | Bucket keys match what NOAA publishes, and the 48 h / 18 h cycle limits are enforced rather than discovered as a 404 |
 | Weather parsing and provenance | `ingest/weather/WeatherParserTest` | Both response shapes parse; missing locations hold their position; nulls stay null rather than becoming zero; the 16-day forecast boundary is exact |
 | Season bounds | `ingest/weather/SeasonTest` | 76 inclusive days, stable across leap years, and substantially longer than the forecast horizon |
 | Photoperiod | `forecast/PhotoperiodTest` | Checked against *published* day lengths, not just self-consistency: equinox ~12 h at every latitude, Vermont solstices 15.4 h / 8.9 h |
@@ -66,6 +68,22 @@ These are reconciliations rather than assertions, and belong in tier 3 as
 automated checks once a test schema exists.
 
 ## Tier 3 — Live integration tests (opt-in)
+
+### HRRR against NOAA
+
+`HrrrLiveIngestTest` exercises the whole GRIB2 path — index, byte-range fetch,
+decode, sample — against the live bucket. Enable with
+`FOLIAGE_HRRR_LIVE_TEST=true`; it skips otherwise, because it needs the public
+internet and a product still inside the rolling window.
+
+A committed fixture was rejected: one GRIB2 message is 1.2 MB, more than this
+repository should carry for a single test. The offline coverage above tests
+the parsing, which is where the bugs actually live.
+
+Its assertions are deliberately loose on values and strict on structure —
+Miami must out-warm Vermont (a transposed grid index would fail that), and a
+point outside CONUS must return null rather than a clamped edge cell.
+
 
 Tests that need a real database run against a real MySQL schema, and **skip
 themselves when none is configured** rather than failing. Enable by setting

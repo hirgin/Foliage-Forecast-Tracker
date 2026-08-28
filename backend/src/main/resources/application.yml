@@ -67,6 +67,13 @@ foliage:
     past-days: 92
     # Years of archive averaged into the climatological fallback.
     climatology-years: 5
+  hrrr:
+    # AWS Open Data, no credentials. See ADR-0006.
+    base-url: https://noaa-hrrr-bdp-pds.s3.amazonaws.com
+    # HRRR reaches 48 h from synoptic cycles and 18 h otherwise, so it refines
+    # the recent past and the next couple of days at 3 km. Open-Meteo keeps the
+    # 16-day horizon and the climatology.
+    enabled: ${FOLIAGE_HRRR_ENABLED:false}
   season:
     # Foliage season bounds, month-day. Everything outside this is not modelled.
     start: "09-01"

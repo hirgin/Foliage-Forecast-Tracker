@@ -82,7 +82,7 @@ times slower.
 - [x] **Phase 3** — phenology model *(Vermont: 49,324 scored cell-days)*
 - [x] **Phase 4** — map experience *(time slider, detail panel, factor breakdown)*
 - [x] **Phase 5** — polish and deploy *(static export, GitHub Pages, nightly refresh)*
-- [ ] **Phase 6** — NOAA GRIB2 pipeline
+- [~] **Phase 6** — NOAA GRIB2 *(fetch, decode and sampling proven; ingest wiring next)*
 
 ## Deployment
 
