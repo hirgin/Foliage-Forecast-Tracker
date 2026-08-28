@@ -16,8 +16,34 @@ const FALLBACK_VIEW = { longitude: -72.65, latitude: 43.92, zoom: 7, pitch: 0, b
 // react-map-gl was dropped here, since it pulled ~1 MB of MapLibre for a
 // backdrop and its v8 API no longer loaded a style under a DeckGL parent.
 // Note the {z}/{y}/{x} order: Esri puts row before column.
-const BASEMAP_TILES =
-  'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const ESRI = 'https://services.arcgisonline.com/arcgis/rest/services/Canvas';
+const BASEMAP_TILES = `${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`;
+
+// Labels and boundaries as a separate transparent layer, drawn ABOVE the
+// hexagons. Esri publishes it for exactly this: place names painted under a
+// data overlay are unreadable, and thinning the data enough to see through
+// them costs more than it buys.
+const REFERENCE_TILES = `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`;
+
+/** A raster basemap layer. Used twice: terrain below the data, labels above. */
+function rasterLayer(id, url, opacity) {
+  return new TileLayer({
+    id,
+    data: url,
+    minZoom: 0,
+    maxZoom: 19,
+    tileSize: 256,
+    opacity,
+    renderSubLayers: (props) => {
+      const { boundingBox } = props.tile;
+      return new BitmapLayer(props, {
+        data: null,
+        image: props.data,
+        bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]],
+      });
+    },
+  });
+}
 
 /** Bounding box of the loaded cells, from their H3 indexes. */
 function boundsOf(cells) {
@@ -64,24 +90,7 @@ export default function FoliageMap({ cells, selected, onSelect }) {
 
   const layers = useMemo(
     () => [
-      new TileLayer({
-        id: 'basemap',
-        data: BASEMAP_TILES,
-        minZoom: 0,
-        maxZoom: 19,
-        tileSize: 256,
-        // Knocked back over the page's dark ground so the basemap reads as
-        // context rather than competing with the foliage ramp on top of it.
-        opacity: 0.45,
-        renderSubLayers: (props) => {
-          const { boundingBox } = props.tile;
-          return new BitmapLayer(props, {
-            data: null,
-            image: props.data,
-            bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]],
-          });
-        },
-      }),
+      rasterLayer('basemap', BASEMAP_TILES, 0.9),
       new H3HexagonLayer({
         id: 'foliage',
         data: cells,
@@ -105,6 +114,9 @@ export default function FoliageMap({ cells, selected, onSelect }) {
           getLineWidth: [selected],
         },
       }),
+      // Last in the array means last drawn: names and boundaries sit above the
+      // data rather than under it.
+      rasterLayer('reference', REFERENCE_TILES, 0.85),
     ],
     [cells, selected, onSelect],
   );

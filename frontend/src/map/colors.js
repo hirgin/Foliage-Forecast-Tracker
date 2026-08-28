@@ -48,9 +48,18 @@ const lerp = (a, b, t) => a + (b - a) * t;
  * invisible. Interpolating within the band restores it without changing a
  * single number in the model.
  */
+/**
+ * Alpha carries confidence, and is deliberately well short of opaque.
+ *
+ * The basemap underneath holds terrain shading, water and settlement shapes,
+ * all of which help place a hexagon in the real world. Painting over it at
+ * full strength throws that away. The range here (~45-70%) keeps the ramp
+ * legible while letting the ground show through; place names are handled
+ * separately by drawing Esri's reference layer above the data.
+ */
 export function foliageColor(cell) {
   const [r, g, b] = progressionColor(cell.progression, cell.stage);
-  const alpha = Math.round(255 * (0.45 + 0.55 * (cell.confidence ?? 1)));
+  const alpha = Math.round(255 * (0.45 + 0.25 * (cell.confidence ?? 1)));
   return [r, g, b, alpha];
 }
 

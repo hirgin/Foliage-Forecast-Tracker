@@ -110,8 +110,15 @@ export default function MapView({ nav }) {
           </p>
           {meta.data && (
             <p className="build">
-              model {meta.data.modelVersion} · schema v
-              {meta.data.database?.schemaVersion ?? '?'}
+              model {meta.data.modelVersion}
+              {/* Schema version is a backend concept; a static build reports
+                  the payload format instead of an empty "schema v?". */}
+              {meta.data.database?.schemaVersion
+                ? ` · schema v${meta.data.database.schemaVersion}`
+                : meta.data.format
+                  ? ` · ${meta.data.format}`
+                  : ''}
+              {meta.data.generatedAt && ` · built ${meta.data.generatedAt.slice(0, 10)}`}
             </p>
           )}
         </footer>
