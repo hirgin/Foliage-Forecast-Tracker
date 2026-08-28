@@ -88,6 +88,9 @@ const shardKey = (h3) => cellToParent(h3, SHARD_RES);
 
 export const fetchMeta = () => (STATIC ? staticMeta() : request('/meta'));
 
+/** The searchable place index. Small enough to fetch once and keep. */
+export const fetchPlaces = () => request(STATIC ? '/places.json' : '/places');
+
 export async function fetchForecast(date) {
   if (!STATIC) return request(`/forecast?date=${date}`);
 

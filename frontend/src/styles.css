@@ -447,3 +447,77 @@ footer a { color: var(--accent); }
    Size it explicitly instead of fighting over position. */
 .map > .map__canvas { width: 100%; height: 100%; }
 .maplibregl-canvas { outline: none; }
+
+/* ---------- place search ---------- */
+
+.search { position: relative; margin-top: 12px; }
+
+.search__input {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.search__input::placeholder { color: var(--muted); }
+.search__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.search__results {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.search__hit {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.search__hit--on { background: rgba(232, 150, 60, 0.16); }
+.search__icon { color: var(--accent); font-size: 10px; }
+.search__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+.search__empty {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  padding: 9px 11px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}

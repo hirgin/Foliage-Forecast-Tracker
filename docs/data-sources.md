@@ -82,6 +82,30 @@ state scale, elevation needs a bulk source (a DEM tile set processed offline)
 rather than a metered API. The `ElevationSource` seam exists for exactly this
 swap.
 
+## Places
+
+### GeoNames US dump
+- <https://download.geonames.org/export/dump/US.zip> — 68 MB, no auth
+- 2.24 million US features; 316,341 kept.
+
+**Filtered by feature code, not population.** Foliage destinations are small or
+unpopulated: Killington and Grafton record zero, Manchester 740, Woodstock 871,
+Stowe 4,314. The `cities15000` tier would have listed Burlington and nothing
+else anyone drives to see leaves.
+
+Kept codes: `PPL*` (towns), `PRK` (parks), `FRST`/`RESF` (forests), `MT`/`PK`
+(mountains), `GAP` (notches). Everything else is discarded — over a million of
+the 2.24 million features are buildings, streams and survey marks.
+
+Natural features are included deliberately: Mount Mansfield and Smugglers'
+Notch are destinations in a way most towns are not.
+
+Every US place is stored regardless of the current grid, since resolving one to
+a hexagon needs only its coordinates. Expanding the grid lights up its towns
+without reprocessing two million rows. The export publishes only places inside
+the grid — a search result with no forecast behind it is worse than not listing
+it.
+
 ## Phenology reference
 
 - USA National Phenology Network — <https://www.usanpn.org/data/code>

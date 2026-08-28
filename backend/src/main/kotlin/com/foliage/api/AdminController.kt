@@ -3,6 +3,8 @@ package com.foliage.api
 import com.foliage.ingest.GridBootstrap
 import com.foliage.ingest.GridBootstrapResult
 import com.foliage.ingest.RegionBootstrapResult
+import com.foliage.ingest.places.PlaceIngest
+import com.foliage.ingest.places.PlaceIngestResult
 import com.foliage.forecast.ForecastRunResult
 import com.foliage.forecast.ForecastService
 import com.foliage.ingest.weather.WeatherIngest
@@ -28,6 +30,7 @@ class AdminController(
     private val weatherIngest: WeatherIngest,
     private val forecastService: ForecastService,
     private val staticExporter: StaticExporter,
+    private val placeIngest: PlaceIngest,
 ) {
 
     @PostMapping("/bootstrap-grid")
@@ -66,6 +69,14 @@ class AdminController(
     @PostMapping("/compute-forecast")
     fun computeForecast(@RequestParam(required = false) stateFips: String?): ForecastRunResult =
         forecastService.computeState(stateFips)
+
+    /**
+     * Loads US places from GeoNames. One-off: the source changes rarely, and
+     * every US place is stored regardless of the current grid, so expanding
+     * the grid needs no re-ingest.
+     */
+    @PostMapping("/ingest-places")
+    fun ingestPlaces(): PlaceIngestResult = placeIngest.ingest()
 
     /** Writes the season out as static JSON for CDN publishing. */
     @PostMapping("/export")

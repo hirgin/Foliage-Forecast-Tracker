@@ -7,6 +7,7 @@ import com.foliage.grid.H3Grid
 import com.foliage.ingest.weather.Season
 import com.foliage.persistence.CellRepository
 import com.foliage.persistence.ForecastRepository
+import com.foliage.persistence.PlaceRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -40,6 +41,7 @@ class StaticExporter(
     private val cells: CellRepository,
     private val forecasts: ForecastRepository,
     private val forecastService: ForecastService,
+    private val places: PlaceRepository,
     private val grid: H3Grid,
     private val season: Season,
     @Value("\${foliage.model-version}") private val modelVersion: String,
@@ -160,6 +162,29 @@ class StaticExporter(
             )
         }
 
+        // --- searchable places --------------------------------------------
+        //
+        // Only those inside the grid: a search result with no forecast behind
+        // it is worse than not listing the place at all. Parallel arrays for
+        // the same reason the daily files use them -- repeating five keys per
+        // entry roughly triples the file.
+        val inGrid = places.findInGrid().filter { indexOf.containsKey(it.h3) }
+        writeJson(
+            target.resolve("places.json"),
+            mapOf(
+                "count" to inGrid.size,
+                "name" to inGrid.map { it.name },
+                "state" to inGrid.map { it.stateCode },
+                "kind" to inGrid.map { it.kind.name },
+                "population" to inGrid.map { it.population },
+                // Index into cells.json rather than the h3 string: the client
+                // needs the cell's position anyway to read a packed day.
+                "cell" to inGrid.map { indexOf.getValue(it.h3) },
+                "lat" to inGrid.map { Math.round(it.latitude * 1e4) / 1e4 },
+                "lon" to inGrid.map { Math.round(it.longitude * 1e4) / 1e4 },
+            ),
+        )
+
         writeJson(
             target.resolve("meta.json"),
             mapOf(
@@ -174,6 +199,7 @@ class StaticExporter(
                 "coverage" to coverageLabel(grid6.mapNotNull { it.stateName }.distinct().sorted()),
                 "stateCount" to grid6.mapNotNull { it.stateName }.distinct().size,
                 "cellCount" to grid6.size,
+                "placeCount" to inGrid.size,
                 "shardCount" to shards.size,
                 "seasonStart" to season.start(year).toString(),
                 "seasonEnd" to season.end(year).toString(),

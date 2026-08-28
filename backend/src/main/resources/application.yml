@@ -87,6 +87,12 @@ foliage:
     # Below this many hours the daily max/min is wrong rather than imprecise,
     # so the day is dropped and Open-Meteo supplies it.
     min-hours-per-day: 18
+  places:
+    # The full US dump, not a population tier. Foliage destinations are small
+    # or unpopulated -- Killington and Grafton record zero -- so places are
+    # selected by GeoNames feature code instead. See V8.
+    url: https://download.geonames.org/export/dump/US.zip
+    batch-size: 2000
   season:
     # Foliage season bounds, month-day. Everything outside this is not modelled.
     start: "09-01"

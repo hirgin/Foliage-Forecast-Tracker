@@ -72,7 +72,7 @@ function boundsOf(cells) {
   return [[minLon, minLat], [maxLon, maxLat]];
 }
 
-export default function FoliageMap({ cells, selected, onSelect }) {
+export default function FoliageMap({ cells, selected, onSelect, focus }) {
   const [hovered, setHovered] = useState(null);
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -142,6 +142,18 @@ export default function FoliageMap({ cells, selected, onSelect }) {
   useEffect(() => {
     overlayRef.current?.setProps({ layers });
   }, [layers]);
+
+  // Centre on a chosen place. Keyed on the nonce rather than the coordinates
+  // so picking the same place twice still recentres.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focus) return;
+    map.flyTo({
+      center: [focus.lon, focus.lat],
+      zoom: Math.max(map.getZoom(), 9),
+      duration: 900,
+    });
+  }, [focus?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fit once, then leave the view alone. A hardcoded zoom only ever looks
   // right at one window size.

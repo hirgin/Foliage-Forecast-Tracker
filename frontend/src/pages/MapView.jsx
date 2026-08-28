@@ -3,6 +3,7 @@ import { useForecast, useMeta } from '../api/hooks';
 import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
+import PlaceSearch from '../components/PlaceSearch';
 import { STAGES } from '../map/colors';
 
 const FORECAST_HORIZON_DAYS = 16;
@@ -20,6 +21,9 @@ export default function MapView({ nav }) {
   const meta = useMeta();
   const [date, setDate] = useState(null);
   const [selected, setSelected] = useState(null);
+  // Where the map should centre. Carries a nonce so choosing the same place
+  // twice still recentres, rather than being ignored as an unchanged prop.
+  const [focus, setFocus] = useState(null);
 
   // Season bounds come from meta, not from a forecast response. Today is
   // usually outside the season, and a static build has no file for a date
@@ -50,7 +54,7 @@ export default function MapView({ nav }) {
 
   return (
     <div className="app">
-      <FoliageMap cells={cells} selected={selected} onSelect={onSelect} />
+      <FoliageMap cells={cells} selected={selected} onSelect={onSelect} focus={focus} />
 
       <aside className="panel">
         <header>
@@ -62,6 +66,13 @@ export default function MapView({ nav }) {
         </header>
 
         {nav}
+        <PlaceSearch
+          onSelect={(place) => {
+            const h3 = cells[place.cell]?.h3;
+            if (h3) setSelected(h3);
+            setFocus({ lat: place.lat, lon: place.lon, nonce: Date.now() });
+          }}
+        />
 
         {(meta.isLoading || (isLoading && !cells.length)) && (
           <p className="note">Loading forecast…</p>

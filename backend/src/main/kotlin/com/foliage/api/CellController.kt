@@ -2,6 +2,7 @@ package com.foliage.api
 
 import com.foliage.grid.H3Grid
 import com.foliage.persistence.CellRepository
+import com.foliage.persistence.PlaceRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.CacheControl
 import org.springframework.http.ResponseEntity
@@ -15,6 +16,7 @@ import java.util.concurrent.TimeUnit
 @RequestMapping("/api/v1")
 class CellController(
     private val cells: CellRepository,
+    private val places: PlaceRepository,
     private val grid: H3Grid,
     @Value("\${foliage.grid.min-canopy-pct}") private val defaultMinCanopy: Int,
 ) {
@@ -28,6 +30,27 @@ class CellController(
      * every index and scatter hexagons across the map. The hex form is also
      * exactly what h3-js and deck.gl expect.
      */
+    /**
+     * Places inside the loaded grid, for search. Mirrors the static export so
+     * development and the deployed site behave identically.
+     */
+    @GetMapping("/places")
+    fun places(@RequestParam(defaultValue = "50") state: String): PlacesResponse {
+        val order = cells.findByState(state, 0).sortedBy { it.h3 }.map { it.h3 }
+        val indexOf = order.withIndex().associate { (i, h3) -> h3 to i }
+        val rows = places.findInGrid().filter { indexOf.containsKey(it.h3) }
+        return PlacesResponse(
+            count = rows.size,
+            name = rows.map { it.name },
+            state = rows.map { it.stateCode },
+            kind = rows.map { it.kind.name },
+            population = rows.map { it.population },
+            cell = rows.map { indexOf.getValue(it.h3) },
+            lat = rows.map { it.latitude },
+            lon = rows.map { it.longitude },
+        )
+    }
+
     @GetMapping("/cells")
     fun cells(
         @RequestParam(defaultValue = "50") state: String,
@@ -56,6 +79,18 @@ class CellController(
             .body(body)
     }
 }
+
+/** Searchable places, in the same parallel-array shape as the static export. */
+data class PlacesResponse(
+    val count: Int,
+    val name: List<String>,
+    val state: List<String?>,
+    val kind: List<String>,
+    val population: List<Int>,
+    val cell: List<Int>,
+    val lat: List<Double>,
+    val lon: List<Double>,
+)
 
 data class CellsResponse(
     val stateFips: String,
