@@ -27,12 +27,14 @@ class CellRepository(private val jdbc: JdbcTemplate) {
 
         val sql = """
             INSERT INTO cell (h3, resolution, parent_res5, parent_res4, parent_res3,
-                              centroid_lat, centroid_lon, elevation_m, canopy_pct, state_fips)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              centroid_lat, centroid_lon, elevation_m, canopy_pct,
+                              state_fips, state_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 elevation_m = COALESCE(VALUES(elevation_m), elevation_m),
                 canopy_pct  = COALESCE(VALUES(canopy_pct),  canopy_pct),
-                state_fips  = VALUES(state_fips)
+                state_fips  = VALUES(state_fips),
+                state_name  = COALESCE(VALUES(state_name), state_name)
         """.trimIndent()
 
         val counts = jdbc.batchUpdate(sql, cells, cells.size) { ps: PreparedStatement, c: Cell ->
@@ -46,9 +48,37 @@ class CellRepository(private val jdbc: JdbcTemplate) {
             c.elevationM?.let { ps.setInt(8, it) } ?: ps.setNull(8, Types.SMALLINT)
             c.canopyPct?.let { ps.setInt(9, it) } ?: ps.setNull(9, Types.TINYINT)
             ps.setString(10, c.stateFips)
+            c.stateName?.let { ps.setString(11, it) } ?: ps.setNull(11, Types.VARCHAR)
         }
         return counts.sumOf { it.size }
     }
+
+    /**
+     * Cells already loaded for a state, looked up by name rather than FIPS.
+     *
+     * The bootstrap knows state names because that is what the boundary
+     * service queries on; it only learns the FIPS after fetching the outline,
+     * which is the expensive part it is trying to skip.
+     */
+    fun countByStateName(stateName: String): Long = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM cell WHERE state_name = ?",
+        Long::class.java, stateName,
+    ) ?: 0
+
+    /** Every cell in the grid, across all loaded states. */
+    fun findAll(minCanopyPct: Int): List<Cell> = jdbc.query(
+        "$selectCell WHERE canopy_pct IS NULL OR canopy_pct >= ? ORDER BY h3",
+        cellMapper, minCanopyPct,
+    )
+
+    fun countAll(): Long =
+        jdbc.queryForObject("SELECT COUNT(*) FROM cell", Long::class.java) ?: 0
+
+    /** Distinct res 5 ancestors across the whole grid. */
+    fun allRes5Parents(): List<Long> = jdbc.queryForList(
+        "SELECT DISTINCT parent_res5 FROM cell ORDER BY parent_res5",
+        Long::class.java,
+    )
 
     fun countByState(stateFips: String): Long =
         jdbc.queryForObject("SELECT COUNT(*) FROM cell WHERE state_fips = ?", Long::class.java, stateFips) ?: 0
@@ -62,7 +92,8 @@ class CellRepository(private val jdbc: JdbcTemplate) {
 
     private val selectCell = """
         SELECT h3, resolution, parent_res5, parent_res4, parent_res3,
-               centroid_lat, centroid_lon, elevation_m, canopy_pct, state_fips
+               centroid_lat, centroid_lon, elevation_m, canopy_pct,
+               state_fips, state_name
         FROM cell
     """.trimIndent()
 
@@ -78,6 +109,7 @@ class CellRepository(private val jdbc: JdbcTemplate) {
             elevationM = rs.getInt("elevation_m").takeUnless { rs.wasNull() },
             canopyPct = rs.getInt("canopy_pct").takeUnless { rs.wasNull() },
             stateFips = rs.getString("state_fips"),
+            stateName = rs.getString("state_name"),
         )
     }
 

@@ -2,6 +2,7 @@ package com.foliage.api
 
 import com.foliage.ingest.GridBootstrap
 import com.foliage.ingest.GridBootstrapResult
+import com.foliage.ingest.RegionBootstrapResult
 import com.foliage.forecast.ForecastRunResult
 import com.foliage.forecast.ForecastService
 import com.foliage.ingest.weather.WeatherIngest
@@ -33,32 +34,43 @@ class AdminController(
     fun bootstrapGrid(@RequestParam state: String): GridBootstrapResult =
         gridBootstrap.bootstrapState(state)
 
+    /**
+     * Bootstraps a whole region. Long-running: a full CONUS pass is thousands
+     * of third-party samples and many hours, so it skips states already loaded
+     * and can simply be re-invoked after an interruption.
+     */
+    @PostMapping("/bootstrap-region")
+    fun bootstrapRegion(
+        @RequestParam region: String,
+        @RequestParam(defaultValue = "false") force: Boolean,
+    ): RegionBootstrapResult = gridBootstrap.bootstrapRegion(region, force)
+
     /** Observed trailing window plus the 16-day forecast. Cheap; run daily. */
     @PostMapping("/ingest-forecast")
-    fun ingestForecast(@RequestParam stateFips: String): WeatherIngestResult =
+    fun ingestForecast(@RequestParam(required = false) stateFips: String?): WeatherIngestResult =
         weatherIngest.refreshForecast(stateFips)
 
     /** Multi-year archive mean for the far season. Expensive; run once a season. */
     @PostMapping("/ingest-climatology")
-    fun ingestClimatology(@RequestParam stateFips: String): WeatherIngestResult =
+    fun ingestClimatology(@RequestParam(required = false) stateFips: String?): WeatherIngestResult =
         weatherIngest.buildClimatology(stateFips)
 
     /** Refines the recent window with HRRR at 3 km. Bandwidth-heavy; see ADR-0006. */
     @PostMapping("/ingest-hrrr")
     fun ingestHrrr(
-        @RequestParam stateFips: String,
+        @RequestParam(required = false) stateFips: String?,
         @RequestParam(defaultValue = "2") days: Int,
     ): WeatherIngestResult = weatherIngest.refreshHrrr(stateFips, days)
 
     /** Scores the whole season for a state. Cheap; rerun after any ingest. */
     @PostMapping("/compute-forecast")
-    fun computeForecast(@RequestParam stateFips: String): ForecastRunResult =
+    fun computeForecast(@RequestParam(required = false) stateFips: String?): ForecastRunResult =
         forecastService.computeState(stateFips)
 
     /** Writes the season out as static JSON for CDN publishing. */
     @PostMapping("/export")
     fun export(
-        @RequestParam stateFips: String,
+        @RequestParam(required = false) stateFips: String?,
         @RequestParam(defaultValue = "build/site-data") path: String,
     ): ExportResult = staticExporter.export(java.nio.file.Path.of(path), stateFips)
 }

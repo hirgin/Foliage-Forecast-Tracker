@@ -41,11 +41,14 @@ class WeatherIngest(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /** Observed trailing window plus the 16-day forecast, in one pass. */
-    fun refreshForecast(stateFips: String, today: LocalDate = LocalDate.now()): WeatherIngestResult {
-        val runId = audit.start("open-meteo", "weather-forecast:$stateFips")
+    /** [stateFips] null covers every res 5 parent in the loaded grid. */
+    fun refreshForecast(stateFips: String?, today: LocalDate = LocalDate.now()): WeatherIngestResult {
+        val scope = stateFips ?: "all"
+        val runId = audit.start("open-meteo", "weather-forecast:$scope")
         var written = 0L
         try {
-            val parents = cells.distinctRes5Parents(stateFips)
+            val parents = if (stateFips == null) cells.allRes5Parents()
+                          else cells.distinctRes5Parents(stateFips)
             val points = parents.map { grid.centroid(it) }
             log.info("fetching forecast for {} res 5 cells in state {}", parents.size, stateFips)
 
@@ -59,7 +62,7 @@ class WeatherIngest(
             written = weather.upsertAll(rows).toLong()
             audit.succeed(runId, written)
 
-            return result(stateFips, parents.size, series, written)
+            return result(scope, parents.size, series, written)
         } catch (e: Exception) {
             audit.fail(runId, written, e)
             throw e
@@ -80,11 +83,12 @@ class WeatherIngest(
      * win while Open-Meteo's precipitation survives -- HRRR's surface analysis
      * carries none.
      */
-    fun refreshHrrr(stateFips: String, days: Int, today: LocalDate = LocalDate.now()): WeatherIngestResult {
-        val runId = audit.start("noaa-hrrr", "weather-hrrr:$stateFips")
+    fun refreshHrrr(stateFips: String?, days: Int, today: LocalDate = LocalDate.now()): WeatherIngestResult {
+        val scope = stateFips ?: "all"
+        val runId = audit.start("noaa-hrrr", "weather-hrrr:$scope")
         var written = 0L
         try {
-            val cells6 = cells.findByState(stateFips, minCanopyPct = 0)
+            val cells6 = if (stateFips == null) cells.findAll(0) else cells.findByState(stateFips, 0)
             val points = cells6.map { LonLat(it.centroidLon, it.centroidLat) }
             // Yesterday backwards: today's later hours have not been published.
             val to = today.minusDays(1)
@@ -111,7 +115,7 @@ class WeatherIngest(
             audit.succeed(runId, written)
 
             return WeatherIngestResult(
-                stateFips = stateFips,
+                stateFips = scope,
                 cellsRequested = points.size,
                 cellsWithData = series.count { it.isNotEmpty() },
                 rowsWritten = written,
@@ -133,11 +137,13 @@ class WeatherIngest(
      * Written for the whole season; the upsert leaves observed and forecast
      * days alone, so it only ever lands where nothing better exists.
      */
-    fun buildClimatology(stateFips: String, today: LocalDate = LocalDate.now()): WeatherIngestResult {
-        val runId = audit.start("open-meteo-archive", "weather-climatology:$stateFips")
+    fun buildClimatology(stateFips: String?, today: LocalDate = LocalDate.now()): WeatherIngestResult {
+        val scope = stateFips ?: "all"
+        val runId = audit.start("open-meteo-archive", "weather-climatology:$scope")
         var written = 0L
         try {
-            val parents = cells.distinctRes5Parents(stateFips)
+            val parents = if (stateFips == null) cells.allRes5Parents()
+                          else cells.distinctRes5Parents(stateFips)
             val points = parents.map { grid.centroid(it) }
             val year = today.year
 
@@ -201,7 +207,7 @@ class WeatherIngest(
             audit.succeed(runId, written)
 
             return WeatherIngestResult(
-                stateFips = stateFips,
+                stateFips = scope,
                 cellsRequested = parents.size,
                 cellsWithData = rows.map { it.h3 }.distinct().size,
                 rowsWritten = written,

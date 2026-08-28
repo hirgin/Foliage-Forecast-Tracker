@@ -1,6 +1,7 @@
 package com.foliage.ingest
 
 import com.foliage.domain.Cell
+import com.foliage.grid.ConusStates
 import com.foliage.grid.H3Grid
 import com.foliage.ingest.audit.IngestRunRecorder
 import com.foliage.ingest.terrain.BoundarySource
@@ -31,6 +32,50 @@ class GridBootstrap(
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * Bootstraps a whole region, one state at a time.
+     *
+     * States already carrying cells are skipped unless [force] is set. A full
+     * CONUS run is many hours of third-party sampling -- roughly 1,500 3DEP
+     * requests and 2,100 canopy requests -- so it has to survive being
+     * interrupted and resumed rather than restarting from zero.
+     */
+    fun bootstrapRegion(region: String, force: Boolean = false): RegionBootstrapResult {
+        val states = ConusStates.resolve(region)
+        val done = mutableListOf<GridBootstrapResult>()
+        val skipped = mutableListOf<String>()
+        val failed = mutableMapOf<String, String>()
+
+        val elapsed = measureTimeMillis {
+            for (state in states) {
+                val existing = runCatching { cells.countByStateName(state) }.getOrDefault(0L)
+                if (existing > 0 && !force) {
+                    log.info("{} already has {} cells, skipping", state, existing)
+                    skipped += state
+                    continue
+                }
+                try {
+                    done += bootstrapState(state)
+                } catch (e: Exception) {
+                    // One bad state must not abandon the rest of a multi-hour
+                    // run; it is recorded and can be retried on its own.
+                    log.error("{} failed: {}", state, e.message)
+                    failed[state] = e.message ?: e::class.simpleName.orEmpty()
+                }
+            }
+        }
+
+        return RegionBootstrapResult(
+            region = region,
+            statesRequested = states.size,
+            statesBootstrapped = done.size,
+            statesSkipped = skipped,
+            statesFailed = failed,
+            cellsAdded = done.sumOf { it.cellsTiled },
+            elapsedMs = elapsed,
+        )
+    }
 
     fun bootstrapState(stateName: String): GridBootstrapResult {
         val runId = audit.start(source = "tigerweb+nlcd+open-meteo", job = "grid-bootstrap:$stateName")
@@ -72,6 +117,7 @@ class GridBootstrap(
                         canopyValues.subList(i * perCell, minOf((i + 1) * perCell, canopyValues.size)),
                     ),
                     stateFips = boundary.fips,
+                    stateName = boundary.name,
                 )
             }
 
@@ -93,6 +139,16 @@ class GridBootstrap(
         }
     }
 }
+
+data class RegionBootstrapResult(
+    val region: String,
+    val statesRequested: Int,
+    val statesBootstrapped: Int,
+    val statesSkipped: List<String>,
+    val statesFailed: Map<String, String>,
+    val cellsAdded: Int,
+    val elapsedMs: Long,
+)
 
 data class GridBootstrapResult(
     val state: String,

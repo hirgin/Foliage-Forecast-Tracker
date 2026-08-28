@@ -51,10 +51,12 @@ class StaticExporter(
     /** Shard key: the res 3 ancestor, up to ~343 res 6 cells per shard. */
     private fun shardOf(h3: Long): String = grid.toAddress(grid.parent(h3, 3))
 
-    fun export(target: Path, stateFips: String, year: Int = LocalDate.now().year): ExportResult {
+    /** [stateFips] null exports the whole loaded grid. */
+    fun export(target: Path, stateFips: String?, year: Int = LocalDate.now().year): ExportResult {
         val days = season.days(year)
-        val grid6 = cells.findByState(stateFips, minCanopyPct = 0).sortedBy { it.h3 }
-        require(grid6.isNotEmpty()) { "no cells for state $stateFips" }
+        val grid6 = (if (stateFips == null) cells.findAll(0) else cells.findByState(stateFips, 0))
+            .sortedBy { it.h3 }
+        require(grid6.isNotEmpty()) { "no cells for ${stateFips ?: "the grid"}" }
 
         Files.createDirectories(target.resolve("forecast"))
         Files.createDirectories(target.resolve("timeline"))
@@ -154,7 +156,7 @@ class StaticExporter(
                 "format" to "packed-v1",
                 "gridResolution" to 6,
                 "shardResolution" to 3,
-                "stateFips" to stateFips,
+                "stateFips" to (stateFips ?: "all"),
                 "cellCount" to grid6.size,
                 "shardCount" to shards.size,
                 "seasonStart" to season.start(year).toString(),

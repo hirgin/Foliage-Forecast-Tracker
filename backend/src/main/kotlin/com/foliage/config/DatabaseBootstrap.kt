@@ -37,6 +37,11 @@ class DatabaseBootstrap(private val dataSource: DataSource) {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load()
+            // Clear any failed entry before migrating. TiDB applies a
+            // multi-clause ALTER as separate schema changes, so a statement
+            // can fail partway and leave the migration marked failed even
+            // after the script itself is corrected.
+            flyway.repair()
             val result = flyway.migrate()
             // targetSchemaVersion is null when nothing ran this boot, which is
             // the normal steady state. Report where the schema actually *is*,

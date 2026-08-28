@@ -37,12 +37,14 @@ class ForecastService(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun computeState(stateFips: String, year: Int = LocalDate.now().year): ForecastRunResult {
-        val runId = audit.start("model", "forecast:$stateFips")
+    /** [stateFips] null scores the whole loaded grid rather than one state. */
+    fun computeState(stateFips: String?, year: Int = LocalDate.now().year): ForecastRunResult {
+        val scope = stateFips ?: "all"
+        val runId = audit.start("model", "forecast:$scope")
         var written = 0L
         try {
-            val grid = cells.findByState(stateFips, minCanopyPct = 0)
-            require(grid.isNotEmpty()) { "no cells for state $stateFips -- run the grid bootstrap first" }
+            val grid = if (stateFips == null) cells.findAll(0) else cells.findByState(stateFips, 0)
+            require(grid.isNotEmpty()) { "no cells for $scope -- run the grid bootstrap first" }
 
             val parents = grid.map { it.parentRes5 }.distinct()
             val series = weather.seriesByCell(parents)
@@ -108,7 +110,7 @@ class ForecastService(
 
             val peaks = forecasts.peakDayByCell()
             return ForecastRunResult(
-                stateFips = stateFips,
+                stateFips = scope,
                 cells = grid.size,
                 days = days.size,
                 rowsWritten = written,
@@ -160,8 +162,8 @@ class ForecastService(
      * per cell -- an N+1 that took four minutes over 649 cells during the first
      * static export. This does the same work with a handful of queries.
      */
-    fun peakFactors(stateFips: String, peakDays: Map<Long, LocalDate>, year: Int): Map<Long, List<Factor>> {
-        val grid = cells.findByState(stateFips, minCanopyPct = 0)
+    fun peakFactors(stateFips: String?, peakDays: Map<Long, LocalDate>, year: Int): Map<Long, List<Factor>> {
+        val grid = if (stateFips == null) cells.findAll(0) else cells.findByState(stateFips, 0)
         val parents = grid.map { it.parentRes5 }.distinct()
         val series = weather.seriesByCell(parents)
         val fine = weather.seriesByCell(grid.map { it.h3 })

@@ -12,4 +12,5 @@ data class Cell(
     val elevationM: Int?,
     val canopyPct: Int?,
     val stateFips: String,
+    val stateName: String?,
 )
