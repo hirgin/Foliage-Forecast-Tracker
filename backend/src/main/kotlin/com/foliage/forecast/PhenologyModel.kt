@@ -72,6 +72,22 @@ object PhenologyModel {
      */
     const val CHILL_GAIN = 0.30
 
+    /**
+     * Forcing contributed by chilling in its own right, per degree below the
+     * threshold, independent of how far day length has fallen.
+     *
+     * Without this, chilling could only ever *multiply* the photoperiod term.
+     * Photoperiod slightly favours southern latitudes (see the negative result
+     * in docs/model.md), so the two partly cancelled and the model produced
+     * almost no north-to-south progression -- 1.0 progression point across
+     * Vermont, measured on the full grid, against source data carrying 31%
+     * more accumulated chilling in the north.
+     *
+     * Cold nights drive senescence whether or not daylength is changing
+     * quickly, so they earn a term of their own.
+     */
+    const val CHILL_DIRECT = 0.55
+
     /** How strongly a degree of excess warmth subtracts from it. */
     const val WARM_DELAY = 0.05
 
@@ -94,7 +110,7 @@ object PhenologyModel {
      * This is the single number that sets *when* peak lands, and it is
      * guarded by a test.
      */
-    const val SENESCENCE_RATE = 0.0558
+    const val SENESCENCE_RATE = 0.0402
 
     /** A hard freeze strips leaves rather than colouring them. */
     const val HARD_FREEZE_C = -4.0
@@ -150,7 +166,11 @@ object PhenologyModel {
                 if (it <= HARD_FREEZE_C) hardFreeze = true
             }
 
-            forcing += (photo * (1 + CHILL_GAIN * chill) - WARM_DELAY * warm).coerceAtLeast(0.0)
+            forcing += (
+                photo * (1 + CHILL_GAIN * chill) +
+                    CHILL_DIRECT * chill -
+                    WARM_DELAY * warm
+                ).coerceAtLeast(0.0)
         }
 
         // Drought shortens and dulls the season, and brings it forward slightly.

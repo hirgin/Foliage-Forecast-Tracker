@@ -137,7 +137,8 @@ Two constants were fitted against the ingested Vermont data, in this order:
 | Constant | Value | Sets |
 |---|---|---|
 | `CHILL_GAIN` | 0.30 | How far apart valley and ridge run |
-| `SENESCENCE_RATE` | 0.0558 | When peak lands |
+| `CHILL_DIRECT` | 0.55 | Chilling's own contribution, independent of daylength |
+| `SENESCENCE_RATE` | 0.0402 | When peak lands |
 
 `CHILL_GAIN` came first because it controls *spread*. At its original 0.09 the
 model had the right direction — elevation-to-progression correlation of 0.79 —
@@ -152,14 +153,14 @@ The resulting season, computed over all 649 Vermont cells:
 
 | | |
 |---|---|
-| Earliest peak | **29 September** — the high Green Mountains |
-| Median peak | **7 October** |
-| Latest peak | **10 October** |
-| Statewide spread | 11 days |
+| Earliest peak | **23 September** — the high Green Mountains |
+| Median peak | **8 October** |
+| Latest peak | **15 October** |
+| Statewide spread | 22 days |
 
 On 7 October: 390 cells at peak, 242 near peak, 17 already past.
 
-Elevation-to-progression correlation is **0.72**, so the lapse-rate downscale
+Elevation-to-progression correlation is **0.78**, so the lapse-rate downscale
 is doing real work — the earliest cells to turn are the high ones, which is
 where a Vermont season actually starts.
 
@@ -173,37 +174,58 @@ test fails the build.
 
 ## Does colour really move north to south?
 
-Yes, but establishing it took measurement rather than assertion, and the first
-answer was misleading.
+Yes, but weakly within Vermont — and establishing that took three measurements,
+two of which were wrong.
 
 **Photoperiod alone favours the south.** Holding weather constant, southern
-latitudes cross the 13-hour threshold about six days earlier, and the north's
-faster rate of decline has not caught up by early October. This is pinned by a
-test, negative result and all, so nobody later "fixes" the model into claiming
-something daylength does not support.
+latitudes cross the 13-hour threshold about six days earlier and the north has
+not caught up by early October. Pinned by a test, negative result and all.
 
-**Temperature more than compensates.** Measured across the real Vermont grid on
-8 October:
+**The data does carry a northern signal.** Ten northern against ten southern
+Vermont points, spread in longitude so the mountains favour neither:
 
-| Band | Mean lat | Mean elevation | Chilling nights | Progression |
-|---|---|---|---|---|
-| Southern 60 cells | 42.90 N | 488 m | 21.0 | 79.2 |
-| Northern 60 cells | 44.94 N | 318 m | 24.2 | **85.4** |
+| Band | Mean elevation | Mean tmin | Accumulated chilling |
+|---|---|---|---|
+| North | 333 m | 8.86 °C | **47.9** |
+| South | 413 m | 9.03 °C | 36.7 |
 
-The north runs 6.2 progression points ahead *while sitting 170 m lower* — so it
-overcomes an elevation handicap that should have delayed it. The march is real
-and in the right direction.
+Mean temperature differs by only 0.17 °C, but chilling by **31%** — and the
+north manages it while sitting 80 m *lower*. Chilling is a threshold function,
+so what matters is how many nights fall below 7 °C, not the average. The same
+nonlinearity that broke climatological chilling.
 
-**It was invisible for a while, and that was a rendering bug.** The map filled
-each stage with a flat colour, and 79.2 and 85.4 are both `PEAK`, so the whole
-state rendered as one uniform red. Worse, "first day reaching peak" is a poor
-statistic here: near the top the saturating curve is nearly flat, so cells cross
-the threshold within a day of each other and the north-south spread collapsed to
-**0.4 days** when measured that way.
+**The model was losing that signal.** Chilling could only *multiply* the
+photoperiod term, and photoperiod favours the south, so the two cancelled.
+Measured across the full grid the result was 1.0 progression point north to
+south, non-monotonic — effectively nothing. Chilling now also contributes
+forcing directly (`CHILL_DIRECT`), because cold nights drive senescence whether
+or not daylength is changing quickly.
 
-The map now interpolates within each stage, which restores the gradient without
-changing a single number in the model. The lesson is worth keeping: a signal
-can be present, correct, and completely hidden by how it is displayed.
+| | Before | After |
+|---|---|---|
+| Peak spread across Vermont | 11 days | **22 days** |
+| North minus south | 1.0 pt | **2.7 pts** |
+| Monotonic south → middle → north | no | **yes** |
+
+**It stays a modest effect here, and that is correct.** Vermont spans ~950 m of
+elevation — about 6 °C by lapse rate — against 2.3° of latitude worth roughly
+0.2 °C. Elevation *should* dominate inside one small state; correlations are
+0.78 for elevation against 0.09 for latitude. The north-to-south march is a
+continental-scale phenomenon, and Vermont is not a continent. It would show
+clearly on a Maine-to-Virginia map, which is another reason expanding the grid
+matters.
+
+### Two measurement lessons
+
+Both worth keeping, because both produced confident wrong answers.
+
+**Sample size.** An early comparison of 5 cells per band suggested a 6.2-point
+northern lead. The full grid says 1.0. Five cells is not a measurement.
+
+**Statistic choice.** Measured as "first day reaching peak", the north-south
+spread was 0.4 days, because the saturating curve is flat near the top and
+cells cross the threshold within hours of each other. The same data measured as
+progression showed the difference plainly.
 
 ## What this model cannot do
 
@@ -221,14 +243,10 @@ can be present, correct, and completely hidden by how it is displayed.
   matter greatly across states — oak-dominated southern forests turn later and
   duller — which makes it a prerequisite for expanding beyond Vermont rather
   than an improvement to the current map.
-- **The spread is too narrow.** Vermont's real season runs two to three weeks
-  from the Northeast Kingdom to the southern valleys; this model produces
-  about nine days. The *direction* is right and elevation clearly drives it,
-  but the magnitude is understated — most likely because species composition,
-  the missing driver above, accounts for much of the real variation.
-  Widening it further by inflating `CHILL_GAIN` would be fitting the model to
-  an anecdote rather than to data, so it has been left honest and documented
-  instead.
+- **Latitude is a weak driver here.** Correlation with progression is 0.09
+  against elevation's 0.78. That is defensible for one small state, but it has
+  not been tested anywhere latitude actually spans a useful range, so the
+  north-to-south behaviour is unverified beyond Vermont.
 - **It does not model cloud cover or wind.** Both affect how a display is
   actually experienced, and a windstorm can end a season overnight.
 - **Beyond 16 days it is climatology.** Not a forecast. A weak claim about a
