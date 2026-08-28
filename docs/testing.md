@@ -42,6 +42,7 @@ npm test --prefix frontend
 | Area | Covered by | What it proves |
 |---|---|---|
 | Foliage colour ramp | `map/colors.test.js` | Continuity across stage boundaries, monotonic advance within a band, clamping instead of extrapolation, and confidence altering only alpha |
+| Packed wire format | `api/packed.test.js` | Magic bytes and truncation rejected rather than read past; the 255 sentinel never decodes as a real value; stage boundaries match the backend exactly; timeline shards extract one cell without disturbing its neighbour |
 | Date formatting | `components/dates.test.js` | `yyyy-mm-dd` is parsed as UTC. Local parsing shifts every slider date by one day, and only for users west of Greenwich |
 
 The colour suite carries an explicit regression: progression 79.2 and 85.4 are

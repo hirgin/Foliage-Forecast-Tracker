@@ -91,14 +91,24 @@ exports the season as static JSON and GitHub Pages serves it from a CDN — no
 cold starts, no hosting bill, nothing to keep alive.
 
 ```
-site-data/meta.json                  season bounds, model version
-site-data/forecast/<date>.json       every cell on one day   (~5 KB gzipped)
-site-data/timeline/<h3>.json         one cell's whole season (~1.3 KB gzipped)
+site-data/meta.json               season bounds, model version, counts
+site-data/cells.json              the cell index -- written once, defines order
+site-data/forecast/<date>.bin     three parallel byte arrays in that order
+site-data/timeline/<res3>.bin     whole seasons, sharded by H3 res 3 ancestor
+site-data/factors/<res3>.json     peak-day explanations, sharded the same way
 ```
 
-76 daily files and 649 per-cell files, 9.5 MB in total, exported in about ten
-seconds. The backend is what it always was — a batch pipeline — and runs as a
-scheduled GitHub Action rather than a service.
+The payload is **packed, not JSON**. Cell identifiers live once in the index
+rather than repeating in every daily file, which takes a cell-day from ~95
+bytes to **3**; and timelines shard by res 3 ancestor rather than one file per
+cell. Vermont is 94 files and 753 KB, exported in eight seconds.
+
+That is what makes a national grid possible. In JSON, CONUS would be
+**1.16 GB across 76,117 files** — past what GitHub Pages will host. Packed, it
+projects to **36 MB across 522 files**.
+
+The backend is what it always was — a batch pipeline — and runs as a scheduled
+GitHub Action rather than a service.
 
 A push redeploys from data already in the database; the nightly run pulls fresh
 observations, rescores the season, and republishes.
