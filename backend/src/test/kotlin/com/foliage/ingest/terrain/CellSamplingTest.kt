@@ -59,4 +59,48 @@ class CellSamplingTest {
         val dy = a.lat - b.lat
         return dx * dx + dy * dy
     }
+
+    // --- elevation over water -------------------------------------------
+
+    @Test
+    fun `prefers land when a coastal cell straddles the shore`() {
+        // The bug this exists for: terrain tiles carry bathymetry, so a cell
+        // whose centroid falls offshore read the seabed. Massachusetts had 92
+        // forested cells, some at 78% canopy, sitting at up to -74 m.
+        val straddling = listOf(-60, -55, 12, 18, 24, -48, 15)
+        assertEquals(17, CellSampling.landElevation(straddling))
+    }
+
+    @Test
+    fun `ignores gaps`() {
+        assertEquals(20, CellSampling.landElevation(listOf(null, 10, null, 30)))
+    }
+
+    @Test
+    fun `keeps genuinely below-sea-level ground`() {
+        // Death Valley and the Salton Sea really are below sea level. Clamping
+        // at zero would invent ground there, so a cell with no land sample at
+        // all keeps its negative value.
+        assertEquals(-70, CellSampling.landElevation(listOf(-72, -68, -70)))
+    }
+
+    @Test
+    fun `is null only when every sample is missing`() {
+        assertNull(CellSampling.landElevation(listOf(null, null)))
+        assertNull(CellSampling.landElevation(emptyList()))
+    }
+
+    @Test
+    fun `treats sea level itself as land`() {
+        // A shoreline sample of exactly 0 is ground, not water; excluding it
+        // would drop the only usable sample on a flat coastal cell.
+        assertEquals(0, CellSampling.landElevation(listOf(-40, 0, -30)))
+    }
+
+    @Test
+    fun `leaves inland cells untouched`() {
+        // Vermont has no coast, which is exactly why the original equivalence
+        // test missed this. Inland cells must be unaffected by the fix.
+        assertEquals(371, CellSampling.landElevation(listOf(340, 355, 371, 388, 401)))
+    }
 }

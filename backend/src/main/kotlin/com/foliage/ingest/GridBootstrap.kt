@@ -112,9 +112,15 @@ class GridBootstrap(
             val canopyMs = measureTimeMillis { canopyValues = canopy.sample(samplePoints) }
             log.info("sampled canopy at {} points ({} per cell) in {} ms", samplePoints.size, perCell, canopyMs)
 
-            var elevations: List<Int?>
-            val elevMs = measureTimeMillis { elevations = elevation.elevation(tiled.map { grid.centroid(it) }) }
-            log.info("sampled elevation at {} centroids in {} ms", tiled.size, elevMs)
+            // Elevation is sampled at the same seven points as canopy, not at
+            // the centroid alone. Terrain tiles include bathymetry, so a
+            // coastal cell whose centre falls offshore read the seabed -- see
+            // CellSampling.landElevation. Sampling more points costs almost
+            // nothing now that this reads tiles rather than one request per
+            // point: the extra samples fall inside tiles already fetched.
+            var elevationSamples: List<Int?>
+            val elevMs = measureTimeMillis { elevationSamples = elevation.elevation(samplePoints) }
+            log.info("sampled elevation at {} points in {} ms", samplePoints.size, elevMs)
 
             val rows = tiled.mapIndexed { i, h3 ->
                 val centroid = grid.centroid(h3)
@@ -126,7 +132,9 @@ class GridBootstrap(
                     parentRes3 = grid.parent(h3, 3),
                     centroidLat = centroid.lat,
                     centroidLon = centroid.lon,
-                    elevationM = elevations.getOrNull(i),
+                    elevationM = CellSampling.landElevation(
+                        elevationSamples.subList(i * perCell, minOf((i + 1) * perCell, elevationSamples.size)),
+                    ),
                     canopyPct = CellSampling.average(
                         canopyValues.subList(i * perCell, minOf((i + 1) * perCell, canopyValues.size)),
                     ),

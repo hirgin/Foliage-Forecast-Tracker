@@ -2,6 +2,7 @@ package com.foliage.ingest.weather
 
 import com.foliage.domain.DailyRecord
 import com.foliage.grid.LonLat
+import com.foliage.ingest.QuotaExhausted
 import com.foliage.ingest.RetryPolicy
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -34,7 +35,12 @@ class OpenMeteoWeatherSource(
 
     private val log = LoggerFactory.getLogger(javaClass)
     private val retry = RetryPolicy(maxAttempts = 4, initialBackoffMs = 20_000)
-    private val isRateLimit: (Throwable) -> Boolean = { it is HttpClientErrorException.TooManyRequests }
+    // Only the short-window limit is worth retrying. A spent hourly or daily
+    // allowance returns the same 429 and is separated by message, because no
+    // backoff this side of an hour clears it -- see QuotaExhausted.
+    private val isRateLimit: (Throwable) -> Boolean = {
+        it is HttpClientErrorException.TooManyRequests && !isQuotaExhausted(it)
+    }
 
     override val nativeResolution = 5
 
@@ -66,13 +72,28 @@ class OpenMeteoWeatherSource(
                     if (body == null) List(batch.size) { emptyList() }
                     else OpenMeteoDailyParser.parse(body, batch.size)
                 }
-            }.getOrElse {
+            }.getOrElse { e ->
+                // A spent hourly allowance is not a bad batch, it is the end of
+                // the run: every batch after it would fail the same way, and
+                // degrading would quietly fill the season with holes. Abort and
+                // keep what is already written.
+                if (e is HttpClientErrorException.TooManyRequests && isQuotaExhausted(e)) {
+                    throw QuotaExhausted("open-meteo", e.responseBodyAsString.take(200))
+                }
                 // Degrade: these points stay unfetched and a later run picks
                 // them up, rather than losing the whole ingest.
-                log.warn("weather batch {} failed after retries: {}", i, it.message)
+                log.warn("weather batch {} failed after retries: {}", i, e.message)
                 List(batch.size) { emptyList<DailyRecord>() }
             }
         }
+
+    private fun isQuotaExhausted(e: HttpClientErrorException.TooManyRequests): Boolean {
+        val body = e.responseBodyAsString.lowercase()
+        // Open-Meteo phrases these as "Hourly API request limit exceeded.
+        // Please try again in the next hour." Matching the window word rather
+        // than the whole sentence survives small wording changes.
+        return "hourly" in body || "daily" in body
+    }
 
     private fun baseUri(url: String, batch: List<LonLat>) =
         UriComponentsBuilder.fromUriString(url)
