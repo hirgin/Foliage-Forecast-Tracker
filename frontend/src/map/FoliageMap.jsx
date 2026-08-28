@@ -4,11 +4,20 @@ import { WebMercatorViewport } from '@deck.gl/core';
 import { H3HexagonLayer, TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { cellToLatLng } from 'h3-js';
-import { canopyColor } from './colors';
+import { foliageColor, stageLabel } from './colors';
 
 // Fallback only. The view is normally fitted to whatever cells are loaded, so
 // adding a second state needs no code change here.
 const FALLBACK_VIEW = { longitude: -72.65, latitude: 43.92, zoom: 7, pitch: 0, bearing: 0 };
+
+// Esri's Dark Gray Canvas: keyless, and purpose-built as a muted backdrop for
+// data overlays. CARTO's raster tiles now stamp "API KEY REQUIRED" across
+// themselves. A raster tile layer also keeps the whole map inside deck.gl --
+// react-map-gl was dropped here, since it pulled ~1 MB of MapLibre for a
+// backdrop and its v8 API no longer loaded a style under a DeckGL parent.
+// Note the {z}/{y}/{x} order: Esri puts row before column.
+const BASEMAP_TILES =
+  'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
 
 /** Bounding box of the loaded cells, from their H3 indexes. */
 function boundsOf(cells) {
@@ -24,43 +33,33 @@ function boundsOf(cells) {
   return [[minLon, minLat], [maxLon, maxLat]];
 }
 
-// Esri's Dark Gray Canvas: keyless, and purpose-built as a muted backdrop for
-// data overlays. CARTO's raster tiles now stamp "API KEY REQUIRED" across
-// themselves. A raster tile layer also keeps the whole map inside deck.gl --
-// react-map-gl was dropped here, since it pulled ~1 MB of MapLibre for a
-// backdrop and its v8 API no longer loaded a style under a DeckGL parent.
-// Note the {z}/{y}/{x} order: Esri puts row before column.
-const BASEMAP_TILES =
-  'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-
-export default function FoliageMap({ cells }) {
+export default function FoliageMap({ cells, selected, onSelect }) {
   const [hovered, setHovered] = useState(null);
   const [viewState, setViewState] = useState(null);
   const containerRef = useRef(null);
-  const fittedFor = useRef(0);
+  const fitted = useRef(false);
 
-  // Fit once per dataset, then hand control to the user. Hardcoding a zoom
-  // only ever looks right at one window size.
+  // Fit once, then hand control to the user. Hardcoding a zoom only ever looks
+  // right at one window size.
   useEffect(() => {
     const el = containerRef.current;
-    if (!el || !cells.length || fittedFor.current === cells.length) return;
+    if (!el || !cells.length || fitted.current) return;
 
     const { clientWidth: width, clientHeight: height } = el;
     const bounds = boundsOf(cells);
     if (!width || !height || !bounds) return;
 
-    const fitted = new WebMercatorViewport({ width, height }).fitBounds(bounds, {
-      // Leaves room for the panel on the left and breathing space elsewhere.
-      padding: { top: 40, bottom: 40, left: width > 640 ? 330 : 40, right: 40 },
+    const view = new WebMercatorViewport({ width, height }).fitBounds(bounds, {
+      padding: { top: 40, bottom: 110, left: width > 720 ? 330 : 40, right: 40 },
     });
     setViewState({
-      longitude: fitted.longitude,
-      latitude: fitted.latitude,
-      zoom: fitted.zoom,
+      longitude: view.longitude,
+      latitude: view.latitude,
+      zoom: view.zoom,
       pitch: 0,
       bearing: 0,
     });
-    fittedFor.current = cells.length;
+    fitted.current = true;
   }, [cells]);
 
   const layers = useMemo(
@@ -72,7 +71,7 @@ export default function FoliageMap({ cells }) {
         maxZoom: 19,
         tileSize: 256,
         // Knocked back over the page's dark ground so the basemap reads as
-        // context rather than competing with the canopy ramp on top of it.
+        // context rather than competing with the foliage ramp on top of it.
         opacity: 0.45,
         renderSubLayers: (props) => {
           const { boundingBox } = props.tile;
@@ -84,23 +83,30 @@ export default function FoliageMap({ cells }) {
         },
       }),
       new H3HexagonLayer({
-        id: 'canopy',
+        id: 'foliage',
         data: cells,
         // Indexes arrive as hex strings: they are 64-bit and would lose
         // precision as JSON numbers.
         getHexagon: (d) => d.h3,
-        getFillColor: (d) => canopyColor(d.canopyPct),
-        getLineColor: [10, 12, 9, 140],
+        getFillColor: foliageColor,
+        getLineColor: (d) => (d.h3 === selected ? [255, 255, 255, 230] : [10, 12, 9, 120]),
+        getLineWidth: (d) => (d.h3 === selected ? 3 : 1),
+        lineWidthUnits: 'pixels',
         lineWidthMinPixels: 0.5,
         stroked: true,
         filled: true,
         extruded: false,
         pickable: true,
         onHover: ({ object }) => setHovered(object ?? null),
-        updateTriggers: { getFillColor: [cells] },
+        onClick: ({ object }) => onSelect?.(object?.h3 ?? null),
+        updateTriggers: {
+          getFillColor: [cells],
+          getLineColor: [selected],
+          getLineWidth: [selected],
+        },
       }),
     ],
-    [cells],
+    [cells, selected, onSelect],
   );
 
   return (
@@ -110,23 +116,17 @@ export default function FoliageMap({ cells }) {
         onViewStateChange={({ viewState: v }) => setViewState(v)}
         controller={true}
         layers={layers}
+        getCursor={({ isDragging }) => (isDragging ? 'grabbing' : hovered ? 'pointer' : 'grab')}
       />
 
-      {hovered && (
-        <div className="tooltip">
-          <div className="tooltip__row">
-            <span>Canopy</span>
-            <strong>{hovered.canopyPct == null ? 'Not sampled' : `${hovered.canopyPct}%`}</strong>
-          </div>
-          <div className="tooltip__row">
-            <span>Elevation</span>
-            <strong>{hovered.elevationM == null ? '—' : `${hovered.elevationM} m`}</strong>
-          </div>
-          <code>{hovered.h3}</code>
+      {hovered && hovered.h3 !== selected && (
+        <div className="hovercard">
+          <strong>{stageLabel(hovered.stage)}</strong>
+          <span>{Math.round(hovered.progression)}% turned</span>
         </div>
       )}
 
-      <div className="attribution">Basemap © Esri · Canopy: USFS/NLCD · Elevation: Open-Meteo</div>
+      <div className="attribution">Basemap © Esri · Canopy: USFS/NLCD · Weather: Open-Meteo</div>
     </div>
   );
 }

@@ -35,6 +35,16 @@ estimate meaningful in August — see [ADR-0005](adr/0005-three-kinds-of-weather
 
 ### Chilling — the accelerator
 
+> **Climatological chilling is averaged as a derived quantity, not derived
+> from averaged temperature.** Chilling is a threshold function, and the mean
+> of a nonlinear function is not the function of the mean. At a southern
+> Vermont cell, individual years had 2–10 nights below 7 °C between 7 September
+> and 8 October, but the five-year *mean* series had only 2 — cold snaps land
+> on different dates each year and average away. Before this was fixed, every
+> climatological day, which is most of the season, scored on photoperiod
+> alone. Chilling is now computed per year and then averaged.
+
+
 Nights below **7 °C** amplify that day's photoperiod forcing, by 30% per degree
 below the threshold. Cold nights are why a sharp early-autumn cold snap brings
 colour forward — and, because temperature falls with altitude, this is the
@@ -61,6 +71,16 @@ entirely.
 Season-to-date precipitation is compared against the climatological normal.
 A dry season brings colour forward slightly (15% at the extreme) and
 substantially reduces vividness (up to 40%).
+
+Both sides of that comparison must cover the **same window**. The weather
+series reaches back well before the season so chilling can accumulate, and
+summing all of it against a season-length normal made every cell look soaked —
+which silently disabled the drought term entirely. Accumulation now starts at
+the season boundary on both sides.
+
+Note that for a purely climatological date the observed series *is* the normal,
+so the anomaly is zero by construction. That is correct: a future drought
+cannot be known, only a current one measured.
 
 ### Frost — accelerates, then destroys
 

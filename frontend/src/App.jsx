@@ -1,89 +1,124 @@
-import { useMeta, useCells } from './api/hooks';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useForecast, useMeta } from './api/hooks';
 import FoliageMap from './map/FoliageMap';
-import { CANOPY_STOPS } from './map/colors';
+import TimeSlider, { formatDay } from './components/TimeSlider';
+import DetailPanel from './components/DetailPanel';
+import { STAGES } from './map/colors';
 
-const VERMONT = '50';
+const FORECAST_HORIZON_DAYS = 16;
 
-function Stat({ label, value }) {
-  return (
-    <div className="stat">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  );
+function isoToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
 
 export default function App() {
   const meta = useMeta();
-  const { data, error, isLoading } = useCells(VERMONT, 0);
+  const [date, setDate] = useState(isoToday);
+  const [selected, setSelected] = useState(null);
 
+  const { data, error, isLoading } = useForecast(date);
   const cells = data?.cells ?? [];
-  const forested = cells.filter((c) => c.canopyPct != null && c.canopyPct >= 50).length;
-  const elevations = cells.map((c) => c.elevationM).filter((e) => e != null);
+
+  // The season bounds come back with the forecast, so today may sit outside
+  // them on first load. Clamp once we know.
+  useEffect(() => {
+    if (!data?.seasonStart) return;
+    if (date < data.seasonStart) setDate(data.seasonStart);
+    else if (date > data.seasonEnd) setDate(data.seasonEnd);
+  }, [data?.seasonStart, data?.seasonEnd]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const horizonDate = useMemo(() => addDays(isoToday(), FORECAST_HORIZON_DAYS), []);
+  const beyondHorizon = date > horizonDate;
+
+  const counts = useMemo(() => {
+    const out = {};
+    for (const c of cells) out[c.stage] = (out[c.stage] ?? 0) + 1;
+    return out;
+  }, [cells]);
+
+  const peakCount = (counts.PEAK ?? 0) + (counts.NEAR_PEAK ?? 0);
+  const onSelect = useCallback((h3) => setSelected(h3), []);
 
   return (
     <div className="app">
-      <FoliageMap cells={cells} />
+      <FoliageMap cells={cells} selected={selected} onSelect={onSelect} />
 
       <aside className="panel">
         <header>
           <h1>Foliage Forecast</h1>
-          <p className="sub">Vermont · H3 resolution {data?.resolution ?? 6} · ~3 km hexagons</p>
+          <p className="sub">Vermont · {cells.length || '—'} hexagons at ~3 km</p>
         </header>
 
-        {isLoading && <p className="note">Loading grid…</p>}
+        {isLoading && !cells.length && <p className="note">Loading forecast…</p>}
         {error && (
-          <p className="note note--bad">
-            {error.message} Is the backend running on :8080?
-          </p>
+          <p className="note note--bad">{error.message} Is the backend running on :8080?</p>
         )}
 
-        {data && (
+        {Boolean(cells.length) && (
           <>
-            <dl className="stats">
-              <Stat label="Cells" value={data.count.toLocaleString()} />
-              <Stat label="50%+ canopy" value={forested.toLocaleString()} />
-              <Stat
-                label="Elevation"
-                value={
-                  elevations.length
-                    ? `${Math.min(...elevations)}–${Math.max(...elevations)} m`
-                    : '—'
-                }
-              />
-            </dl>
+            <div className="headline">
+              <span className="headline__date">{formatDay(date)}</span>
+              <span className="headline__peak">
+                {peakCount
+                  ? `${peakCount} of ${cells.length} at or near peak`
+                  : 'No cells near peak yet'}
+              </span>
+            </div>
 
             <section className="legend">
-              <h2>Tree canopy</h2>
-              {CANOPY_STOPS.map((s) => (
-                <div className="legend__row" key={s.min}>
-                  <span
-                    className="swatch"
-                    style={{ background: `rgb(${s.rgb.join(',')})` }}
-                  />
-                  {s.label}
+              <h2>Stage</h2>
+              {STAGES.map((s) => (
+                <div className="legend__row" key={s.key}>
+                  <span className="swatch" style={{ background: `rgb(${s.rgb.join(',')})` }} />
+                  <span className="legend__label">{s.label}</span>
+                  <span className="legend__count">{counts[s.key] ?? 0}</span>
                 </div>
               ))}
-              <div className="legend__row">
-                <span className="swatch swatch--none" />
-                Not sampled
-              </div>
             </section>
           </>
         )}
 
+        {beyondHorizon && (
+          <p className="note note--warn">
+            Beyond the 16-day weather forecast. This date is estimated from a
+            five-year average, not forecast — treat it as a typical year rather
+            than a prediction about this one.
+          </p>
+        )}
+
         <footer>
           <p>
-            Phase 1 — the grid. Colour shows <strong>canopy density</strong>, not
-            foliage: the phenology model arrives in Phase 3.
+            A model, not an official forecast. There is no ground-truth record of
+            when foliage actually peaks, so this has not been validated against
+            reality.
           </p>
           {meta.data && (
             <p className="build">
-              model {meta.data.modelVersion} · schema v{meta.data.database?.schemaVersion ?? '?'}
+              model {meta.data.modelVersion} · schema v
+              {meta.data.database?.schemaVersion ?? '?'}
             </p>
           )}
         </footer>
       </aside>
+
+      {data?.seasonStart && (
+        <TimeSlider
+          seasonStart={data.seasonStart}
+          seasonEnd={data.seasonEnd}
+          value={date}
+          onChange={setDate}
+          horizonDate={horizonDate}
+        />
+      )}
+
+      {selected && (
+        <DetailPanel h3={selected} date={date} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }

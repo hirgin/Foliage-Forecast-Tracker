@@ -12,6 +12,16 @@ data class DayInput(
     val tmaxC: Double?,
     val tminC: Double?,
     val precipMm: Double?,
+    /**
+     * Precomputed chilling for this day, overriding what would be derived
+     * from [tminC].
+     *
+     * Set for CLIMATOLOGY days. Chilling is a threshold function, so deriving
+     * it from a multi-year *mean* temperature destroys it -- cold snaps fall
+     * on different dates each year and average away. Climatological chilling
+     * is therefore computed per year and averaged, then supplied here. See V6.
+     */
+    val chillUnits: Double? = null,
 )
 
 data class CellInput(val latitude: Double, val elevationM: Int?)
@@ -107,6 +117,16 @@ object PhenologyModel {
         days: List<DayInput>,
         target: LocalDate,
         normalPrecipMm: Double? = null,
+        /**
+         * Where precipitation accumulation starts.
+         *
+         * Must match the window [normalPrecipMm] was accumulated over, or the
+         * drought anomaly compares different spans of time. The weather series
+         * reaches back further than the season for chilling purposes, so
+         * summing it whole against a season-length normal made every cell look
+         * soaked and silently disabled the drought term.
+         */
+        precipFrom: LocalDate? = null,
     ): FoliageScore {
         val upToTarget = days.filter { !it.day.isAfter(target) }.sortedBy { it.day }
 
@@ -119,7 +139,9 @@ object PhenologyModel {
             val photo = Photoperiod.senescenceForcing(cell.latitude, d.day, PHOTOPERIOD_THRESHOLD_H)
             if (photo <= 0.0) continue
 
-            val chill = d.tminC?.let { (CHILL_THRESHOLD_C - it).coerceAtLeast(0.0) } ?: 0.0
+            val chill = d.chillUnits
+                ?: d.tminC?.let { (CHILL_THRESHOLD_C - it).coerceAtLeast(0.0) }
+                ?: 0.0
             val warm = d.tmaxC?.let { (it - WARM_THRESHOLD_C).coerceAtLeast(0.0) } ?: 0.0
 
             if (chill > 0) chillDays++
@@ -132,7 +154,10 @@ object PhenologyModel {
         }
 
         // Drought shortens and dulls the season, and brings it forward slightly.
-        val observedPrecip = upToTarget.mapNotNull { it.precipMm }.sum()
+        val observedPrecip = upToTarget
+            .filter { precipFrom == null || !it.day.isBefore(precipFrom) }
+            .mapNotNull { it.precipMm }
+            .sum()
         val droughtStress = normalPrecipMm
             ?.takeIf { it > 0 }
             ?.let { (1.0 - observedPrecip / it).coerceIn(0.0, 1.0) }

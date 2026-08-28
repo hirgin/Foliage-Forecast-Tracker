@@ -165,6 +165,85 @@ class PhenologyModelTest {
         )
     }
 
+    @Test
+    fun `precipitation is only counted from the window the normal covers`() {
+        // The weather series reaches back before the season so chilling can
+        // accumulate. Summing all of it against a season-length normal made
+        // every cell look soaked and silently disabled the drought term.
+        val target = LocalDate.of(2026, 10, 5)
+        val seasonStart = LocalDate.of(2026, 9, 1)
+        val normal = 120.0
+
+        // Heavy summer rain, then a bone-dry autumn.
+        val days = typicalSeason().map {
+            if (it.day.isBefore(seasonStart)) it.copy(precipMm = 20.0) else it.copy(precipMm = 0.1)
+        }
+
+        val windowed = PhenologyModel.score(vermont, days, target, normal, precipFrom = seasonStart)
+        val unwindowed = PhenologyModel.score(vermont, days, target, normal)
+
+        assertTrue(
+            windowed.intensity < unwindowed.intensity,
+            "a dry autumn after a wet summer must still register as drought",
+        )
+        assertTrue(
+            windowed.progression >= unwindowed.progression,
+            "drought should not slow progression",
+        )
+    }
+
+    // --- climatological chilling (V6) -------------------------------------
+
+    @Test
+    fun `averaging temperature destroys chilling, which is why it is precomputed`() {
+        // Five Septembers where each year has one sharp cold night, but on a
+        // different date. Every year contributes real chilling; the *mean*
+        // series contributes almost none, because the cold snaps average away.
+        val threshold = PhenologyModel.CHILL_THRESHOLD_C
+        val years = (0 until 5).map { y ->
+            (0 until 5).map { d -> if (d == y) 0.0 else 12.0 }
+        }
+
+        val meanSeries = (0 until 5).map { d -> years.map { it[d] }.average() }
+        val chillFromMean = meanSeries.sumOf { (threshold - it).coerceAtLeast(0.0) }
+        val chillPerYearThenAveraged = years
+            .map { yr -> yr.sumOf { (threshold - it).coerceAtLeast(0.0) } }
+            .average()
+
+        assertEquals(0.0, chillFromMean, "the averaged series should show no chilling at all")
+        assertTrue(
+            chillPerYearThenAveraged > 1.0,
+            "per-year chilling averages to something real: $chillPerYearThenAveraged",
+        )
+    }
+
+    @Test
+    fun `a supplied chillUnits override is used instead of deriving from tmin`() {
+        val target = LocalDate.of(2026, 10, 5)
+        // Warm minima that would derive zero chilling on their own.
+        val warm = typicalSeason().map { it.copy(tminC = 12.0) }
+        val withOverride = warm.map { it.copy(chillUnits = 4.0) }
+
+        val derived = PhenologyModel.score(vermont, warm, target).progression
+        val overridden = PhenologyModel.score(vermont, withOverride, target).progression
+
+        assertTrue(
+            overridden > derived,
+            "supplied chilling must contribute: $overridden vs $derived",
+        )
+    }
+
+    @Test
+    fun `observed days ignore the override path and still derive from tmin`() {
+        val target = LocalDate.of(2026, 10, 5)
+        val cold = typicalSeason().map { it.copy(tminC = -2.0) }
+        val mild = typicalSeason().map { it.copy(tminC = 12.0) }
+        assertTrue(
+            PhenologyModel.score(vermont, cold, target).progression >
+                PhenologyModel.score(vermont, mild, target).progression,
+        )
+    }
+
     // --- stages and confidence -------------------------------------------
 
     @Test

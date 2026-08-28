@@ -4,6 +4,7 @@ import com.foliage.domain.DailyRecord
 import com.foliage.domain.WeatherDay
 import com.foliage.domain.WeatherKind
 import com.foliage.domain.WeatherNormal
+import com.foliage.forecast.PhenologyModel
 import com.foliage.grid.H3Grid
 import com.foliage.ingest.audit.IngestRunRecorder
 import com.foliage.persistence.CellRepository
@@ -95,6 +96,7 @@ class WeatherIngest(
             // observations for. See the amendment to ADR-0005.
             val normalRows = sums.map { (key, recs) ->
                 val (i, md) = key
+                val minima = recs.mapNotNull { it.tminC }
                 WeatherNormal(
                     h3 = parents[i],
                     monthDay = md,
@@ -102,6 +104,16 @@ class WeatherIngest(
                     tmaxC = recs.meanOf { it.tmaxC },
                     tminC = recs.meanOf { it.tminC },
                     precipMm = recs.meanOf { it.precipMm },
+                    // Chilling is computed per year and *then* averaged. Doing
+                    // it the other way round -- deriving from the mean tmin --
+                    // destroys the signal, because the threshold is nonlinear
+                    // and cold snaps fall on different dates each year.
+                    chillUnits = minima
+                        .map { (PhenologyModel.CHILL_THRESHOLD_C - it).coerceAtLeast(0.0) }
+                        .takeIf { it.isNotEmpty() }?.average(),
+                    frostFrequency = minima
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { m -> m.count { it <= 0.0 }.toDouble() / m.size },
                     yearsAveraged = climatologyYears,
                 )
             }

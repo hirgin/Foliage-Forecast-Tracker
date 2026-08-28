@@ -45,5 +45,13 @@ data class WeatherNormal(
     val tmaxC: Double?,
     val tminC: Double?,
     val precipMm: Double?,
+    /**
+     * Mean of `max(0, CHILL_THRESHOLD - tmin)` computed **per year and then
+     * averaged**, not derived from [tminC]. Chilling is a threshold function,
+     * and averaging temperature first destroys it. See V6.
+     */
+    val chillUnits: Double?,
+    /** Fraction of averaged years with a freezing night on this calendar day. */
+    val frostFrequency: Double?,
     val yearsAveraged: Int,
 )

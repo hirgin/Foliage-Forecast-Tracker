@@ -47,6 +47,7 @@ class ForecastService(
             val parents = grid.map { it.parentRes5 }.distinct()
             val series = weather.seriesByCell(parents)
             val precipNormals = normals.precipNormalsByCell()
+            val chillNormals = normals.chillUnitsByCell()
 
             // A res 5 cell's reference elevation is the mean of its res 6
             // children. The weather was reported for the parent as a whole, so
@@ -59,13 +60,15 @@ class ForecastService(
                 }
 
             val days = season.days(year)
+            val seasonStart = season.start(year)
             val rows = ArrayList<StoredForecast>(grid.size * days.size)
 
             val elapsed = measureTimeMillis {
                 for (cell in grid) {
                     val parentSeries = series[cell.parentRes5] ?: continue
                     val reference = referenceElevation[cell.parentRes5]
-                    val inputs = parentSeries.map { it.downscaledTo(cell, reference) }
+                    val chill = chillNormals[cell.parentRes5]
+                    val inputs = parentSeries.map { it.downscaledTo(cell, reference, chill) }
                     val cumulativeNormal = cumulativePrecip(precipNormals[cell.parentRes5], days)
 
                     for (day in days) {
@@ -74,6 +77,7 @@ class ForecastService(
                             days = inputs,
                             target = day,
                             normalPrecipMm = cumulativeNormal[day],
+                            precipFrom = seasonStart,
                         )
                         rows += StoredForecast(
                             h3 = cell.h3,
@@ -116,7 +120,8 @@ class ForecastService(
 
         val siblings = cells.findByParent(cell.parentRes5)
         val reference = siblings.mapNotNull { it.elevationM }.takeIf { it.isNotEmpty() }?.average()
-        val inputs = parentSeries.map { it.downscaledTo(cell, reference) }
+        val chill = normals.chillUnitsByCell()[cell.parentRes5]
+        val inputs = parentSeries.map { it.downscaledTo(cell, reference, chill) }
         val cumulative = cumulativePrecip(normals.precipNormalsByCell()[cell.parentRes5], season.days(year))
 
         return PhenologyModel.score(
@@ -124,6 +129,7 @@ class ForecastService(
             days = inputs,
             target = day,
             normalPrecipMm = cumulative[day],
+            precipFrom = season.start(year),
         )
     }
 
@@ -140,14 +146,38 @@ class ForecastService(
         }
     }
 
-    /** Corrects a parent cell's reading to this cell's own elevation. */
-    private fun WeatherDay.downscaledTo(cell: Cell, referenceElevationM: Double?) = DayInput(
-        day = day,
-        kind = kind,
-        tmaxC = LapseRate.adjust(tmaxC, cell.elevationM, referenceElevationM),
-        tminC = LapseRate.adjust(tminC, cell.elevationM, referenceElevationM),
-        precipMm = precipMm,
-    )
+    /**
+     * Corrects a parent cell's reading to this cell's own elevation, and for
+     * climatological days supplies chilling that was averaged as a derived
+     * quantity rather than derived from averaged temperature. See V6.
+     *
+     * The lapse-rate correction is applied to the chilling override too: a
+     * ridge is colder than the parent cell's mean, so it chills more, and the
+     * whole point of scoring at res 6 is to express that.
+     */
+    private fun WeatherDay.downscaledTo(
+        cell: Cell,
+        referenceElevationM: Double?,
+        chillNormals: Map<MonthDay, Double>?,
+    ): DayInput {
+        val tmin = LapseRate.adjust(tminC, cell.elevationM, referenceElevationM)
+        val chill = if (kind == com.foliage.domain.WeatherKind.CLIMATOLOGY) {
+            chillNormals?.get(MonthDay.from(day))?.let { base ->
+                val cooling = (tmin ?: 0.0) - (tminC ?: 0.0)
+                (base - cooling).coerceAtLeast(0.0)
+            }
+        } else {
+            null
+        }
+        return DayInput(
+            day = day,
+            kind = kind,
+            tmaxC = LapseRate.adjust(tmaxC, cell.elevationM, referenceElevationM),
+            tminC = tmin,
+            precipMm = precipMm,
+            chillUnits = chill,
+        )
+    }
 }
 
 data class ForecastRunResult(

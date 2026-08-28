@@ -25,15 +25,18 @@ class NormalRepository(private val jdbc: JdbcTemplate) {
 
         val sql = """
             INSERT INTO weather_normal
-                (h3, month_day, resolution, tmax_c, tmin_c, precip_mm, years_averaged)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (h3, month_day, resolution, tmax_c, tmin_c, precip_mm,
+                 chill_units, frost_frequency, years_averaged)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-                tmax_c         = VALUES(tmax_c),
-                tmin_c         = VALUES(tmin_c),
-                precip_mm      = VALUES(precip_mm),
-                resolution     = VALUES(resolution),
-                years_averaged = VALUES(years_averaged),
-                computed_at    = NOW(6)
+                tmax_c          = VALUES(tmax_c),
+                tmin_c          = VALUES(tmin_c),
+                precip_mm       = VALUES(precip_mm),
+                chill_units     = VALUES(chill_units),
+                frost_frequency = VALUES(frost_frequency),
+                resolution      = VALUES(resolution),
+                years_averaged  = VALUES(years_averaged),
+                computed_at     = NOW(6)
         """.trimIndent()
 
         val counts = jdbc.batchUpdate(sql, normals, normals.size) { ps: PreparedStatement, n: WeatherNormal ->
@@ -43,7 +46,9 @@ class NormalRepository(private val jdbc: JdbcTemplate) {
             setDouble(ps, 4, n.tmaxC)
             setDouble(ps, 5, n.tminC)
             setDouble(ps, 6, n.precipMm)
-            ps.setInt(7, n.yearsAveraged)
+            setDouble(ps, 7, n.chillUnits)
+            setDouble(ps, 8, n.frostFrequency)
+            ps.setInt(9, n.yearsAveraged)
         }
         return counts.sumOf { it.size }
     }
@@ -73,6 +78,17 @@ class NormalRepository(private val jdbc: JdbcTemplate) {
             val md = rs.getString("month_day").split("-")
             val precip = rs.getObject("precip_mm")?.let { rs.getDouble("precip_mm") } ?: 0.0
             out.getOrPut(rs.getLong("h3")) { HashMap() }[MonthDay.of(md[0].toInt(), md[1].toInt())] = precip
+        }
+        return out
+    }
+
+    /** Per-cell mean chilling units by calendar day, for climatological days. */
+    fun chillUnitsByCell(): Map<Long, Map<MonthDay, Double>> {
+        val out = HashMap<Long, MutableMap<MonthDay, Double>>()
+        jdbc.query("SELECT h3, month_day, chill_units FROM weather_normal WHERE chill_units IS NOT NULL") { rs ->
+            val md = rs.getString("month_day").split("-")
+            out.getOrPut(rs.getLong("h3")) { HashMap() }[MonthDay.of(md[0].toInt(), md[1].toInt())] =
+                rs.getDouble("chill_units")
         }
         return out
     }
