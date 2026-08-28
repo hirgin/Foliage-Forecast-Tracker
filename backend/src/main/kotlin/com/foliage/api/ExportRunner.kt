@@ -1,5 +1,6 @@
 package com.foliage.api
 
+import com.foliage.config.DatabaseBootstrap
 import com.foliage.forecast.ForecastService
 import com.foliage.ingest.weather.WeatherIngest
 import org.slf4j.LoggerFactory
@@ -26,6 +27,7 @@ import java.nio.file.Path
 @ConditionalOnProperty("foliage.export.path")
 class ExportRunner(
     private val exporter: StaticExporter,
+    private val database: DatabaseBootstrap,
     private val weatherIngest: WeatherIngest,
     private val forecastService: ForecastService,
     private val context: ApplicationContext,
@@ -44,6 +46,22 @@ class ExportRunner(
         // deploy triggered by a code push the database is already current, so
         // the refresh is skipped and the export takes seconds.
         val refresh = env.getProperty("foliage.export.refresh", "false").toBoolean()
+
+        // DatabaseBootstrap degrades rather than aborting startup, which is
+        // right for a dev server and wrong here: a batch job with no database
+        // must fail loudly and say why, not fall through to an empty export
+        // that reports "no cells".
+        if (database.status.state != "connected") {
+            log.error(
+                "database is {} -- cannot export. Underlying error: {}",
+                database.status.state,
+                database.status.error ?: "none reported",
+            )
+            SpringApplication.exit(context, ExitCodeGenerator { 2 })
+            Runtime.getRuntime().halt(2)
+            return
+        }
+        log.info("database connected, schema {}", database.status.schemaVersion)
 
         val code = try {
             if (refresh) {

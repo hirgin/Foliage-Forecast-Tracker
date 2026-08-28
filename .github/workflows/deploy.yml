@@ -76,10 +76,10 @@ jobs:
             REFRESH=true
           fi
           echo "refresh=$REFRESH"
-          ./gradlew bootRun --no-daemon --args="\
-            --foliage.export.path=${{ github.workspace }}/site-data \
-            --foliage.export.state=50 \
-            --foliage.export.refresh=$REFRESH"
+          # Kept on one line: the indented backslash continuations produced
+          # runs of whitespace inside --args, which Gradle splits into empty
+          # arguments.
+          ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.state=50 --foliage.export.refresh=$REFRESH"
 
       - name: Check the export produced data
         run: |
