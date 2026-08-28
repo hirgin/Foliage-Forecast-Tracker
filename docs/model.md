@@ -146,22 +146,27 @@ against a field rule of thumb of roughly a week per 300 m. Raising it to 0.30
 widened the statewide spread from 5 days to 9.
 
 `SENESCENCE_RATE` was then solved for directly by inverting the curve at the
-median cell, so median peak lands on 8 October.
+median cell.
 
 The resulting season, computed over all 649 Vermont cells:
 
-| Date | State of the canopy |
+| | |
 |---|---|
-| 15 Sep | Mostly no change, some patchy |
-| 25 Sep | Entirely partial |
-| 1 Oct | Predominantly near peak |
-| **8 Oct** | **Half the state at peak** |
-| 12 Oct | 547 of 649 cells at peak |
-| 18 Oct | Effectively all past peak |
+| Earliest peak | **29 September** — the high Green Mountains |
+| Median peak | **7 October** |
+| Latest peak | **10 October** |
+| Statewide spread | 11 days |
 
-Elevation-to-progression correlation is **0.718**, with the highest 80 cells
-averaging 73.0 against 65.6 for the lowest 80 — so the lapse-rate downscale is
-doing real work.
+On 7 October: 390 cells at peak, 242 near peak, 17 already past.
+
+Elevation-to-progression correlation is **0.72**, so the lapse-rate downscale
+is doing real work — the earliest cells to turn are the high ones, which is
+where a Vermont season actually starts.
+
+These figures are from after the climatological-chilling correction described
+under [Chilling](#chilling--the-accelerator). Before it, earliest peak was
+5 October and the spread 9 days, because high-elevation cells were getting no
+chilling credit on climatological days.
 
 The calibration is guarded by a test. Changing a constant without moving the
 test fails the build.
