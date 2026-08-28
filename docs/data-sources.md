@@ -31,8 +31,27 @@ Every external input, where it comes from, and what it costs.
 - 30 m raster, public domain. Defines which hexagons are forest.
 - Downloaded and processed **once**, offline, in the bootstrap job.
 
-### Elevation
-- Derived per cell from Open-Meteo's elevation endpoint during bootstrap.
+### Elevation — USGS 3DEP
+- <https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer>
+- **Auth:** none. Batched `getSamples`, same interface as the canopy service.
+- **Batch size 50, measured not guessed.** 3DEP is slow when points span many
+  raster tiles: 0.36 s/point at 50, but 0.73 s/point at both 25 and 100, and
+  CloudFront returns 504 Gateway Timeout above roughly 200 spread points.
+
+**Its resolution advantage is illusory at this grid scale.** Across all 649
+Vermont cells, 3DEP (1 m) and Open-Meteo (~90 m) agree closely — min/median/max
+of 30/371/967 against 27/380/981. One centroid sample per 36 km² hexagon cannot
+exploit metre-scale detail. 3DEP is used because it is **not rate-limited**,
+not because it is finer.
+
+**Neither is right for CONUS.** 76,041 cells at batch 50 is 1,521 requests and
+roughly 7.6 hours sequentially. A bulk DEM at ~1 km would be faster and, per
+the comparison above, entirely sufficient — and would also give each cell a
+true *mean* elevation rather than a centroid point sample, which is the more
+correct quantity for a lapse-rate correction. NetCDF-Java is already on the
+classpath from the GRIB work and can read one.
+
+#### Previously: Open-Meteo elevation
 
 **Measured rate limit.** Open-Meteo meters by request *weight*, not request
 count: a batch of 100 coordinates costs far more than a single lookup. The

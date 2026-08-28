@@ -50,9 +50,16 @@ foliage:
     # Points per request. Large enough to keep round trips down, small enough
     # that one failed batch loses little work.
     canopy-batch-size: 250
+    # USGS 3DEP, 1 m resolution, batched like the canopy service and not
+    # metered by weight. Replaces Open-Meteo, whose 429s were the documented
+    # blocker on covering CONUS. See docs/data-sources.md.
+    elevation-3dep-url: https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer
+    # Retained as a fallback implementation; capped at 100 coordinates per call.
     elevation-url: https://api.open-meteo.com/v1/elevation
-    # Open-Meteo caps the elevation endpoint at 100 coordinates per call.
-    elevation-batch-size: 100
+    # 50 is measured, not guessed. 3DEP is slow when points span many raster
+    # tiles -- 0.36 s/point at 50, but 0.73 s/point at both 25 and 100, and
+    # CloudFront returns 504 above roughly 200 spread points.
+    elevation-batch-size: 50
     boundary-url: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0/query
   weather:
     forecast-url: https://api.open-meteo.com/v1/forecast

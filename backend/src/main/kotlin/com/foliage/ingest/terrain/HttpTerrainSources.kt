@@ -69,7 +69,9 @@ class NlcdCanopySource(
 class OpenMeteoElevationSource(
     private val restClient: RestClient,
     @Value("\${foliage.terrain.elevation-url}") private val url: String,
-    @Value("\${foliage.terrain.elevation-batch-size}") private val batchSize: Int,
+    // Open-Meteo caps this endpoint at 100 coordinates regardless of the
+    // shared setting, which 3DEP raises for its own batches.
+    private val batchSize: Int = 100,
 ) : ElevationSource {
 
     private val log = LoggerFactory.getLogger(javaClass)

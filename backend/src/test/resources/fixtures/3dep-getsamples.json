@@ -1,0 +1,5 @@
+{"samples":[
+ {"location":{"x":-72.7,"y":44.0,"spatialReference":{"wkid":4326}},"locationId":0,"value":"492.113281250","rasterId":1,"resolution":1},
+ {"location":{"x":-73.05,"y":44.48,"spatialReference":{"wkid":4326}},"locationId":1,"value":"111.679237366","rasterId":28870,"resolution":1},
+ {"location":{"x":-72.90,"y":43.20,"spatialReference":{"wkid":4326}},"locationId":2,"value":"486.972442627","rasterId":40168,"resolution":1}
+]}
