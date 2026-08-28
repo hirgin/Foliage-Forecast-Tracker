@@ -22,6 +22,14 @@ class H3Grid {
             resolution,
         )
 
+    /**
+     * The cell of [resolution] containing a point. This is how a place name or
+     * a map click resolves to a hexagon -- no spatial query involved, just
+     * arithmetic on the coordinate.
+     */
+    fun cellAt(point: LonLat, resolution: Int): Long =
+        h3.latLngToCell(point.lat, point.lon, resolution)
+
     fun centroid(h3Index: Long): LonLat =
         h3.cellToLatLng(h3Index).let { LonLat(lon = it.lng, lat = it.lat) }
 

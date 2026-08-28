@@ -28,8 +28,19 @@ Every external input, where it comes from, and what it costs.
 - Downloaded and processed **once**, offline, in the bootstrap job.
 
 ### Elevation
-- Derived per cell from Open-Meteo's elevation endpoint during bootstrap,
-  with min/mean/max across each hexagon driving the lapse-rate correction.
+- Derived per cell from Open-Meteo's elevation endpoint during bootstrap.
+
+**Measured rate limit.** Open-Meteo meters by request *weight*, not request
+count: a batch of 100 coordinates costs far more than a single lookup. The
+first Vermont bootstrap fired 7 batches of 100 in 1.9 s and the seventh came
+back `429 Minutely API request limit exceeded`. Clients now retry on 429 with
+exponential backoff, which recovered the batch on re-run at a cost of ~74 s.
+
+**This does not scale to CONUS.** 224,000 cells is 2,240 batches; at the
+observed throttle that is hours of mostly-waiting. Before the grid leaves the
+state scale, elevation needs a bulk source (a DEM tile set processed offline)
+rather than a metered API. The `ElevationSource` seam exists for exactly this
+swap.
 
 ## Phenology reference
 

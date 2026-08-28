@@ -20,6 +20,8 @@ only tier that gates every build.
 | Area | Covered by | What it proves |
 |---|---|---|
 | H3 tiling and ancestry | `grid/H3GridTest` | Cell counts are the right order of magnitude, resolutions are exact, ancestry is transitive, no res 5 parent exceeds 7 children |
+| Per-cell terrain sampling | `ingest/terrain/CellSamplingTest` | Seven samples per hexagon, all strictly inside the boundary; no samples averages to null, not zero |
+| Retry and backoff | `ingest/RetryPolicyTest` | Backoff doubles, stops at maxAttempts, and never retries a non-transient error. Sleeping is injected, so the suite stays fast |
 | Phenology model *(phase 3)* | `forecast/` | Scoring is monotonic in each driver and bounded 0–100 |
 
 ## Tier 2 — Fixture-backed tests (always run)

@@ -42,6 +42,21 @@ foliage:
   grid:
     # H3 resolution the forecast is computed at (~3 km edge). See ADR-0002.
     resolution: 6
+    # A cell counts as forest at or above this canopy percentage. Applied at
+    # query time, never at ingest, so it can be retuned without re-sampling.
+    min-canopy-pct: 20
+  terrain:
+    canopy-url: https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_NLCD_TCC_CONUS/ImageServer
+    # Points per request. Large enough to keep round trips down, small enough
+    # that one failed batch loses little work.
+    canopy-batch-size: 250
+    elevation-url: https://api.open-meteo.com/v1/elevation
+    # Open-Meteo caps the elevation endpoint at 100 coordinates per call.
+    elevation-batch-size: 100
+    boundary-url: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0/query
+  admin:
+    # Guards the bootstrap trigger. Off by default; enabled in the local profile.
+    enabled: ${FOLIAGE_ADMIN_ENABLED:false}
   cors:
     allowed-origins: http://localhost:5173
 

@@ -63,6 +63,13 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 - **Never persist per-factor model contributions.** It nearly triples the
   forecast table and blows the 5 GiB free tier. `explain` recomputes them for
   a single cell on demand. See ADR-0004.
+- **Open-Meteo meters by request weight, not count.** Seven 100-coordinate
+  batches in under two seconds trips its minutely limit. Clients retry on 429
+  via `RetryPolicy`; do not remove that, and do not raise batch sizes hoping
+  for fewer round trips -- weight is what is metered.
+- The preview tooling resolves `.claude/launch.json` from the session's
+  original project root. Use absolute paths in `runtimeArgs`; a relative
+  `-p backend` silently builds whatever tree the preview process starts in.
 - MySQL specifics: timestamps are `DATETIME(6)` (TIMESTAMP dies in 2038),
   indexed strings must be `VARCHAR` not `TEXT`, and all stored times are UTC.
 - Java 23 is the toolchain. Node is 18.16, so Vite stays on 5.x.
