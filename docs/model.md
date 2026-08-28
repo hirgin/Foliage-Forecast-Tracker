@@ -171,17 +171,39 @@ chilling credit on climatological days.
 The calibration is guarded by a test. Changing a constant without moving the
 test fails the build.
 
-## A deliberate negative result
+## Does colour really move north to south?
 
-Holding weather constant, this model progresses **slightly faster in the south**
-than the north in early October. That is not a bug. Southern latitudes cross
-the 13-hour threshold about six days earlier, and the north's faster rate of
-decline has not yet made up the difference by 5 October.
+Yes, but establishing it took measurement rather than assertion, and the first
+answer was misleading.
 
-Northern regions peak earlier in reality because they are **colder**, not
-because of daylength. Latitude acts on this model through temperature. Both
-behaviours are pinned by tests, the negative one included, so that nobody
-later "fixes" the model into claiming something photoperiod does not support.
+**Photoperiod alone favours the south.** Holding weather constant, southern
+latitudes cross the 13-hour threshold about six days earlier, and the north's
+faster rate of decline has not caught up by early October. This is pinned by a
+test, negative result and all, so nobody later "fixes" the model into claiming
+something daylength does not support.
+
+**Temperature more than compensates.** Measured across the real Vermont grid on
+8 October:
+
+| Band | Mean lat | Mean elevation | Chilling nights | Progression |
+|---|---|---|---|---|
+| Southern 60 cells | 42.90 N | 488 m | 21.0 | 79.2 |
+| Northern 60 cells | 44.94 N | 318 m | 24.2 | **85.4** |
+
+The north runs 6.2 progression points ahead *while sitting 170 m lower* — so it
+overcomes an elevation handicap that should have delayed it. The march is real
+and in the right direction.
+
+**It was invisible for a while, and that was a rendering bug.** The map filled
+each stage with a flat colour, and 79.2 and 85.4 are both `PEAK`, so the whole
+state rendered as one uniform red. Worse, "first day reaching peak" is a poor
+statistic here: near the top the saturating curve is nearly flat, so cells cross
+the threshold within a day of each other and the north-south spread collapsed to
+**0.4 days** when measured that way.
+
+The map now interpolates within each stage, which restores the gradient without
+changing a single number in the model. The lesson is worth keeping: a signal
+can be present, correct, and completely hidden by how it is displayed.
 
 ## What this model cannot do
 
@@ -193,6 +215,12 @@ later "fixes" the model into claiming something photoperiod does not support.
   times and in different colours. Only canopy density is currently modelled,
   not composition, so a maple stand and an oak stand at the same elevation
   score identically. This is the largest single gap.
+- **It does not vary species by region.** USFS forest type data was checked:
+  Vermont is almost uniformly Maple/beech/birch, with spruce/fir only at
+  elevation, so species would not differentiate *within* this state. It would
+  matter greatly across states — oak-dominated southern forests turn later and
+  duller — which makes it a prerequisite for expanding beyond Vermont rather
+  than an improvement to the current map.
 - **The spread is too narrow.** Vermont's real season runs two to three weeks
   from the Northeast Kingdom to the southern valleys; this model produces
   about nine days. The *direction* is right and elevation clearly drives it,

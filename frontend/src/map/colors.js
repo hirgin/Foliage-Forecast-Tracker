@@ -26,15 +26,47 @@ export function stageLabel(stage) {
   return BY_KEY[stage]?.label ?? 'Unknown';
 }
 
+/** Stage boundaries, matching PhenologyModel.stageOf on the backend. */
+const BOUNDS = {
+  NO_CHANGE: [0, 10],
+  PATCHY: [10, 30],
+  PARTIAL: [30, 55],
+  NEAR_PEAK: [55, 75],
+  PEAK: [75, 90],
+  PAST_PEAK: [90, 100],
+};
+
+const lerp = (a, b, t) => a + (b - a) * t;
+
 /**
- * Alpha carries confidence, so a climatological October reads as visibly less
- * certain than an observed September without needing a second colour channel.
- * The floor keeps low-confidence cells legible rather than invisible.
+ * Colour by progression, interpolating between stage anchors.
+ *
+ * Flat-filling each stage hid a real signal. Northern Vermont runs about six
+ * progression points ahead of the south — the correct direction, achieved
+ * despite sitting lower and therefore warmer — but 79 and 85 are both PEAK, so
+ * the whole state rendered as one flat red and the north-to-south march was
+ * invisible. Interpolating within the band restores it without changing a
+ * single number in the model.
  */
 export function foliageColor(cell) {
-  const [r, g, b] = stageColor(cell.stage);
+  const [r, g, b] = progressionColor(cell.progression, cell.stage);
   const alpha = Math.round(255 * (0.45 + 0.55 * (cell.confidence ?? 1)));
   return [r, g, b, alpha];
+}
+
+export function progressionColor(progression, stage) {
+  const i = STAGES.findIndex((s) => s.key === stage);
+  if (i < 0) return [70, 66, 60];
+
+  const [lo, hi] = BOUNDS[stage];
+  // How far through its own stage this cell is.
+  const t = hi > lo ? Math.min(1, Math.max(0, (progression - lo) / (hi - lo))) : 0;
+
+  const from = STAGES[i].rgb;
+  // Blend toward the next stage, so the ramp is continuous across boundaries
+  // rather than stepping. The last stage has nowhere to go, so it deepens.
+  const to = STAGES[i + 1]?.rgb ?? from.map((c) => Math.round(c * 0.72));
+  return [0, 1, 2].map((k) => Math.round(lerp(from[k], to[k], t)));
 }
 
 /** Canopy ramp, retained for the grid-only view. */
