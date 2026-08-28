@@ -42,9 +42,10 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("org.springframework.boot:spring-boot-testcontainers")
-    testImplementation("org.testcontainers:mysql")
-    testImplementation("org.testcontainers:junit-jupiter")
+    // No Testcontainers: this environment has no Docker, so a container-backed
+    // test could never run here. External services are tested against captured
+    // fixtures instead, and database tests run against a real schema when one
+    // is configured. See docs/testing.md.
 }
 
 kotlin {

@@ -37,7 +37,15 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 - Every ingest job writes an `ingest_run` row. Jobs must be idempotent and
   resumable — the historical backfill is too large to restart from zero.
 - New weather sources implement `WeatherSource` and nothing downstream changes.
-  That seam is deliberate; do not leak source-specific types past it.
+  That seam is deliberate; do not leak source-specific types past it. The same
+  applies to `CanopySource` and `ElevationSource`.
+- **Every phase ships tests.** No Testcontainers — there is no Docker here, so
+  a container-backed test could never run. Instead, split every external
+  client into a thin transport half and a **pure parsing function**, and test
+  the parser against a real response captured into
+  `src/test/resources/fixtures/`. See `docs/testing.md`.
+- Parsers must degrade, not throw: a short, empty, or malformed response
+  becomes nulls so that one bad batch cannot abort a whole bootstrap.
 
 ## Gotchas
 

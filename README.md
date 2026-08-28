@@ -84,6 +84,16 @@ times slower.
 - [ ] **Phase 5** — polish and deploy
 - [ ] **Phase 6** — NOAA GRIB2 pipeline
 
+## Testing
+
+```bash
+cd backend && ./gradlew test
+```
+
+Unit tests plus fixture-backed parser tests, with live-database tests gated
+behind opt-in configuration. The strategy — and what deliberately is *not*
+tested — is documented in [`docs/testing.md`](docs/testing.md).
+
 ## Data sources
 
 Provenance and licensing for every input is in
