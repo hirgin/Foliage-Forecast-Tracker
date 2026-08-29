@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForecast, useMeta } from '../api/hooks';
-import { resolutionForZoom, cellWidthKm } from '../api/client';
+import { resolutionForZoom, cellWidthKm, h3ForPlace } from '../api/client';
 import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
@@ -104,10 +104,13 @@ export default function MapView({ nav }) {
 
         {nav}
         <PlaceSearch
-          onSelect={(place) => {
-            const h3 = cells[place.cell]?.h3;
-            if (h3) setSelected(h3);
+          onSelect={async (place) => {
+            // Resolved against the detailed cell list rather than whatever is
+            // on screen: zoomed out, the drawn cells are a coarser set and the
+            // index would point at the wrong hexagon.
             setFocus({ lat: place.lat, lon: place.lon, nonce: Date.now() });
+            const h3 = await h3ForPlace(place, cells);
+            if (h3) setSelected(h3);
           }}
         />
 

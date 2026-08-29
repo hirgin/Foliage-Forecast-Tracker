@@ -101,6 +101,20 @@ export default function DetailPanel({ h3, date, onClose }) {
             </div>
           </dl>
 
+          {/* How wooded the hexagon actually is.
+              City cells are now on the map whatever their canopy, because
+              street trees turn on the same schedule as the woods outside town.
+              But downtown Boston is 2% trees, and showing it at peak without
+              saying so would promise a display that is not there. */}
+          {typeof timeline.data.canopyPct === 'number' && (
+            <p className="detail__canopy">
+              {timeline.data.canopyPct < 20
+                ? `Only ${timeline.data.canopyPct}% of this area is tree cover, so expect ` +
+                  'scattered colour rather than a hillside.'
+                : `${timeline.data.canopyPct}% tree cover.`}
+            </p>
+          )}
+
           <Sparkline days={timeline.data.days} activeDate={date} />
           <p className="spark__caption">
             Season progression · dashed line marks first peak

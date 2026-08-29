@@ -46,6 +46,7 @@ class StaticExporter(
     private val season: Season,
     @Value("\${foliage.model-version}") private val modelVersion: String,
     @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
+    @Value("\${foliage.grid.metro-population}") private val metroPopulation: Int,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -106,8 +107,8 @@ class StaticExporter(
         // day in each daily file, so shipping the unforested two thirds would
         // roughly double the payload to draw hexagons that can never carry a
         // colour.
-        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct)
-                     else cells.findByState(stateFips, minCanopyPct))
+        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation)
+                     else cells.findByState(stateFips, minCanopyPct, metroPopulation))
             .sortedBy { it.h3 }
         require(grid6.isNotEmpty()) { "no cells for ${stateFips ?: "the grid"}" }
 

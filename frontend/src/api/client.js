@@ -170,6 +170,25 @@ export async function fetchForecast(date, resolution = 6) {
   };
 }
 
+/**
+ * The hexagon a search result points at.
+ *
+ * A place carries an *index* into the detailed cell list, not an address. That
+ * was fine while the map only ever drew one resolution; once it swaps to a
+ * coarser export when zoomed out, indexing the cells currently on screen picks
+ * the wrong hexagon or none at all -- selecting a city from search did nothing
+ * when the map happened to be zoomed out.
+ *
+ * So the index is always resolved against the detailed list it belongs to,
+ * whatever is being drawn.
+ */
+export async function h3ForPlace(place, drawnCells) {
+  if (place?.cell == null) return null;
+  if (!STATIC) return drawnCells?.[place.cell]?.h3 ?? null;
+  const index = await staticIndex();
+  return index.h3[place.cell] ?? null;
+}
+
 export async function fetchTimeline(h3) {
   if (!STATIC) return request(`/cells/${h3}/timeline`);
 

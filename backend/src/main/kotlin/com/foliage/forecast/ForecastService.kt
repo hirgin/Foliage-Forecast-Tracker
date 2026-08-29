@@ -41,6 +41,7 @@ class ForecastService(
      */
     @Value("\${foliage.model.kind:cooling}") private val modelKind: String,
     @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
+    @Value("\${foliage.grid.metro-population}") private val metroPopulation: Int,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -58,8 +59,8 @@ class ForecastService(
             // Nevada desert changes colour. findAll keeps cells whose canopy
             // is unsampled, so a terrain gap leaves a cell uncoloured rather
             // than deleting it from the map.
-            val grid = if (stateFips == null) cells.findAll(minCanopyPct)
-                       else cells.findByState(stateFips, minCanopyPct)
+            val grid = if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation)
+                       else cells.findByState(stateFips, minCanopyPct, metroPopulation)
             require(grid.isNotEmpty()) { "no cells for $scope -- run the grid bootstrap first" }
 
             val parents = grid.map { it.parentRes5 }.distinct()
@@ -202,8 +203,8 @@ class ForecastService(
 
     fun peakFactors(stateFips: String?, peakDays: Map<Long, LocalDate>, year: Int): Map<Long, List<Factor>> {
         // Same forest floor as scoring; see computeState.
-        val grid = if (stateFips == null) cells.findAll(minCanopyPct)
-                   else cells.findByState(stateFips, minCanopyPct)
+        val grid = if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation)
+                   else cells.findByState(stateFips, minCanopyPct, metroPopulation)
         val parents = grid.map { it.parentRes5 }.distinct()
         val series = weather.seriesByCell(parents)
         val fine = weather.seriesByCell(grid.map { it.h3 })

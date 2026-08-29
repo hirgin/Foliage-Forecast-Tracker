@@ -83,10 +83,29 @@ class CellRepository(private val jdbc: JdbcTemplate) {
         Long::class.java, stateName,
     ) ?: 0
 
-    /** Every cell in the grid, across all loaded states. */
-    fun findAll(minCanopyPct: Int): List<Cell> = jdbc.query(
-        "$selectCell WHERE canopy_pct IS NULL OR canopy_pct >= ? ORDER BY h3",
-        cellMapper, minCanopyPct,
+    /**
+     * Cells worth forecasting: forest, plus the built-up parts of major metros.
+     *
+     * The canopy floor alone left every city centre off the map. Boston's own
+     * hexagon is 2% canopy, so the place people most often ask about in New
+     * England simply was not there. Street trees and park maples do turn, and
+     * on the same schedule as the woods outside town, so a forecast is
+     * meaningful even where the canopy is thin.
+     *
+     * Lowering the floor everywhere was the wrong fix: at 10% it pulls in the
+     * western pinyon-juniper belt, which is evergreen and has no foliage
+     * season at all. The exception is therefore keyed on population, not on a
+     * looser canopy rule.
+     *
+     * Matched by res 5 parent rather than by the single hexagon holding a
+     * city's centre point, so a metro arrives as a patch roughly 11 km across
+     * instead of one lonely cell in a hole.
+     */
+    fun findAll(minCanopyPct: Int, metroPopulation: Int = Int.MAX_VALUE): List<Cell> = jdbc.query(
+        "$selectCell WHERE canopy_pct IS NULL OR canopy_pct >= ? " +
+            "OR parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p " +
+            "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?) ORDER BY h3",
+        cellMapper, minCanopyPct, metroPopulation,
     )
 
     fun countAll(): Long =
@@ -132,9 +151,21 @@ class CellRepository(private val jdbc: JdbcTemplate) {
     }
 
     /** Full cell rows for a state, optionally masked to forest. */
-    fun findByState(stateFips: String, minCanopyPct: Int): List<Cell> = jdbc.query(
-        "$selectCell WHERE state_fips = ? AND (canopy_pct IS NULL OR canopy_pct >= ?) ORDER BY h3",
-        cellMapper, stateFips, minCanopyPct,
+    /**
+     * One state's cells worth forecasting. Same rule as [findAll], and it has
+     * to stay the same: scoring runs per state while the export runs
+     * nationally, so a cell selected by one and not the other would be
+     * published with no forecast behind it forever.
+     */
+    fun findByState(
+        stateFips: String,
+        minCanopyPct: Int,
+        metroPopulation: Int = Int.MAX_VALUE,
+    ): List<Cell> = jdbc.query(
+        "$selectCell WHERE state_fips = ? AND (canopy_pct IS NULL OR canopy_pct >= ? " +
+            "OR parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p " +
+            "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?)) ORDER BY h3",
+        cellMapper, stateFips, minCanopyPct, metroPopulation,
     )
 
     fun findByH3(h3: Long): Cell? =

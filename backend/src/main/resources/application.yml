@@ -52,6 +52,13 @@ foliage:
     # A cell counts as forest at or above this canopy percentage. Applied at
     # query time, never at ingest, so it can be retuned without re-sampling.
     min-canopy-pct: 20
+    # Built-up cells are kept regardless of canopy when they sit in a metro
+    # of at least this many people. City street trees turn on the same
+    # schedule as the woods outside town, and the canopy floor alone left
+    # every city centre off the map -- Boston's own hexagon is 2% canopy.
+    # Population rather than a lower canopy floor, because 10% canopy in the
+    # west is evergreen pinyon-juniper with no foliage season.
+    metro-population: 50000
   terrain:
     # AWS public Terrarium terrain tiles -- keyless, and the reason CONUS
     # elevation is minutes rather than 71 hours: cells are grouped by tile, so
