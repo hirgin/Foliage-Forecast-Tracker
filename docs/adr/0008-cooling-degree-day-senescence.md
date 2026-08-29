@@ -293,3 +293,39 @@ said the same thing everywhere.
 The residual pattern still points at species composition — Litchfield, in oak
 country, remains the largest negative residual, and oak turns later than the
 maple/beech/birch this assumes. That remains the next driver worth adding.
+
+## Amendment: peak has to last
+
+The first implementation used a plain power curve into progression. It put peak
+in the right place and held it for **2.4 to 5.2 days**, which is not what a
+foliage season does — real peak colour holds for roughly a week.
+
+The cause was the curve's shape rather than its calibration. A power curve with
+an exponent above 1 is convex, so it is *steepest exactly at peak*, and a stand
+tore through the peak band almost as soon as it entered it.
+
+Replaced with a Weibull shape, which starts slowly *and* saturates, so the top
+of the curve flattens:
+
+    progression = 100 * (1 - exp(-(S / SCALE)^SHAPE))
+
+`SCALE` is derived from `S_PEAK` rather than fitted, so peak still lands at the
+calibrated accumulation whatever the shape. Timing is untouched by
+construction, and measurement confirms it: the gradient moved from −3.40 to
+−3.36 days per degree and the season from 44 days to 43.
+
+Measured peak duration, per reference place:
+
+| | Power curve | Saturating |
+|---|---|---|
+| Fort Kent, ME | ~2 days | **8** |
+| Stowe, VT | ~3 | **7** |
+| Concord, MA | ~4 | **10** |
+| Newport, RI | ~5 | **8** |
+
+Near-peak-or-better now runs 13–18 days, which is the window someone would
+actually plan a trip inside.
+
+Duration varies by place, and in the right direction: a mild coast holds peak
+longer than a cold interior, because leaf drop is driven by frost and wind and
+those arrive sooner in the north.

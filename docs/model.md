@@ -33,6 +33,12 @@ Once the gate opens, each day contributes **cooling degree days** — how far th
 day's mean temperature sits below 20 °C — and a stand is at peak when those
 reach a calibrated total.
 
+Accumulation turns into visible colour through a saturating curve, so colour
+comes on slowly at first and then holds near peak rather than racing past it.
+Peak lasts **7 to 10 days** depending on the place, and near-peak or better
+runs 13 to 18 — a mild coast holds longer than a cold interior, because leaf
+drop is driven by frost and wind and those arrive sooner in the north.
+
 That is the whole reason a warm coast turns later than a cold interior. A cell
 averaging 10 °C accumulates about twice as fast as one averaging 16 °C, and
 turns correspondingly earlier. The structure this replaced accumulated

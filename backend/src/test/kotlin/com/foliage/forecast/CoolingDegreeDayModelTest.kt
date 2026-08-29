@@ -127,17 +127,47 @@ class CoolingDegreeDayModelTest {
     }
 
     @Test
-    fun `colour comes on slowly at first, then accelerates`() {
-        // What GAMMA above 1 buys: a linear ramp would turn a forest at a
-        // constant rate from the moment the gate opened, which is not what a
-        // forest does. Asserted as convexity rather than as a particular stage
-        // on a particular date, since that is the actual property.
+    fun `colour comes on more slowly than a straight line`() {
+        // The curve is not linear from the moment the gate opens: a forest does
+        // not start turning the day the trigger fires. Asserted against the
+        // straight line to peak, which is the thing it must beat.
+        //
+        // This replaced an assertion that progression keeps accelerating. That
+        // was true of the convex power curve used before, and is not true of a
+        // saturating one -- the inflection now falls about a week after the
+        // gate, which is the whole reason peak lasts.
         val days = season(meanC = 12.0)
-        val at = { d: LocalDate -> CoolingDegreeDayModel.score(CellInput(44.0, 200), days, d).progression }
+        val early = LocalDate.of(2026, 9, 11)
+        val p = CoolingDegreeDayModel.score(CellInput(44.0, 200), days, early)
+        val cooling = p.factors.single { it.name == "Cooling" }.value
+        val straightLine = CoolingDegreeDayModel.PEAK_PROGRESSION * cooling / CoolingDegreeDayModel.S_PEAK
 
-        val early = at(LocalDate.of(2026, 9, 20)) - at(LocalDate.of(2026, 9, 10))
-        val later = at(LocalDate.of(2026, 9, 30)) - at(LocalDate.of(2026, 9, 20))
-        assertTrue(later > early, "expected acceleration: gained $early then $later")
+        assertTrue(cooling > 0, "nothing accumulated by $early, so this proves nothing")
+        assertTrue(
+            p.progression < straightLine,
+            "expected a slow start: ${p.progression} against a straight line of $straightLine",
+        )
+    }
+
+    @Test
+    fun `one place's season runs for weeks`() {
+        // First colour to past peak at a single place. Too short and the map
+        // flicks from green to bare between visits; the old curve managed
+        // barely three weeks with only days of it at peak.
+        val days = season(meanC = 12.0)
+        val stageOn = { d: LocalDate -> CoolingDegreeDayModel.score(CellInput(44.0, 200), days, d).stage }
+
+        var first: LocalDate? = null
+        var past: LocalDate? = null
+        var d = seasonStart
+        while (!d.isAfter(seasonEnd)) {
+            if (first == null && stageOn(d) != FoliageStage.NO_CHANGE) first = d
+            if (past == null && stageOn(d) == FoliageStage.PAST_PEAK) past = d
+            d = d.plusDays(1)
+        }
+        assertTrue(first != null && past != null, "expected a full season, got $first..$past")
+        val length = past!!.toEpochDay() - first!!.toEpochDay()
+        assertTrue(length >= 18, "a place's season lasted only $length days")
     }
 
     @Test
@@ -211,5 +241,60 @@ class CoolingDegreeDayModelTest {
             CellInput(44.0, 200), season(12.0, kind = WeatherKind.CLIMATOLOGY), seasonEnd,
         )
         assertTrue("normals" in score.factors.single { it.name == "Cooling" }.detail)
+    }
+
+    // --- how long peak lasts ---------------------------------------------
+
+    private fun daysAtPeak(days: List<DayInput>): Int {
+        var count = 0
+        var d = seasonStart
+        while (!d.isAfter(seasonEnd)) {
+            if (CoolingDegreeDayModel.score(CellInput(44.0, 200), days, d).stage == FoliageStage.PEAK) count++
+            d = d.plusDays(1)
+        }
+        return count
+    }
+
+    @Test
+    fun `peak holds for about a week, not a couple of days`() {
+        // A plain power curve is convex -- steepest exactly at peak -- so a
+        // stand tore through the peak band in under three days. Real peak
+        // colour holds for something closer to a week, which is what the
+        // saturating shape buys.
+        val held = daysAtPeak(season(meanC = 12.0))
+        assertTrue(held >= 6, "peak lasted only $held days")
+        assertTrue(held <= 14, "peak lasted $held days, which is too long to be peak")
+    }
+
+    @Test
+    fun `a milder place holds peak longer than a cold one`() {
+        // Leaf drop is driven by frost and wind, which arrive sooner in the
+        // north, so a northern peak is the shorter one. This is the
+        // "depending" in how long peak lasts.
+        val cold = daysAtPeak(season(meanC = 10.5))
+        val mild = daysAtPeak(season(meanC = 15.0))
+        assertTrue(mild > cold, "mild held $mild days, cold held $cold")
+    }
+
+    @Test
+    fun `the saturating curve does not move peak`() {
+        // The whole point of deriving SCALE from S_PEAK: shape changes how
+        // long stages last, never when peak arrives. If this drifts, every
+        // calibrated date in ADR-0008 drifts with it.
+        val atPeak = 100.0 * (1 - Math.exp(-Math.pow(
+            CoolingDegreeDayModel.S_PEAK / CoolingDegreeDayModel.SCALE,
+            CoolingDegreeDayModel.SHAPE,
+        )))
+        assertEquals(CoolingDegreeDayModel.PEAK_PROGRESSION, atPeak, 0.01)
+    }
+
+    @Test
+    fun `progression approaches but never exceeds fully turned`() {
+        // A saturating curve is the honest shape: a stand is never more than
+        // completely turned, however cold it gets.
+        val brutal = season(meanC = -5.0)
+        val p = CoolingDegreeDayModel.score(CellInput(44.0, 200), brutal, seasonEnd).progression
+        assertTrue(p <= 100.0, "progression $p exceeded 100")
+        assertTrue(p > 95.0, "a whole freezing season should finish the canopy, got $p")
     }
 }

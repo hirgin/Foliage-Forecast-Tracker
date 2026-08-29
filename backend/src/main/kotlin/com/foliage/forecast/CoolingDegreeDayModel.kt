@@ -67,22 +67,28 @@ object CoolingDegreeDayModel {
     const val PEAK_PROGRESSION = 82.0
 
     /**
-     * Curvature of accumulation into visible colour.
+     * Shape of accumulation into visible colour.
      *
      * Above 1, so colour comes on slowly at first rather than the moment the
-     * photoperiod gate opens. A linear ramp had northern Maine turning patchy
-     * within days of the trigger, which is not what a forest does.
+     * photoperiod gate opens: a forest does not start turning the day the
+     * trigger fires.
      *
-     * It does not affect *peak* timing, which is pinned by [S_PEAK]; it shapes
-     * the early season only.
+     * This was a plain power curve, which is convex — steepest exactly at
+     * peak — so a stand tore through the peak band in 2.4 to 5.2 days. Real
+     * peak colour holds for something closer to a week. A Weibull shape starts
+     * slowly *and* saturates, so the top of the curve flattens and peak lasts.
+     *
+     * It does not move peak: [SCALE] is derived so [PEAK_PROGRESSION] lands
+     * exactly at [S_PEAK] whatever the shape, which keeps the calibration and
+     * every measured peak date intact.
      */
-    const val GAMMA = 1.5
+    const val SHAPE = 1.5
 
     /**
-     * Accumulation at which a stand is fully turned, derived rather than
-     * fitted so that [S_PEAK] keeps meaning exactly what it was calibrated to.
+     * Scale of the accumulation curve, derived rather than fitted so [S_PEAK]
+     * keeps meaning exactly what it was calibrated to.
      */
-    val S_FULL: Double = S_PEAK / Math.pow(PEAK_PROGRESSION / 100.0, 1.0 / GAMMA)
+    val SCALE: Double = S_PEAK / Math.pow(-Math.log(1 - PEAK_PROGRESSION / 100.0), 1.0 / SHAPE)
 
     /** Drought accelerates senescence, as in the model this replaces. */
     const val DROUGHT_ACCELERATION = 0.15
@@ -135,8 +141,12 @@ object CoolingDegreeDayModel {
             ?: 0.0
 
         val effective = cooling * (1 + DROUGHT_ACCELERATION * droughtStress)
-        val fraction = (effective / S_FULL).coerceIn(0.0, 1.0)
-        val progression = (100.0 * Math.pow(fraction, GAMMA)).coerceIn(0.0, 100.0)
+        // Weibull. Slow to start, then saturating, so peak colour holds for
+        // about a week instead of a couple of days. Approaches 100 without
+        // reaching it, which is the honest shape: a stand is never more than
+        // fully turned.
+        val progression = (100.0 * (1 - Math.exp(-Math.pow(effective / SCALE, SHAPE))))
+            .coerceIn(0.0, 100.0)
 
         // Intensity is unchanged: a wide day-night spread makes vivid colour,
         // drought dulls it, a hard freeze ends it. This is about how good the
