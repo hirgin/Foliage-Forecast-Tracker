@@ -14,6 +14,7 @@ import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 import java.nio.file.Path
+import java.time.Duration
 
 /**
  * Runs the static export and exits.
@@ -31,6 +32,7 @@ class ExportRunner(
     private val exporter: StaticExporter,
     private val database: DatabaseBootstrap,
     private val weatherIngest: WeatherIngest,
+    private val weatherBackfill: com.foliage.ingest.WeatherBackfill,
     private val forecastService: ForecastService,
     private val context: ApplicationContext,
 ) {
@@ -62,6 +64,10 @@ class ExportRunner(
         val refreshState = env.getProperty("foliage.export.refresh-state")?.takeIf { it.isNotBlank() }
             ?: state
 
+        val backfill = env.getProperty("foliage.export.backfill", "false").toBoolean()
+        val backfillStates = env.getProperty("foliage.export.backfill-states", "6").toInt()
+        val backfillMinutes = env.getProperty("foliage.export.backfill-minutes", "90").toLong()
+
         log.info(
             "exporting {}, refresh scope {}",
             state?.let { "state $it" } ?: "the whole grid",
@@ -91,6 +97,19 @@ class ExportRunner(
         log.info("database connected, schema {}", database.status.schemaVersion)
 
         val code = try {
+            // Load the next few unfinished states before exporting. The free
+            // Open-Meteo allowance covers roughly 650 res 5 parents a day and
+            // the country needs 19,904, so this is a month of nightly runs
+            // rather than one long job. It stops cleanly when the allowance or
+            // the budget runs out and resumes here tomorrow.
+            if (backfill) {
+                val filled = weatherBackfill.run(backfillStates, Duration.ofMinutes(backfillMinutes))
+                log.info(
+                    "backfill: loaded {}, {} still untouched, stoppedOnQuota={}",
+                    filled.statesLoaded, filled.statesUntouched, filled.stoppedOnQuota,
+                )
+            }
+
             if (refresh) {
                 val ingest = weatherIngest.refreshForecast(refreshState)
                 log.info("refreshed weather: {} rows, kinds {}", ingest.rowsWritten, ingest.byKind)

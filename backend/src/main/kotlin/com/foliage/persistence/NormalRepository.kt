@@ -93,6 +93,19 @@ class NormalRepository(private val jdbc: JdbcTemplate) {
         return out
     }
 
+    /**
+     * Res 5 parents that already have normals.
+     *
+     * The backfill needs to know what is already done, and row counts do not
+     * tell it: a state whose climatology died partway through the daily
+     * allowance has rows and is still incomplete. Compared against a state's
+     * parents, this is what makes the nightly run resume rather than restart.
+     */
+    fun cellsWithNormals(): Set<Long> = jdbc.queryForList(
+        "SELECT DISTINCT h3 FROM weather_normal WHERE chill_units IS NOT NULL",
+        Long::class.java,
+    ).toSet()
+
     fun count(): Long =
         jdbc.queryForObject("SELECT COUNT(*) FROM weather_normal", Long::class.java) ?: 0
 }

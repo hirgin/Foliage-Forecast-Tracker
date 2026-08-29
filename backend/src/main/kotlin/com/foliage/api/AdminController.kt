@@ -1,7 +1,9 @@
 package com.foliage.api
 
 import com.foliage.ingest.GridBootstrap
+import com.foliage.ingest.BackfillResult
 import com.foliage.ingest.ElevationRefreshResult
+import com.foliage.ingest.WeatherBackfill
 import com.foliage.ingest.GridBootstrapResult
 import com.foliage.ingest.RegionBootstrapResult
 import com.foliage.ingest.places.PlaceIngest
@@ -32,6 +34,7 @@ class AdminController(
     private val forecastService: ForecastService,
     private val staticExporter: StaticExporter,
     private val placeIngest: PlaceIngest,
+    private val weatherBackfill: WeatherBackfill,
 ) {
 
     @PostMapping("/bootstrap-grid")
@@ -95,6 +98,17 @@ class AdminController(
     @PostMapping("/clear-forecast")
     fun clearForecast(@RequestParam stateFips: String): Map<String, Any> =
         mapOf("stateFips" to stateFips, "rowsDeleted" to forecastService.clearState(stateFips))
+
+    /**
+     * Loads the next few unfinished states, stopping when the daily Open-Meteo
+     * allowance or the time budget runs out. Called by the nightly deploy; see
+     * WeatherBackfill.
+     */
+    @PostMapping("/backfill")
+    fun backfill(
+        @RequestParam(defaultValue = "6") maxStates: Int,
+        @RequestParam(defaultValue = "90") maxMinutes: Long,
+    ): BackfillResult = weatherBackfill.run(maxStates, java.time.Duration.ofMinutes(maxMinutes))
 
     /** Writes the season out as static JSON for CDN publishing. */
     @PostMapping("/export")

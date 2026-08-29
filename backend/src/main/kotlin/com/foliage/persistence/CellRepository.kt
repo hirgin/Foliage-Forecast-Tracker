@@ -151,6 +151,20 @@ class CellRepository(private val jdbc: JdbcTemplate) {
      * accurate at; roughly seven res 6 cells share each one, so this cuts the
      * number of API calls by about 7x with no loss of real information.
      */
+    /**
+     * The FIPS code a state name was tiled under, or null if it was not.
+     *
+     * The backfill works from state *names*, because that is the order
+     * ConusStates expresses foliage priority in, but every ingest job keys on
+     * FIPS. Looking it up from the grid avoids a second hardcoded mapping that
+     * could drift from the one the bootstrap used.
+     */
+    fun stateFipsFor(stateName: String): String? = jdbc.query(
+        "SELECT state_fips FROM cell WHERE state_name = ? LIMIT 1",
+        { rs, _ -> rs.getString("state_fips") },
+        stateName,
+    ).firstOrNull()
+
     fun distinctRes5Parents(stateFips: String): List<Long> = jdbc.queryForList(
         "SELECT DISTINCT parent_res5 FROM cell WHERE state_fips = ? ORDER BY parent_res5",
         Long::class.java, stateFips,

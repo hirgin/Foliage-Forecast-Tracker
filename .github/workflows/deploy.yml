@@ -97,6 +97,13 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.refresh }}" = "true" ]; then
             REFRESH=true
           fi
+          # On a scheduled run the job also backfills the next few states that
+          # have no weather yet. The free Open-Meteo allowance covers roughly
+          # 650 res 5 parents a day against a country needing 19,904, so the
+          # map fills in over about a month of nightly runs rather than one
+          # long job. Ninety minutes leaves plenty of room under the six hour
+          # ceiling for the export that follows.
+          #
           # States the nightly refresh pulls weather for. The export itself is
           # unscoped and publishes whatever the grid holds; this is only the
           # third-party fetch, which is metered. Widen it as weather lands, and
@@ -106,7 +113,7 @@ jobs:
           # Kept on one line: the indented backslash continuations produced
           # runs of whitespace inside --args, which Gradle splits into empty
           # arguments.
-          ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.refresh=$REFRESH --foliage.export.refresh-state=$REFRESH_STATE"
+          ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.refresh=$REFRESH --foliage.export.refresh-state=$REFRESH_STATE --foliage.export.backfill=$REFRESH --foliage.export.backfill-states=6 --foliage.export.backfill-minutes=90"
 
       - name: Check the export produced data
         run: |
