@@ -74,6 +74,9 @@ function boundsOf(cells) {
 
 export default function FoliageMap({ cells, selected, onSelect, focus, onZoom }) {
   const [hovered, setHovered] = useState(null);
+  // Whether the basemap style is in place. The hexagons are interleaved into
+  // it, so they cannot be added before it exists.
+  const [styleReady, setStyleReady] = useState(false);
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -99,7 +102,13 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
 
     // Repaint after the style is in place; the layer list does not exist
     // before then.
-    map.on('load', () => brightenLabels(map));
+    map.on('load', () => {
+      brightenLabels(map);
+      setStyleReady(true);
+    });
+    // Already loaded is possible if the style came from cache between
+    // constructing the map and attaching this listener.
+    if (map.isStyleLoaded()) setStyleReady(true);
 
     // Report zoom so the page can swap to the coarser export when hexagons
     // would be smaller than a pixel. On moveend rather than on every frame:
@@ -150,8 +159,16 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
   );
 
   useEffect(() => {
+    // Held back until the style exists.
+    //
+    // The layer is interleaved beneath a style layer by name, so adding it
+    // before the style has loaded leaves it with no insertion point and it
+    // draws no fill -- the map came up with hexagon outlines and no colour,
+    // and only a reload fixed it, because then the style came from cache and
+    // won the race against the data.
+    if (!styleReady) return;
     overlayRef.current?.setProps({ layers });
-  }, [layers]);
+  }, [layers, styleReady]);
 
   // Centre on a chosen place. Keyed on the nonce rather than the coordinates
   // so picking the same place twice still recentres.

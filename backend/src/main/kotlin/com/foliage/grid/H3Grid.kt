@@ -39,6 +39,16 @@ class H3Grid {
 
     fun parent(h3Index: Long, resolution: Int): Long = h3.cellToParent(h3Index, resolution)
 
+    /**
+     * Cells within [k] steps of [h3Index], nearest first by ring.
+     *
+     * Used to find the closest forested cell to a place that sits on ground
+     * the forest mask excludes -- a city centre, most obviously. Returned ring
+     * by ring so a caller can stop at the first hit rather than sorting by
+     * distance afterwards.
+     */
+    fun disk(h3Index: Long, k: Int): List<Long> = h3.gridDisk(h3Index, k)
+
     fun resolution(h3Index: Long): Int = h3.getResolution(h3Index)
 
     /** Debug/logging helper -- the canonical hex string form, e.g. "862baac7fffffff". */

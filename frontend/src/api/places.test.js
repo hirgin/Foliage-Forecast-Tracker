@@ -10,6 +10,7 @@ function index(rows) {
     kind: rows.map((r) => r.kind ?? 'TOWN'),
     population: rows.map((r) => r.population ?? 0),
     cell: rows.map((_, i) => i),
+    nearby: rows.map((r) => r.nearby ?? false),
     lat: rows.map(() => 44),
     lon: rows.map(() => -72.7),
   };
@@ -116,5 +117,41 @@ describe('describePlace', () => {
     ['TOWN', 'PARK', 'FOREST', 'MOUNTAIN', 'NOTCH'].forEach((k) => {
       expect(KIND_LABEL[k]).toBeTruthy();
     });
+  });
+});
+
+describe('places on ground with too few trees to score', () => {
+  const index = {
+    count: 2,
+    name: ['Boston', 'Stowe'],
+    state: ['MA', 'VT'],
+    kind: ['TOWN', 'TOWN'],
+    population: [654776, 4314],
+    cell: [0, 1],
+    nearby: [true, false],
+    lat: [42.36, 44.46],
+    lon: [-71.06, -72.69],
+  };
+
+  it('finds a city whose own hexagon is not forested', () => {
+    // The bug this guards: Boston's own cell is 2% canopy, so it was dropped
+    // from the index entirely and searching for it returned nineteen small
+    // Bostons in other states.
+    const hit = searchPlaces(index, 'boston')[0];
+    expect(hit.name).toBe('Boston');
+    expect(hit.nearby).toBe(true);
+  });
+
+  it('says the forecast is for the woods nearby', () => {
+    const [boston, stowe] = ['boston', 'stowe'].map((q) => searchPlaces(index, q)[0]);
+    expect(describePlace(boston)).toBe('MA · nearest woods');
+    expect(describePlace(stowe)).toBe('VT · Town');
+    // The note replaces the kind rather than following it: both together
+    // overflowed the panel and truncated to something meaningless.
+    expect(describePlace(boston)).not.toContain('Town');
+  });
+
+  it('still carries a cell to navigate to', () => {
+    expect(typeof searchPlaces(index, 'boston')[0].cell).toBe('number');
   });
 });

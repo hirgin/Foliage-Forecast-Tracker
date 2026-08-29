@@ -628,7 +628,11 @@ footer a { color: var(--accent); }
 
 .search__hit {
   display: grid;
-  grid-template-columns: 14px 1fr auto;
+  /* The name gets a floor and the note gives way, rather than the other way
+     round. With a plain `auto` note column, "Boston, MA - Town - nearest
+     woods" squeezed the name down to "B.". Whatever else is trimmed, the
+     thing being searched for has to stay readable. */
+  grid-template-columns: 14px minmax(4.5em, 1fr) minmax(0, auto);
   align-items: baseline;
   gap: 8px;
   width: 100%;
@@ -645,7 +649,13 @@ footer a { color: var(--accent); }
 .search__hit--on { background: rgba(232, 150, 60, 0.16); }
 .search__icon { color: var(--accent); font-size: 10px; }
 .search__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.search__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.search__meta {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .search__empty {
   position: absolute;

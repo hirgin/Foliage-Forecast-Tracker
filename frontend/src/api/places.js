@@ -69,6 +69,9 @@ export function searchPlaces(places, query, limit = 8) {
       kind: places.kind[i],
       population: places.population[i],
       cell: places.cell[i],
+      // True when the forecast comes from a nearby forested cell rather than
+      // the place's own ground -- a city centre with too few trees to score.
+      nearby: places.nearby?.[i] ?? false,
       lat: places.lat[i],
       lon: places.lon[i],
       score,
@@ -82,5 +85,11 @@ export function searchPlaces(places, query, limit = 8) {
 /** "Stowe, VT · Town" — the subtitle under a result. */
 export function describePlace(place) {
   const kind = KIND_LABEL[place.kind] ?? place.kind;
+  // For a place whose own ground has too few trees to score, the note
+  // replaces the kind rather than following it. Both together did not fit the
+  // panel and truncated to "MA - Town - ne...", which says less than either
+  // alone -- and that the forecast is from the woods nearby matters more than
+  // that the place is a town.
+  if (place.nearby) return place.state ? `${place.state} · nearest woods` : 'nearest woods';
   return place.state ? `${place.state} · ${kind}` : kind;
 }

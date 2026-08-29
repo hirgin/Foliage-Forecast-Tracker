@@ -82,6 +82,22 @@ class StaticExporter(
     /** Shard key: the res 3 ancestor, up to ~343 res 6 cells per shard. */
     private fun shardOf(h3: Long): String = grid.toAddress(grid.parent(h3, 3))
 
+    /**
+     * Whether a place on unforested ground is worth pointing at nearby woods.
+     *
+     * Rescuing every one of them added 110,000 entries and 57% to the search
+     * index, mostly hamlets in farmland whose nearest trees are ten kilometres
+     * off. The point of the rescue is cities people actually search for, and
+     * destinations that happen to sit on open ground.
+     *
+     * So: somewhere with enough people to be looked up, or somewhere that is a
+     * destination in its own right. A named park or mountain is worth finding
+     * however few people live in it; a hamlet of forty in the middle of Kansas
+     * is not.
+     */
+    private fun worthRescuing(place: com.foliage.domain.Place): Boolean =
+        place.population >= 1_000 || place.kind != com.foliage.ingest.places.PlaceKind.TOWN
+
     /** [stateFips] null exports the whole loaded grid. */
     fun export(target: Path, stateFips: String?, year: Int = LocalDate.now().year): ExportResult {
         val days = season.days(year)
@@ -225,24 +241,49 @@ class StaticExporter(
 
         // --- searchable places --------------------------------------------
         //
-        // Only those inside the grid: a search result with no forecast behind
-        // it is worse than not listing the place at all. Parallel arrays for
-        // the same reason the daily files use them -- repeating five keys per
-        // entry roughly triples the file.
-        val inGrid = places.findInGrid().filter { indexOf.containsKey(it.h3) }
+        // Parallel arrays for the same reason the daily files use them:
+        // repeating six keys per entry roughly triples the file.
+        //
+        // Places on ground the forest mask excludes are kept and pointed at
+        // the nearest forested cell instead of being dropped. Boston's own
+        // hexagon is 2% canopy, so it was not in the index at all and
+        // searching for it returned nineteen small Bostons in other states.
+        // "The nearest woods to Boston" is a useful answer; nothing is not.
+        val gridPlaces = places.findInGrid()
+        val resolved = gridPlaces.mapNotNull { place ->
+            val own = indexOf[place.h3]
+            if (own != null) {
+                place to (own to false)
+            } else if (worthRescuing(place)) {
+                // Outward ring by ring, stopping at the first forested cell.
+                // Four steps is roughly 12 km; past that "nearest woods" stops
+                // being a useful answer and the place is better left out.
+                val near = (1..4).firstNotNullOfOrNull { k ->
+                    grid.disk(place.h3, k).firstNotNullOfOrNull { indexOf[it] }
+                }
+                near?.let { place to (it to true) }
+            } else {
+                null
+            }
+        }
+
         writeJson(
             target.resolve("places.json"),
             mapOf(
-                "count" to inGrid.size,
-                "name" to inGrid.map { it.name },
-                "state" to inGrid.map { it.stateCode },
-                "kind" to inGrid.map { it.kind.name },
-                "population" to inGrid.map { it.population },
+                "count" to resolved.size,
+                "name" to resolved.map { it.first.name },
+                "state" to resolved.map { it.first.stateCode },
+                "kind" to resolved.map { it.first.kind.name },
+                "population" to resolved.map { it.first.population },
                 // Index into cells.json rather than the h3 string: the client
                 // needs the cell's position anyway to read a packed day.
-                "cell" to inGrid.map { indexOf.getValue(it.h3) },
-                "lat" to inGrid.map { Math.round(it.latitude * 1e4) / 1e4 },
-                "lon" to inGrid.map { Math.round(it.longitude * 1e4) / 1e4 },
+                "cell" to resolved.map { it.second.first },
+                // True when the cell is nearby rather than the place's own,
+                // so the UI can say so instead of implying a forecast for a
+                // city centre that has no trees in it.
+                "nearby" to resolved.map { it.second.second },
+                "lat" to resolved.map { Math.round(it.first.latitude * 1e4) / 1e4 },
+                "lon" to resolved.map { Math.round(it.first.longitude * 1e4) / 1e4 },
             ),
         )
 
@@ -260,7 +301,7 @@ class StaticExporter(
                 "coverage" to coverageLabel(grid6.mapNotNull { it.stateName }.distinct().sorted()),
                 "stateCount" to grid6.mapNotNull { it.stateName }.distinct().size,
                 "cellCount" to grid6.size,
-                "placeCount" to inGrid.size,
+                "placeCount" to resolved.size,
                 "shardCount" to shards.size,
                 "seasonStart" to season.start(year).toString(),
                 "seasonEnd" to season.end(year).toString(),
