@@ -296,7 +296,7 @@ footer a { color: var(--accent); }
     left: 8px;
     right: 8px;
     width: auto;
-    padding: 12px 14px;
+    padding: 11px 14px 12px;
     /* Room for the slider and its attribution, so the sheet can never grow
        into them however long the content gets. */
     max-height: calc(100% - 132px);
@@ -344,15 +344,34 @@ footer a { color: var(--accent); }
     column-gap: 12px;
     row-gap: 1px;
   }
-  .legend__row { font-size: 11.5px; gap: 6px; padding: 1.5px 0; }
+  .legend__row { font-size: 11.5px; gap: 6px; padding: 0.5px 0; }
   .legend__label { flex: none; }
   .legend__count { margin-left: auto; }
 
   .panel h1 { font-size: 15px; }
-  .panel .sub { font-size: 11px; }
-  .headline { margin: 12px 0 0; padding: 10px 0 0; border-bottom: none; }
-  .headline__date { font-size: 18px; }
-  .panel--open .headline { margin-bottom: 4px; }
+
+  /* The grid's size is reference, not answer. It stays for anyone who opens
+     the panel and costs nothing when they do not. */
+  .panel:not(.panel--open) .sub { display: none; }
+
+  /* One line instead of three. The date already sits in the slider readout at
+     the bottom of the screen, so a second large copy of it was the single
+     biggest block of chrome on the page for no extra information. */
+  .headline {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+    margin: 9px 0 0;
+    padding: 9px 0 0;
+    border-bottom: none;
+  }
+  .headline__date { font-size: 14px; }
+  .headline__peak { font-size: 11px; }
+
+  /* Six coloured swatches labelled with their own stage names do not need a
+     heading that says STAGE. */
+  .legend h2 { display: none; }
+  .legend { margin-top: 9px; }
 
   /* One sheet at a time. */
   .app--detail .panel { display: none; }
