@@ -5,20 +5,47 @@ How this site decides what colour a hexagon should be, written for a human.
 > **This is a model, not an official forecast.** No authoritative dataset
 > records when a given place actually peaked, so nothing here has been
 > validated against reality. What *has* been checked is that the model is
-> internally consistent and that its constants put peak where published norms
-> put it. Read the [limitations](#what-this-model-cannot-do) before trusting a
-> number.
+> internally consistent, and that its timing is **calibrated** so modelled
+> peaks fall inside published peak windows — mean absolute error 4.2 days over
+> six reference places. Agreement with published norms is evidence of
+> plausibility, not of accuracy. Read the
+> [limitations](#what-this-model-cannot-do) before trusting a number.
+
+> **Structure changed in `0.2.0-cdd`.** Senescence is now paced by *cooling*
+> and gated by photoperiod, not accumulated from photoperiod with temperature
+> as a nudge. The previous structure could not express the geography of a
+> season: it put New England's peak inside a five-day window against a real
+> thirty, because both its temperature terms were exactly zero in a mild
+> coastal autumn. [ADR-0008](adr/0008-cooling-degree-day-senescence.md) carries
+> the measurements, the failed attempt to fix it by tuning, and the
+> calibration. Sections below marked *superseded* describe the old structure.
 
 ## The shape of the problem
 
-Autumn colour is triggered by **shortening days** and paced by **temperature**.
-Trees stop producing chlorophyll as photoperiod falls; how fast the remaining
-pigments show depends on how cold the nights get. Drought, frost, and cloud
-cover then modulate how vivid and how long-lived the display is.
+Autumn colour is **triggered by shortening days** and **paced by temperature**.
+Trees stop producing chlorophyll once photoperiod falls past a threshold; how
+fast the display then develops depends on how much the weather cools. Drought,
+frost and cloud cover modulate how vivid and how long-lived it is.
 
-So the model accumulates a daily *forcing* from the start of the season and
-compares it against the amount of forcing that corresponds to a fully turned
-canopy.
+The model takes that division literally. Photoperiod is a **gate**: nothing
+accumulates while days are still long, so a cold August banks no progress.
+Once the gate opens, each day contributes **cooling degree days** — how far the
+day's mean temperature sits below 20 °C — and a stand is at peak when those
+reach a calibrated total.
+
+That is the whole reason a warm coast turns later than a cold interior. A cell
+averaging 10 °C accumulates about twice as fast as one averaging 16 °C, and
+turns correspondingly earlier. The structure this replaced accumulated
+photoperiod instead, and photoperiod barely varies across a region — so every
+cell reached peak at nearly the same date whatever its weather.
+
+### Why not a chilling threshold
+
+The old structure counted nights below 7 °C. That is a *dormancy* threshold
+borrowed from spring phenology, and a mild coastal autumn never reaches it —
+so temperature contributed exactly nothing precisely where the model was most
+wrong. Cooling from 20 °C downward is the autumn quantity, and every autumn day
+has some of it.
 
 ## Drivers
 
@@ -243,19 +270,20 @@ progression showed the difference plainly.
   matter greatly across states — oak-dominated southern forests turn later and
   duller — which makes it a prerequisite for expanding beyond Vermont rather
   than an improvement to the current map.
-- **The north-to-south gradient is far too weak, and this is now measured.**
-  Across 4,694 cells in seven states it is **−1.40 days per degree of
-  latitude**, against roughly −4.7 implied by published peak windows, and the
-  modelled season is 21 days wide against about 45. Southern and coastal peaks
-  land about ten days early.
+- **The north-to-south gradient is still shallower than reality.** Measured
+  across 4,694 cells it is −3.40 days per degree of latitude, against roughly
+  −4.7 implied by published windows. The season is now 44 days wide against a
+  real ~45, and every state median falls inside its published window, but the
+  extremes are still compressed: the far north runs about a week late and
+  inland Connecticut about six days early.
 
-  This is structural, not a matter of tuning. Both temperature terms are inert
-  in a mild autumn — chilling needs 7 °C and warm delay needs 20 °C, and
-  coastal October sits between the two — so photoperiod supplies about 80% of
-  forcing and barely varies across these latitudes. Raising `WARM_DELAY`
-  ninefold and `CHILL_DIRECT` by 64% widened the spread from 5 days to 8.
-  [ADR-0008](adr/0008-cooling-degree-day-senescence.md) proposes the redesign
-  that would fix it, and records the measurements in full.
+  Before `0.2.0-cdd` the gradient was −1.40 and the season 21 days wide. See
+  [ADR-0008](adr/0008-cooling-degree-day-senescence.md).
+
+- **Species composition is the largest identifiable residual.** Litchfield,
+  Connecticut is the worst reference place at six days early, and it sits in
+  oak country. Oak turns later and duller than the maple/beech/birch this model
+  implicitly assumes. That is the next driver worth adding.
 
 - **It does not model cloud cover or wind.** Both affect how a display is
   actually experienced, and a windstorm can end a season overnight.

@@ -33,6 +33,13 @@ class ForecastService(
     private val season: Season,
     private val audit: IngestRunRecorder,
     @Value("\${foliage.model-version}") private val modelVersion: String,
+    /**
+     * Which senescence model scores. "cooling" is the cooling-degree-day model
+     * of ADR-0008; "photoperiod" is the one it replaces, kept callable so the
+     * two can be run over identical inputs and compared rather than argued
+     * about.
+     */
+    @Value("\${foliage.model.kind:cooling}") private val modelKind: String,
     @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
 ) {
 
@@ -94,13 +101,7 @@ class ForecastService(
                     val cumulativeNormal = cumulativePrecip(precipNormals[cell.parentRes5], days)
 
                     for (day in days) {
-                        val score = PhenologyModel.score(
-                            cell = CellInput(cell.centroidLat, cell.elevationM),
-                            days = inputs,
-                            target = day,
-                            normalPrecipMm = cumulativeNormal[day],
-                            precipFrom = seasonStart,
-                        )
+                        val score = scoreDay(cell, inputs, day, cumulativeNormal[day], seasonStart)
                         rows += StoredForecast(
                             h3 = cell.h3,
                             day = day,
@@ -138,6 +139,22 @@ class ForecastService(
         }
     }
 
+    /** Dispatches to whichever senescence model is configured; see [modelKind]. */
+    private fun scoreDay(
+        cell: com.foliage.domain.Cell,
+        inputs: List<DayInput>,
+        target: LocalDate,
+        normalPrecipMm: Double?,
+        precipFrom: LocalDate?,
+    ): FoliageScore {
+        val input = CellInput(cell.centroidLat, cell.elevationM)
+        return if (modelKind == "photoperiod") {
+            PhenologyModel.score(input, inputs, target, normalPrecipMm, precipFrom)
+        } else {
+            CoolingDegreeDayModel.score(input, inputs, target, normalPrecipMm, precipFrom)
+        }
+    }
+
     /**
      * The exact daily series the model scores for one cell.
      *
@@ -169,13 +186,7 @@ class ForecastService(
         val inputs = inputsFor(h3, year) ?: return null
         val cumulative = cumulativePrecip(normals.precipNormalsByCell()[cell.parentRes5], season.days(year))
 
-        return PhenologyModel.score(
-            cell = CellInput(cell.centroidLat, cell.elevationM),
-            days = inputs,
-            target = day,
-            normalPrecipMm = cumulative[day],
-            precipFrom = season.start(year),
-        )
+        return scoreDay(cell, inputs, day, cumulative[day], season.start(year))
     }
 
     /**
@@ -218,13 +229,7 @@ class ForecastService(
                 chillNormals = chillNormals[cell.parentRes5],
             )
             val cumulative = cumulativePrecip(precipNormals[cell.parentRes5], seasonDays)
-            val score = PhenologyModel.score(
-                cell = CellInput(cell.centroidLat, cell.elevationM),
-                days = inputs,
-                target = day,
-                normalPrecipMm = cumulative[day],
-                precipFrom = seasonStart,
-            )
+            val score = scoreDay(cell, inputs, day, cumulative[day], seasonStart)
             cell.h3 to score.factors
         }.toMap()
     }

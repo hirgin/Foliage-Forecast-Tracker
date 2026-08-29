@@ -38,7 +38,14 @@ management:
       show-details: always
 
 foliage:
-  model-version: "0.1.0-dev"
+  model:
+    # Which senescence model scores: "cooling" (ADR-0008, cooling degree days
+    # gated by photoperiod) or "photoperiod" (the one it replaces, kept so the
+    # two can be compared on identical inputs).
+    kind: cooling
+  # Bumped for the cooling-degree-day model (ADR-0008). Forecast rows carry
+  # this, so a mixed table can be told apart after a partial rescore.
+  model-version: "0.2.0-cdd"
   grid:
     # H3 resolution the forecast is computed at (~3 km edge). See ADR-0002.
     resolution: 6

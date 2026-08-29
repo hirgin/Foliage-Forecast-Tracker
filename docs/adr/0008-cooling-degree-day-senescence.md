@@ -1,8 +1,13 @@
 # ADR-0008: Pace senescence by cooling, not by photoperiod
 
-**Status:** proposed, and the feasibility gate below has been run and passed.
-Not yet implemented. Supersedes the forcing structure in
-[`docs/model.md`](../model.md) if accepted.
+**Status:** accepted and implemented, model version `0.2.0-cdd`. Supersedes the
+forcing structure described in [`docs/model.md`](../model.md).
+
+Measured over the seven scored states after implementation: the gradient went
+from −1.40 to **−3.40 days per degree** against a target near −4.7, the season
+from 21 days wide to **44** against a real ~45, and every state median landed
+**inside** its published window. Mean absolute error over six reference places
+is **4.2 days**, against roughly ten in the south before. Details at the end.
 
 ## Context
 
@@ -245,3 +250,46 @@ latitude, and the measured gradient falling inside a stated range.
 - [Chilling, photoperiod and forcing temperature in woody plant phenology (PMC)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7176907/)
 - [The science behind peak fall colors — Scientific American](https://www.scientificamerican.com/article/the-science-behind-peak-fall-colors-what-to-expect-in-2025/)
 - Present behaviour and the measurements above: [`docs/model.md`](../model.md), ADR-0005.
+
+## Outcome
+
+Implemented as `CoolingDegreeDayModel`, selected by `foliage.model.kind`, with
+the previous model kept callable so both can be scored over identical inputs.
+
+| | Photoperiod model | Cooling model | Target |
+|---|---|---|---|
+| Gradient | −1.40 d/deg | **−3.40 d/deg** | ~−4.7 |
+| Season width | 21 days | **44 days** | ~45 |
+| Mean error, 6 reference places | ~10 days in the south | **4.2 days** | — |
+
+State medians, all now inside their published windows:
+
+| | Model | Published |
+|---|---|---|
+| Vermont | 9 Oct | 5–12 Oct |
+| Maine | 10 Oct | early Oct |
+| New Hampshire | 11 Oct | 8–15 Oct |
+| New York | 17 Oct | 10–20 Oct |
+| Massachusetts | 19 Oct | 15–22 Oct |
+| Connecticut | 21 Oct | 18–25 Oct |
+| Rhode Island | 24 Oct | 20–28 Oct |
+
+Per reference place: Fort Kent +8, Stowe +2, Bar Harbor −3, Litchfield −6,
+Provincetown −1, Newport +5.
+
+Two things worth recording honestly.
+
+**The gradient is better but not all the way there**, −3.40 against −4.7. Part
+of that is real: the fit is against latitude alone, and coastal and inland
+cells at the same latitude now legitimately differ by days, which is the
+behaviour that was missing and which adds scatter to a latitude-only fit.
+
+**Spatial coherence loosened**, from a mean 0.15-day gap between neighbouring
+coastal cells to 0.88. That is not the old bimodal defect returning — it is the
+model expressing elevation and maritime differences it previously flattened.
+Worth watching, not worth reverting: 0.15 was the signature of a model that
+said the same thing everywhere.
+
+The residual pattern still points at species composition — Litchfield, in oak
+country, remains the largest negative residual, and oak turns later than the
+maple/beech/birch this assumes. That remains the next driver worth adding.
