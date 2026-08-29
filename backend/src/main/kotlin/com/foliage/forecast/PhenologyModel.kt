@@ -147,7 +147,17 @@ object PhenologyModel {
         val upToTarget = days.filter { !it.day.isAfter(target) }.sortedBy { it.day }
 
         var forcing = 0.0
-        var chillDays = 0
+        // Chilling is reported as accumulated degree-nights, not as a count of
+        // nights. Counting days where chilling was non-zero silently lied on
+        // climatological days: there `chill` is a five-year *mean* of
+        // max(0, threshold - tmin), which is a small positive on most days in a
+        // mild climate. Cape Cod was reporting "32 nights below 7C" by mid
+        // October, which is not close to true, while Newport an hour away
+        // reported none. Degree-nights is what the model actually accumulates,
+        // and it means the same thing whichever provenance a day came from.
+        var chillUnitsTotal = 0.0
+        var observedChillNights = 0
+        var climatologyDays = 0
         var frostDays = 0
         var hardFreeze = false
 
@@ -160,7 +170,11 @@ object PhenologyModel {
                 ?: 0.0
             val warm = d.tmaxC?.let { (it - WARM_THRESHOLD_C).coerceAtLeast(0.0) } ?: 0.0
 
-            if (chill > 0) chillDays++
+            chillUnitsTotal += chill
+            if (d.kind == com.foliage.domain.WeatherKind.CLIMATOLOGY) climatologyDays++
+            // Only a real night has a real minimum. A climatological day's
+            // tmin is a mean across years and cannot be counted as one night.
+            else if ((d.tminC ?: Double.MAX_VALUE) <= CHILL_THRESHOLD_C) observedChillNights++
             d.tminC?.let {
                 if (it <= 0.0) frostDays++
                 if (it <= HARD_FREEZE_C) hardFreeze = true
@@ -212,8 +226,28 @@ object PhenologyModel {
                     "Accumulated day-length forcing since the season began. Shortening days are the main trigger.",
                 ),
                 Factor(
-                    "Chilling", chillDays.toDouble(), if (chillDays > 0) "accelerates" else "neutral",
-                    "$chillDays nights below ${CHILL_THRESHOLD_C.toInt()}°C, which speeds colour development.",
+                    "Chilling", chillUnitsTotal, if (chillUnitsTotal > 0) "accelerates" else "neutral",
+                    buildString {
+                        val degrees = "%.0f".format(chillUnitsTotal)
+                        val threshold = CHILL_THRESHOLD_C.toInt()
+                        if (chillUnitsTotal <= 0.0) {
+                            append("No chilling below $threshold°C yet")
+                        } else {
+                            append("$degrees degree-nights of chilling below $threshold°C, ")
+                            append("which speeds colour development")
+                        }
+                        // Most of a season is normals rather than measurement,
+                        // and the panel should not imply otherwise. Worded so
+                        // it reads correctly whether or not anything has
+                        // actually been observed yet.
+                        when {
+                            observedChillNights > 0 && climatologyDays > 0 ->
+                                append("; $observedChillNights nights observed, the rest from five-year normals")
+                            observedChillNights > 0 -> append("; $observedChillNights nights observed")
+                            climatologyDays > 0 -> append(", expected from five-year normals")
+                        }
+                        append(".")
+                    },
                 ),
                 Factor(
                     "Frost", frostDays.toDouble(), if (hardFreeze) "damaging" else if (frostDays > 0) "accelerates" else "neutral",

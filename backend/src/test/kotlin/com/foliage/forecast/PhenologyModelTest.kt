@@ -272,4 +272,74 @@ class PhenologyModelTest {
         assertTrue(s.factors.all { it.detail.isNotBlank() }, "every factor needs a human-readable reason")
         assertTrue(s.factors.any { it.name == "Photoperiod" })
     }
+
+    // --- how chilling is reported ---------------------------------------
+
+    private fun chilling(days: List<DayInput>, target: LocalDate) =
+        PhenologyModel.score(vermont, days, target).factors.single { it.name == "Chilling" }
+
+    @Test
+    fun `a climatological day is never reported as an observed night`() {
+        // The bug this guards. On a climatology day `chillUnits` is a five-year
+        // mean of max(0, 7 - tmin), which is a small positive on most days in a
+        // mild place. Counting those as nights had Cape Cod claiming "32 nights
+        // below 7C" by mid-October while Newport, an hour away, claimed none.
+        val target = LocalDate.of(2026, 10, 15)
+        val days = (0..60).map {
+            DayInput(
+                seasonStart.plusDays(it.toLong()), WeatherKind.CLIMATOLOGY,
+                tmaxC = 18.0, tminC = 11.0, precipMm = 3.0, chillUnits = 0.4,
+            )
+        }
+        val f = chilling(days, target)
+        assertTrue("observed" !in f.detail, "must not claim observations it does not have: ${f.detail}")
+        assertTrue("normals" in f.detail, "must say the figure comes from normals: ${f.detail}")
+        assertTrue("degree-nights" in f.detail)
+    }
+
+    @Test
+    fun `counts a genuinely observed cold night`() {
+        val target = LocalDate.of(2026, 10, 15)
+        val days = (0..60).map {
+            DayInput(
+                seasonStart.plusDays(it.toLong()), WeatherKind.OBSERVED,
+                tmaxC = 12.0, tminC = 2.0, precipMm = 3.0,
+            )
+        }
+        val f = chilling(days, target)
+        assertTrue("observed" in f.detail, "a real minimum is a real night: ${f.detail}")
+        assertTrue("normals" !in f.detail, "nothing here came from normals: ${f.detail}")
+    }
+
+    @Test
+    fun `reports accumulated degree-nights rather than a day count`() {
+        // The value is what the model actually accumulates, so it stays
+        // comparable across provenances instead of switching meaning.
+        val target = LocalDate.of(2026, 10, 15)
+        val days = (0..60).map {
+            DayInput(
+                seasonStart.plusDays(it.toLong()), WeatherKind.CLIMATOLOGY,
+                tmaxC = 18.0, tminC = 11.0, precipMm = 3.0, chillUnits = 0.5,
+            )
+        }
+        val f = chilling(days, target)
+        // Accumulation only starts once photoperiod forcing does, so this is
+        // bounded above by the number of days and well above a day count of 0.
+        assertTrue(f.value > 0.0, "expected accumulated chilling, got ${f.value}")
+        assertTrue(f.value <= 61 * 0.5 + 1e-9, "cannot exceed what was supplied: ${f.value}")
+    }
+
+    @Test
+    fun `says nothing accumulated when nothing did`() {
+        val target = LocalDate.of(2026, 10, 15)
+        val days = (0..60).map {
+            DayInput(
+                seasonStart.plusDays(it.toLong()), WeatherKind.OBSERVED,
+                tmaxC = 22.0, tminC = 15.0, precipMm = 3.0,
+            )
+        }
+        val f = chilling(days, target)
+        assertEquals(0.0, f.value)
+        assertEquals("neutral", f.effect)
+    }
 }
