@@ -63,6 +63,22 @@ class StaticExporter(
         else -> "${states.size} states"
     }
 
+    /**
+     * Resolution the map falls back to when zoomed out.
+     *
+     * A res 6 cell is about 3 km across. Fitting the country on a phone puts
+     * that under a pixel, so the national view -- the first thing anyone sees
+     * -- rendered as a faint speckle rather than a map. A res 4 cell is around
+     * 22 km, which is a few pixels at that zoom and reads as a continuous
+     * field of colour.
+     *
+     * Two levels rather than one, because res 4 to res 6 is a 49x jump in area
+     * and leaves a band around zoom 6 where the coarse cells look blocky and
+     * the detailed ones are still under two pixels. Res 5 is ~8 km and fills
+     * it. Together they cost about 16% of the detailed payload.
+     */
+    private val aggregateResolutions = listOf(4, 5)
+
     /** Shard key: the res 3 ancestor, up to ~343 res 6 cells per shard. */
     private fun shardOf(h3: Long): String = grid.toAddress(grid.parent(h3, 3))
 
@@ -80,6 +96,7 @@ class StaticExporter(
         require(grid6.isNotEmpty()) { "no cells for ${stateFips ?: "the grid"}" }
 
         Files.createDirectories(target.resolve("forecast"))
+        for (res in aggregateResolutions) Files.createDirectories(target.resolve("forecast-r$res"))
         Files.createDirectories(target.resolve("timeline"))
         Files.createDirectories(target.resolve("factors"))
 
@@ -111,6 +128,22 @@ class StaticExporter(
             ),
         )
 
+        // The coarse level's own index. Same contract as cells.json: position
+        // is identity in every packed file at this resolution.
+        val coarseLevels = aggregateResolutions.map { res ->
+            val children = order.groupBy { grid.parent(it, res) }
+            val cellOrder = children.keys.sorted()
+            writeJson(
+                target.resolve("cells-r$res.json"),
+                mapOf(
+                    "count" to cellOrder.size,
+                    "resolution" to res,
+                    "h3" to cellOrder.map { grid.toAddress(it) },
+                ),
+            )
+            Triple(res, children, cellOrder)
+        }
+
         // --- one packed file per day --------------------------------------
         for (day in days) {
             val byCell = forecasts.byDay(day).associateBy { it.h3 }
@@ -126,6 +159,27 @@ class StaticExporter(
             for (h3 in order) buf.put(PackedFormat.quantiseUnit(byCell[h3]?.confidence).toByte())
 
             write(target.resolve("forecast/$day.bin"), buf.array())
+
+            // Same day at each coarser level. Averaged over the children that
+            // actually have a score, so a parent straddling the edge of the
+            // loaded area reports what is known rather than being dragged
+            // toward zero by cells that have no forecast yet.
+            for ((res, children, cellOrder) in coarseLevels) {
+                val coarse = PackedFormat.buffer(
+                    PackedFormat.HEADER_BYTES + PackedFormat.CHANNELS * cellOrder.size,
+                )
+                coarse.putMagic(PackedFormat.MAGIC_DAY).putInt(cellOrder.size)
+                fun meanOver(pick: (com.foliage.persistence.StoredForecast) -> Double): List<Double?> =
+                    cellOrder.map { parent ->
+                        val values = children[parent].orEmpty().mapNotNull { byCell[it]?.let(pick) }
+                        if (values.isEmpty()) null else values.average()
+                    }
+                for (v in meanOver { it.progression }) coarse.put(PackedFormat.quantise(v).toByte())
+                for (v in meanOver { it.intensity }) coarse.put(PackedFormat.quantise(v).toByte())
+                for (v in meanOver { it.confidence }) coarse.put(PackedFormat.quantiseUnit(v).toByte())
+
+                write(target.resolve("forecast-r$res/$day.bin"), coarse.array())
+            }
         }
 
         // --- timelines and factors, sharded by res 3 ancestor -------------

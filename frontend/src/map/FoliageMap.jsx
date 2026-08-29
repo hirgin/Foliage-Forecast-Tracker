@@ -72,12 +72,15 @@ function boundsOf(cells) {
   return [[minLon, minLat], [maxLon, maxLat]];
 }
 
-export default function FoliageMap({ cells, selected, onSelect, focus }) {
+export default function FoliageMap({ cells, selected, onSelect, focus, onZoom }) {
   const [hovered, setHovered] = useState(null);
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
   const fitted = useRef(false);
+  // Held in a ref so the map is not rebuilt when the callback identity changes.
+  const onZoomRef = useRef(onZoom);
+  onZoomRef.current = onZoom;
 
   // Created once. Rebuilding the map on re-render would refetch every tile and
   // throw away the user's pan and zoom.
@@ -97,6 +100,13 @@ export default function FoliageMap({ cells, selected, onSelect, focus }) {
     // Repaint after the style is in place; the layer list does not exist
     // before then.
     map.on('load', () => brightenLabels(map));
+
+    // Report zoom so the page can swap to the coarser export when hexagons
+    // would be smaller than a pixel. On moveend rather than on every frame:
+    // this decides which file to fetch, and doing it mid-gesture would thrash.
+    const report = () => onZoomRef.current?.(map.getZoom());
+    map.on('moveend', report);
+    map.on('load', report);
 
     mapRef.current = map;
     overlayRef.current = overlay;

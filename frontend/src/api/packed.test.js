@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { resolutionForZoom, COARSE_RES, COARSE_BELOW_ZOOM } from './client';
 import {
   decodeDay,
   decodeTimelineShard,
@@ -188,5 +189,44 @@ describe('seasonDates', () => {
       '2026-10-30', '2026-10-31', '2026-11-01',
       '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05',
     ]);
+  });
+});
+
+describe('picking a resolution for the zoom', () => {
+  it('draws the detailed grid when zoomed in', () => {
+    expect(resolutionForZoom(9)).toBe(6);
+    expect(resolutionForZoom(7)).toBe(6);
+  });
+
+  it('uses the middle level across the awkward band', () => {
+    // Res 4 to res 6 is a 49x jump in area, so without this there is a stretch
+    // of zoom where the coarse cells look blocky and the detailed ones are
+    // still under two pixels.
+    expect(resolutionForZoom(5)).toBe(5);
+    expect(resolutionForZoom(6.9)).toBe(5);
+  });
+
+  it('falls back to the coarse grid when zoomed out', () => {
+    // The bug this exists for: a res 6 cell is ~3 km, which is under a pixel
+    // with the whole country on screen, so the national view -- the first
+    // thing anyone sees -- rendered as a faint speckle instead of a map.
+    expect(resolutionForZoom(3)).toBe(COARSE_RES);
+    expect(resolutionForZoom(4.9)).toBe(COARSE_RES);
+  });
+
+  it('is stable at the boundary rather than flickering', () => {
+    // Just either side of the switch must land on different levels and stay
+    // there; the map reports zoom on moveend, so an unstable edge would
+    // refetch on every nudge.
+    expect(resolutionForZoom(COARSE_BELOW_ZOOM - 0.01)).toBe(COARSE_RES);
+    expect(resolutionForZoom(COARSE_BELOW_ZOOM)).toBe(5);
+    expect(resolutionForZoom(COARSE_BELOW_ZOOM + 0.01)).toBe(5);
+  });
+
+  it('assumes the detailed grid when zoom is unknown', () => {
+    // Before the map has loaded there is no zoom to read. Guessing coarse
+    // would show a blocky map to anyone who lands already zoomed in.
+    expect(resolutionForZoom(null)).toBe(6);
+    expect(resolutionForZoom(undefined)).toBe(6);
   });
 });

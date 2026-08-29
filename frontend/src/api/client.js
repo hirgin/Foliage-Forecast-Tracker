@@ -59,6 +59,8 @@ export const isStatic = STATIC;
  */
 let indexPromise = null;
 let metaPromise = null;
+/** Coarse indices, keyed by resolution, fetched at most once each. */
+const coarseIndexPromises = new Map();
 
 function staticMeta() {
   if (!metaPromise) metaPromise = request('/meta.json');
@@ -84,6 +86,52 @@ async function staticIndex() {
 
 const shardKey = (h3) => cellToParent(h3, SHARD_RES);
 
+/**
+ * Resolution to draw at, from the map's zoom.
+ *
+ * A res 6 cell is ~3 km, which is under a pixel when the whole country is on
+ * screen -- the national view rendered as a faint speckle rather than a map.
+ * Below the switch the coarser export is drawn instead, where a cell is ~22 km
+ * and reads as a continuous field.
+ *
+ * The threshold is where res 6 hexagons reach roughly two pixels, and the
+ * coarse level is only ~2% of the detailed payload, so the swap costs
+ * essentially nothing.
+ */
+export const COARSE_RES = 4;
+export const COARSE_BELOW_ZOOM = 5;
+
+/**
+ * Two coarse levels rather than one. Res 4 to res 6 is a 49x jump in area, and
+ * across zoom 5 to 7 that leaves a band where the coarse cells are blocky and
+ * the detailed ones are still under two pixels. Res 5 (~8 km) covers it.
+ *
+ * Thresholds are where each level's cells reach roughly four pixels:
+ * res 4 at ~22 km below zoom 5, res 5 at ~8 km below zoom 7, res 6 above.
+ */
+export function resolutionForZoom(zoom) {
+  if (zoom == null) return 6;
+  if (zoom < COARSE_BELOW_ZOOM) return COARSE_RES;
+  if (zoom < 7) return 5;
+  return 6;
+}
+
+/**
+ * Roughly how wide a cell is at a given H3 resolution, in km.
+ *
+ * Shown to the reader, so it has to change when the map swaps levels: the
+ * counts on screen are of whatever is being drawn, and labelling 22 km cells
+ * as 3 km would make those numbers look broken.
+ */
+export const cellWidthKm = (res) => (res === 6 ? 3 : res === 5 ? 8 : res === 4 ? 22 : 59);
+
+async function coarseIndex(res) {
+  if (!coarseIndexPromises.has(res)) {
+    coarseIndexPromises.set(res, request(`/cells-r${res}.json`));
+  }
+  return coarseIndexPromises.get(res);
+}
+
 // --- public API ----------------------------------------------------------
 
 export const fetchMeta = () => (STATIC ? staticMeta() : request('/meta'));
@@ -91,13 +139,17 @@ export const fetchMeta = () => (STATIC ? staticMeta() : request('/meta'));
 /** The searchable place index. Small enough to fetch once and keep. */
 export const fetchPlaces = () => request(STATIC ? '/places.json' : '/places');
 
-export async function fetchForecast(date) {
+export async function fetchForecast(date, resolution = 6) {
   if (!STATIC) return request(`/forecast?date=${date}`);
 
+  // The coarse level has its own index and its own daily files, in the same
+  // packed format, so everything downstream is unchanged apart from which
+  // pair it reads.
+  const coarse = resolution !== 6;
   const [index, meta, buffer] = await Promise.all([
-    staticIndex(),
+    coarse ? coarseIndex(resolution) : staticIndex(),
     staticMeta(),
-    request(`/forecast/${date}.bin`, true),
+    request(coarse ? `/forecast-r${resolution}/${date}.bin` : `/forecast/${date}.bin`, true),
   ]);
   const day = decodeDay(buffer);
   if (day.count !== index.h3.length) {
@@ -110,6 +162,7 @@ export async function fetchForecast(date) {
   }
   return {
     date,
+    resolution,
     count: day.count,
     seasonStart: meta.seasonStart,
     seasonEnd: meta.seasonEnd,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForecast, useMeta } from '../api/hooks';
+import { resolutionForZoom, cellWidthKm } from '../api/client';
 import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
@@ -25,6 +26,10 @@ export default function MapView({ nav }) {
   // the whole point of the page, is not buried under a legend. Desktop has
   // room for everything at once and ignores this entirely.
   const [panelOpen, setPanelOpen] = useState(false);
+  // Which resolution to draw. A res 6 hexagon is under a pixel with the whole
+  // country on screen, so the map falls back to a coarser export when zoomed
+  // out and swaps back on the way in.
+  const [resolution, setResolution] = useState(6);
   // Where the map should centre. Carries a nonce so choosing the same place
   // twice still recentres, rather than being ignored as an unchanged prop.
   const [focus, setFocus] = useState(null);
@@ -41,7 +46,7 @@ export default function MapView({ nav }) {
     setDate(today < seasonStart ? seasonStart : today > seasonEnd ? seasonEnd : today);
   }, [seasonStart, seasonEnd, date]);
 
-  const { data, error, isLoading } = useForecast(date);
+  const { data, error, isLoading } = useForecast(date, resolution);
   const cells = data?.cells ?? [];
 
   const horizonDate = useMemo(() => addDays(isoToday(), FORECAST_HORIZON_DAYS), []);
@@ -60,15 +65,25 @@ export default function MapView({ nav }) {
     // On a phone the detail panel takes the whole lower half, so the main
     // panel steps aside rather than stacking two sheets over a hidden map.
     <div className={selected ? 'app app--detail' : 'app'}>
-      <FoliageMap cells={cells} selected={selected} onSelect={onSelect} focus={focus} />
+      <FoliageMap
+        cells={cells}
+        selected={selected}
+        onSelect={onSelect}
+        focus={focus}
+        onZoom={(zoom) => setResolution(resolutionForZoom(zoom))}
+      />
 
       <aside className={panelOpen ? 'panel panel--open' : 'panel'}>
         <header className="panel__head">
           <div>
             <h1>Foliage Forecast</h1>
-            <p className="sub">
+            {/* The size follows what is actually being drawn. Zooming out swaps
+              to a coarser export and the counts below become counts of those
+              larger areas, so a fixed "3 km" would make them look wrong. */}
+          <p className="sub">
               {meta.data?.coverage ?? 'United States'} ·{' '}
-              {cells.length ? cells.length.toLocaleString() : '—'} hexagons at ~3 km
+              {cells.length ? cells.length.toLocaleString() : '—'} hexagons at ~
+            {cellWidthKm(resolution)} km
             </p>
           </div>
           <button

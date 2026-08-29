@@ -10,10 +10,12 @@ export function useMeta() {
   });
 }
 
-export function useForecast(date) {
+export function useForecast(date, resolution = 6) {
   return useQuery({
-    queryKey: ['forecast', date],
-    queryFn: () => fetchForecast(date),
+    // Resolution is part of the key, so zooming swaps between two cached
+    // sets rather than refetching one over the other.
+    queryKey: ['forecast', date, resolution],
+    queryFn: () => fetchForecast(date, resolution),
     enabled: Boolean(date),
     retry: false,
     // Scrubbing the slider revisits dates constantly; keeping them resident
