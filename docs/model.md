@@ -243,10 +243,20 @@ progression showed the difference plainly.
   matter greatly across states — oak-dominated southern forests turn later and
   duller — which makes it a prerequisite for expanding beyond Vermont rather
   than an improvement to the current map.
-- **Latitude is a weak driver here.** Correlation with progression is 0.09
-  against elevation's 0.78. That is defensible for one small state, but it has
-  not been tested anywhere latitude actually spans a useful range, so the
-  north-to-south behaviour is unverified beyond Vermont.
+- **The north-to-south gradient is far too weak, and this is now measured.**
+  Across 4,694 cells in seven states it is **−1.40 days per degree of
+  latitude**, against roughly −4.7 implied by published peak windows, and the
+  modelled season is 21 days wide against about 45. Southern and coastal peaks
+  land about ten days early.
+
+  This is structural, not a matter of tuning. Both temperature terms are inert
+  in a mild autumn — chilling needs 7 °C and warm delay needs 20 °C, and
+  coastal October sits between the two — so photoperiod supplies about 80% of
+  forcing and barely varies across these latitudes. Raising `WARM_DELAY`
+  ninefold and `CHILL_DIRECT` by 64% widened the spread from 5 days to 8.
+  [ADR-0008](adr/0008-cooling-degree-day-senescence.md) proposes the redesign
+  that would fix it, and records the measurements in full.
+
 - **It does not model cloud cover or wind.** Both affect how a display is
   actually experienced, and a windstorm can end a season overnight.
 - **Beyond 16 days it is climatology.** Not a forecast. A weak claim about a
