@@ -169,3 +169,32 @@ describe('telling peak from past peak', () => {
     expect(late).toBeLessThan(early);
   });
 });
+
+describe('cells with no forecast yet', () => {
+  it('is drawn distinctly from a scored cell', () => {
+    // The bug this guards: a cell awaiting data was drawn at [70, 66, 60] and
+    // 45% alpha over a near-black basemap, which is indistinguishable from
+    // empty ground. Most of the country looks like this until the backfill
+    // finishes, so a waiting grid read as a broken one.
+    const pending = foliageColor({ progression: null, stage: null, confidence: 0 });
+    const scored = foliageColor({ progression: 80, stage: 'PEAK', confidence: 1 });
+    expect(pending).not.toEqual(scored);
+    expect(pending[3]).toBeGreaterThan(100);
+  });
+
+  it('is not drawn as a score of zero', () => {
+    // "Not computed yet" and "no colour change yet" are different claims and
+    // must not share a colour.
+    const pending = foliageColor({ progression: null, stage: null, confidence: 0 });
+    const noChange = foliageColor({ progression: 0, stage: 'NO_CHANGE', confidence: 1 });
+    expect(pending.slice(0, 3)).not.toEqual(noChange.slice(0, 3));
+  });
+
+  it('stays subordinate to the stage colours', () => {
+    // It covers most of the map right now, so it must not shout over the
+    // cells that actually carry a forecast.
+    const chroma = ([r, g, b]) => Math.max(r, g, b) - Math.min(r, g, b);
+    const pending = foliageColor({ progression: null, stage: null, confidence: 0 });
+    expect(chroma(pending)).toBeLessThan(chroma(stageColor('PEAK')));
+  });
+});

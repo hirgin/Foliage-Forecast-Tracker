@@ -26,6 +26,22 @@ export const STAGES = [
   { key: 'PAST_PEAK', label: 'Past peak', rgb: [96, 74, 59] },
 ];
 
+/**
+ * A cell that exists but has no forecast yet.
+ *
+ * Deliberately visible. It used to be [70, 66, 60] at 45% alpha over a
+ * near-black basemap, which drew the hexagon and made it indistinguishable
+ * from empty ground -- so a grid that was merely waiting on data looked
+ * broken. Most of the country is in this state until the nightly backfill
+ * finishes, and "not computed yet" is a different claim from "no forest
+ * here", which is genuinely blank.
+ *
+ * Still clearly subordinate to the stage colours: neutral, and no more opaque
+ * than it has to be to read as a hexagon.
+ */
+export const NO_FORECAST_RGB = [92, 90, 86];
+export const NO_FORECAST_ALPHA = 120;
+
 const BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s]));
 
 export function stageColor(stage) {
@@ -68,6 +84,10 @@ const lerp = (a, b, t) => a + (b - a) * t;
  * separately by drawing Esri's reference layer above the data.
  */
 export function foliageColor(cell) {
+  // No stage means no forecast for this cell yet, which is not the same as a
+  // score of zero and should not be drawn as one.
+  if (cell.stage == null) return [...NO_FORECAST_RGB, NO_FORECAST_ALPHA];
+
   const [r, g, b] = progressionColor(cell.progression, cell.stage);
   const alpha = Math.round(255 * (0.45 + 0.25 * (cell.confidence ?? 1)));
   return [r, g, b, alpha];
