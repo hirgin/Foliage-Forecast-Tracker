@@ -45,6 +45,52 @@ class WeatherBackfill(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
+     * Brings every already-complete state up to date.
+     *
+     * Run before [run], because keeping what is already on the map honest
+     * matters more than adding to it: both draw on the same daily allowance,
+     * and a map that silently ages is worse than one that is merely small.
+     *
+     * This replaced a hardcoded Vermont FIPS in the nightly deploy. That was
+     * right when Vermont was the only state loaded and quietly wrong the
+     * moment it was not -- every other state would have frozen on the day it
+     * landed while Vermont alone stayed current, with nothing to show that had
+     * happened.
+     *
+     * Only complete states are touched. A half-loaded one is the backfill's
+     * job, and refreshing its observations would not make it scoreable.
+     */
+    fun refreshLoaded(budget: Duration = Duration.ofMinutes(60)): RefreshResult {
+        val deadline = Instant.now().plus(budget)
+        val covered = runCatching { normals.cellsWithNormals() }.getOrDefault(emptySet())
+        val refreshed = mutableListOf<String>()
+        var quotaSpent = false
+
+        for (state in ConusStates.ALL) {
+            if (Instant.now().isAfter(deadline)) break
+            val fips = runCatching { cells.stateFipsFor(state) }.getOrNull() ?: continue
+            val parents = cells.distinctRes5Parents(fips)
+            if (parents.isEmpty() || !covered.containsAll(parents)) continue
+
+            try {
+                weatherIngest.refreshForecast(fips)
+                // Rescored as well as refetched. New observations that never
+                // reach the model change nothing on the map.
+                forecastService.computeState(fips)
+                refreshed += state
+            } catch (e: QuotaExhausted) {
+                log.info("daily allowance spent refreshing {}; the rest keep yesterday's data", state)
+                quotaSpent = true
+                break
+            } catch (e: Exception) {
+                log.error("refreshing {} failed: {}", state, e.message)
+            }
+        }
+        log.info("refreshed {} loaded states, quotaSpent={}", refreshed.size, quotaSpent)
+        return RefreshResult(refreshed, quotaSpent)
+    }
+
+    /**
      * @param maxStates how many states to attempt at most
      * @param budget wall-clock ceiling; a scheduled deploy runs inside a job
      *   with its own limit, and being killed halfway is worse than stopping
@@ -128,4 +174,9 @@ data class BackfillResult(
     /** True when the daily allowance ran out, which is expected and not an error. */
     val stoppedOnQuota: Boolean,
     val stoppedOnTime: Boolean,
+)
+
+data class RefreshResult(
+    val statesRefreshed: List<String>,
+    val stoppedOnQuota: Boolean,
 )

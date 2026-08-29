@@ -67,6 +67,7 @@ class ExportRunner(
         val backfill = env.getProperty("foliage.export.backfill", "false").toBoolean()
         val backfillStates = env.getProperty("foliage.export.backfill-states", "6").toInt()
         val backfillMinutes = env.getProperty("foliage.export.backfill-minutes", "90").toLong()
+        val refreshMinutes = env.getProperty("foliage.export.refresh-minutes", "45").toLong()
 
         log.info(
             "exporting {}, refresh scope {}",
@@ -102,6 +103,34 @@ class ExportRunner(
             // the country needs 19,904, so this is a month of nightly runs
             // rather than one long job. It stops cleanly when the allowance or
             // the budget runs out and resumes here tomorrow.
+            if (refresh) {
+                // Everything already loaded, brought up to date. Ordered
+                // before the backfill deliberately: both draw on the same
+                // daily allowance, and keeping what is on the map honest
+                // matters more than adding to it.
+                //
+                // A single state can still be named to override this, which is
+                // what the local profile and a manual run want.
+                val refreshed = if (refreshState != null) {
+                    val ingest = weatherIngest.refreshForecast(refreshState)
+                    val scored = forecastService.computeState(refreshState)
+                    log.info(
+                        "refreshed state {}: {} weather rows, {} scored",
+                        refreshState, ingest.rowsWritten, scored.rowsWritten,
+                    )
+                    listOf(refreshState)
+                } else {
+                    val r = weatherBackfill.refreshLoaded(Duration.ofMinutes(refreshMinutes))
+                    log.info(
+                        "refreshed {} loaded states, stoppedOnQuota={}",
+                        r.statesRefreshed.size, r.stoppedOnQuota,
+                    )
+                    r.statesRefreshed
+                }
+                if (refreshed.isEmpty()) log.info("nothing complete enough to refresh yet")
+            }
+
+            // Then extend the map, with whatever allowance is left.
             if (backfill) {
                 val filled = weatherBackfill.run(backfillStates, Duration.ofMinutes(backfillMinutes))
                 log.info(
@@ -110,12 +139,6 @@ class ExportRunner(
                 )
             }
 
-            if (refresh) {
-                val ingest = weatherIngest.refreshForecast(refreshState)
-                log.info("refreshed weather: {} rows, kinds {}", ingest.rowsWritten, ingest.byKind)
-                val scored = forecastService.computeState(refreshState)
-                log.info("rescored: {} rows in {} ms", scored.rowsWritten, scored.scoringMs)
-            }
             val result = exporter.export(Path.of(path), state)
             log.info(
                 "export complete: {} files, {} KB, {} days x {} cells",

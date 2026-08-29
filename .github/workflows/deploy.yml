@@ -104,11 +104,12 @@ jobs:
           # long job. Ninety minutes leaves plenty of room under the six hour
           # ceiling for the export that follows.
           #
-          # States the nightly refresh pulls weather for. The export itself is
-          # unscoped and publishes whatever the grid holds; this is only the
-          # third-party fetch, which is metered. Widen it as weather lands, and
-          # blank it once the country is covered.
-          REFRESH_STATE=50
+          # Blank means "every state whose weather is complete", which is what
+          # a nightly refresh should mean. It was pinned to Vermont's FIPS back
+          # when Vermont was the only state loaded; leaving it that way would
+          # have frozen every other state on the day it landed while Vermont
+          # alone stayed current. Name a single FIPS here only to override.
+          REFRESH_STATE=
           echo "refresh=$REFRESH scope=${REFRESH_STATE:-whole grid}"
           # Kept on one line: the indented backslash continuations produced
           # runs of whitespace inside --args, which Gradle splits into empty
