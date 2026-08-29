@@ -70,6 +70,10 @@ h2 {
   padding: 17px;
 }
 
+/* Collapse control. Only a phone has too little room to show everything, so
+   on any wider screen this does not exist rather than being merely hidden. */
+.panel__toggle { display: none; }
+
 .headline {
   display: flex;
   flex-direction: column;
@@ -274,9 +278,109 @@ footer a { color: var(--accent); }
   pointer-events: none;
 }
 
+/* ---------- phones ----------
+
+   The map is the page. On a phone the old layout put a 46%-tall panel over the
+   top of it and a detail sheet over the bottom, which left almost no map
+   visible and stacked two scrolling surfaces on a 375px screen.
+
+   So the panel keeps only what answers the question -- the date and how much
+   is near peak -- plus search, and folds the legend, caveats and credits
+   behind a toggle. Selecting a hexagon hides it altogether: the detail sheet
+   is the answer at that point, and two sheets over a hidden map is the
+   clutter itself. */
+
 @media (max-width: 620px) {
-  .panel { top: 12px; left: 12px; right: 12px; width: auto; max-height: 46%; }
-  .detail { top: auto; bottom: 96px; right: 12px; left: 12px; width: auto; max-height: 44%; }
+  .panel {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    padding: 12px 14px;
+    /* Room for the slider and its attribution, so the sheet can never grow
+       into them however long the content gets. */
+    max-height: calc(100% - 132px);
+  }
+
+  .panel__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .panel__toggle {
+    display: grid;
+    place-items: center;
+    flex: none;
+    /* 40px is the smallest comfortable touch target; the icon inside is much
+       smaller than the tappable area. */
+    width: 40px;
+    height: 40px;
+    margin: -6px -6px 0 0;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  /* Folded away until asked for. Both are reference material, not the answer. */
+  .panel:not(.panel--open) .nav,
+  .panel:not(.panel--open) .panel__more { display: none; }
+
+  .panel h1 { font-size: 15px; }
+  .panel .sub { font-size: 11px; }
+  .headline { margin: 12px 0 0; padding: 10px 0 0; border-bottom: none; }
+  .headline__date { font-size: 18px; }
+  .panel--open .headline { margin-bottom: 4px; }
+
+  /* One sheet at a time. */
+  .app--detail .panel { display: none; }
+
+  .detail {
+    top: auto;
+    /* Clears the slider, which sits 22px up and is 56px tall. 74 was measured
+       overlapping it by 4px on a 568px-tall screen. */
+    bottom: 88px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 58%;
+    padding: 14px;
+  }
+  .detail header button { width: 34px; height: 34px; font-size: 18px; }
+
+  .slider {
+    bottom: 22px;
+    width: calc(100% - 16px);
+    gap: 10px;
+    padding: 9px 12px;
+  }
+  .slider__play { width: 36px; height: 36px; }
+  .slider__value { min-width: 54px; font-size: 12px; }
+
+  /* The marker stays; only its wording goes. At this width "forecast ends"
+     lands on top of the month labels it sits between. */
+  .tick--horizon .tick__text { display: none; }
+
+  /* Kept, because OpenStreetMap and the data sources require credit, but on
+     one line under the slider instead of wrapping across the map. */
+  .attribution {
+    left: 8px;
+    right: 8px;
+    bottom: 4px;
+    font-size: 9px;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Hover does not exist on touch, and the card only ever appeared on a
+     pointer device. */
   .hovercard { display: none; }
 }
 

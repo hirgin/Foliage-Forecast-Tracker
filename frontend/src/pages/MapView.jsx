@@ -21,6 +21,10 @@ export default function MapView({ nav }) {
   const meta = useMeta();
   const [date, setDate] = useState(null);
   const [selected, setSelected] = useState(null);
+  // Mobile only: the panel collapses to its essentials so the map, which is
+  // the whole point of the page, is not buried under a legend. Desktop has
+  // room for everything at once and ignores this entirely.
+  const [panelOpen, setPanelOpen] = useState(false);
   // Where the map should centre. Carries a nonce so choosing the same place
   // twice still recentres, rather than being ignored as an unchanged prop.
   const [focus, setFocus] = useState(null);
@@ -53,16 +57,29 @@ export default function MapView({ nav }) {
   const onSelect = useCallback((h3) => setSelected(h3), []);
 
   return (
-    <div className="app">
+    // On a phone the detail panel takes the whole lower half, so the main
+    // panel steps aside rather than stacking two sheets over a hidden map.
+    <div className={selected ? 'app app--detail' : 'app'}>
       <FoliageMap cells={cells} selected={selected} onSelect={onSelect} focus={focus} />
 
-      <aside className="panel">
-        <header>
-          <h1>Foliage Forecast</h1>
-          <p className="sub">
-            {meta.data?.coverage ?? 'United States'} ·{' '}
-            {cells.length ? cells.length.toLocaleString() : '—'} hexagons at ~3 km
-          </p>
+      <aside className={panelOpen ? 'panel panel--open' : 'panel'}>
+        <header className="panel__head">
+          <div>
+            <h1>Foliage Forecast</h1>
+            <p className="sub">
+              {meta.data?.coverage ?? 'United States'} ·{' '}
+              {cells.length ? cells.length.toLocaleString() : '—'} hexagons at ~3 km
+            </p>
+          </div>
+          <button
+            type="button"
+            className="panel__toggle"
+            onClick={() => setPanelOpen((o) => !o)}
+            aria-expanded={panelOpen}
+            aria-label={panelOpen ? 'Hide details' : 'Show legend and details'}
+          >
+            <span aria-hidden="true">{panelOpen ? '−' : '+'}</span>
+          </button>
         </header>
 
         {nav}
@@ -82,27 +99,30 @@ export default function MapView({ nav }) {
         )}
 
         {Boolean(cells.length) && (
-          <>
-            <div className="headline">
-              <span className="headline__date">{date ? formatDay(date) : '—'}</span>
-              <span className="headline__peak">
-                {peakCount
-                  ? `${peakCount.toLocaleString()} of ${cells.length.toLocaleString()} at or near peak`
-                  : 'No cells near peak yet'}
-              </span>
-            </div>
+          <div className="headline">
+            <span className="headline__date">{date ? formatDay(date) : '—'}</span>
+            <span className="headline__peak">
+              {peakCount
+                ? `${peakCount.toLocaleString()} of ${cells.length.toLocaleString()} at or near peak`
+                : 'No cells near peak yet'}
+            </span>
+          </div>
+        )}
 
-            <section className="legend">
-              <h2>Stage</h2>
-              {STAGES.map((s) => (
-                <div className="legend__row" key={s.key}>
-                  <span className="swatch" style={{ background: `rgb(${s.rgb.join(',')})` }} />
-                  <span className="legend__label">{s.label}</span>
-                  <span className="legend__count">{(counts[s.key] ?? 0).toLocaleString()}</span>
-                </div>
-              ))}
-            </section>
-          </>
+        {/* Everything below folds away on a phone. The date and how much is
+            near peak are the answer; the legend and the caveats are reference. */}
+        <div className="panel__more">
+        {Boolean(cells.length) && (
+          <section className="legend">
+            <h2>Stage</h2>
+            {STAGES.map((s) => (
+              <div className="legend__row" key={s.key}>
+                <span className="swatch" style={{ background: `rgb(${s.rgb.join(',')})` }} />
+                <span className="legend__label">{s.label}</span>
+                <span className="legend__count">{(counts[s.key] ?? 0).toLocaleString()}</span>
+              </div>
+            ))}
+          </section>
         )}
 
         {beyondHorizon && (
@@ -133,6 +153,7 @@ export default function MapView({ nav }) {
             </p>
           )}
         </footer>
+        </div>
       </aside>
 
       {seasonStart && date && (

@@ -164,9 +164,16 @@ export default function FoliageMap({ cells, selected, onSelect, focus }) {
     const bounds = boundsOf(cells);
     if (!bounds) return;
 
+    // Pad for wherever the chrome actually is. On a wide screen the panel sits
+    // down the left; on a phone it is a sheet across the top, so reserving 330
+    // pixels on the left there both wasted the width the map needs most and
+    // left the country to drift under the panel.
     const width = containerRef.current?.clientWidth ?? 0;
+    const wide = width > 720;
     map.fitBounds(bounds, {
-      padding: { top: 40, bottom: 110, left: width > 720 ? 330 : 40, right: 40 },
+      padding: wide
+        ? { top: 40, bottom: 110, left: 330, right: 40 }
+        : { top: 150, bottom: 100, left: 12, right: 12 },
       duration: 0,
     });
     fitted.current = true;

@@ -97,7 +97,10 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
               style={{ left: `${horizonPct}%` }}
               title="Beyond here the forecast is climatology, not a forecast"
             >
-              forecast ends
+              {/* The dashed marker is drawn by CSS and always shows; only the
+                  wording folds away on a narrow screen, where it would sit on
+                  top of the month labels. */}
+              <span className="tick__text">forecast ends</span>
             </span>
           )}
         </div>
