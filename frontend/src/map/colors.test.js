@@ -128,3 +128,44 @@ describe('canopyColor', () => {
     expect(canopyColor(null)).not.toEqual(canopyColor(0));
   });
 });
+
+describe('telling peak from past peak', () => {
+  // Relative luminance, the brightness a viewer perceives. Colour-blind or
+  // not, this is the channel that still works when hue does not.
+  const luminance = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+  it('separates them by brightness, not only by hue', () => {
+    // The bug this guards: peak red and past-peak brown had luminances of
+    // 90.9 and 88.5, so they differed only in colourfulness. On a small
+    // hexagon at 45-70% alpha over a dark basemap, that reads as one colour.
+    const peak = stageColor('PEAK');
+    const past = stageColor('PAST_PEAK');
+    expect(Math.abs(luminance(peak) - luminance(past))).toBeGreaterThan(8);
+  });
+
+  it('keeps past peak the duller of the two', () => {
+    // Semantics as well as legibility: past peak is leaves going down, and it
+    // should never look more vivid than peak itself.
+    const chroma = ([r, g, b]) => Math.max(r, g, b) - Math.min(r, g, b);
+    expect(chroma(stageColor('PAST_PEAK'))).toBeLessThan(chroma(stageColor('PEAK')));
+  });
+
+  it('still reads as a continuous ramp out of peak', () => {
+    // Separating them must not reintroduce a hard step, which would hide the
+    // progression within the peak band that the interpolation exists for.
+    const samples = [75, 80, 85, 90].map((p) => progressionColor(p, 'PEAK'));
+    samples.slice(1).forEach((c, i) => {
+      const previous = samples[i];
+      const jump = Math.max(...[0, 1, 2].map((k) => Math.abs(c[k] - previous[k])));
+      expect(jump).toBeLessThan(60);
+    });
+  });
+
+  it('darkens steadily through the peak band', () => {
+    // With peak now lasting a week, where a cell sits inside the band is
+    // information. It should get visibly closer to past peak, not jump.
+    const early = luminance(progressionColor(76, 'PEAK'));
+    const late = luminance(progressionColor(89, 'PEAK'));
+    expect(late).toBeLessThan(early);
+  });
+});
