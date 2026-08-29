@@ -169,45 +169,66 @@ object CoolingDegreeDayModel {
             stage = PhenologyModel.stageOf(progression),
             intensity = intensity,
             confidence = PhenologyModel.confidenceOf(upToTarget),
+            // Written for someone standing in a forest, not for someone
+            // reading the source. The quantities are the same; "cooling degree
+            // days below 20 C since days shortened past 13 hours" is not a
+            // sentence anyone should have to parse to find out why a hexagon
+            // is orange.
             factors = listOf(
                 Factor(
-                    "Cooling", cooling, "primary",
+                    "Cool weather", cooling, "sets the pace",
                     buildString {
-                        append("${"%.0f".format(cooling)} cooling degree-days below ")
-                        append("${T_BASE_C.toInt()}°C since days shortened past ")
-                        append("${PHOTOPERIOD_GATE_H.toInt()} hours. ")
-                        append("Peak is reached at about ${S_PEAK.toInt()}")
-                        if (climatologyDays > 0) append(", mostly expected from five-year normals")
+                        val pct = (100.0 * cooling / S_PEAK).coerceAtMost(999.0)
+                        if (cooling <= 0.0) {
+                            append("Still too warm for the leaves to turn")
+                        } else {
+                            append("It has been cool enough to get about ${"%.0f".format(pct)}% ")
+                            append("of the way to full colour")
+                        }
+                        if (climatologyDays > 0) {
+                            append(", though most of that is a typical year rather than measured weather")
+                        }
                         append(".")
                     },
                 ),
                 Factor(
-                    "Photoperiod", gatedDays.toDouble(),
-                    if (gatedDays > 0) "has triggered" else "not yet",
+                    "Shorter days", gatedDays.toDouble(),
+                    if (gatedDays > 0) "has started" else "not started",
                     if (gatedDays > 0) {
-                        "$gatedDays days since day length fell below " +
-                            "${PHOTOPERIOD_GATE_H.toInt()} hours, which is what starts senescence. " +
-                            "Temperature sets the pace from there."
+                        "Daylight dropped under ${PHOTOPERIOD_GATE_H.toInt()} hours $gatedDays days " +
+                            "ago. That is the signal for trees to start shutting down; how cool it " +
+                            "gets from then on decides how fast."
                     } else {
-                        "Days are still longer than ${PHOTOPERIOD_GATE_H.toInt()} hours, " +
-                            "so senescence has not begun."
+                        "Days are still too long. Trees have not started shutting down yet."
                     },
                 ),
                 Factor(
                     "Frost", frostDays.toDouble(),
-                    if (hardFreeze) "damaging" else if (frostDays > 0) "accelerates" else "neutral",
-                    if (hardFreeze) "A hard freeze has occurred, which strips leaves rather than colouring them."
-                    else "$frostDays nights at or below freezing.",
+                    if (hardFreeze) "damaging" else if (frostDays > 0) "speeds it up" else "none yet",
+                    when {
+                        hardFreeze -> "A hard freeze has hit, which knocks leaves down rather than colouring them."
+                        frostDays > 0 -> "$frostDays frosty nights, which brings colour on faster."
+                        else -> "No frosty nights yet."
+                    },
                 ),
                 Factor(
-                    "Drought", droughtStress * 100,
-                    if (droughtStress > 0.2) "dulls and shortens" else "neutral",
-                    "Precipitation is ${"%.0f".format(observedPrecip)} mm against a normal of " +
-                        (normalPrecipMm?.let { "${"%.0f".format(it)} mm" } ?: "unknown"),
+                    "Rain", droughtStress * 100,
+                    if (droughtStress > 0.2) "dulls the colour" else "nothing unusual",
+                    buildString {
+                        append("${"%.0f".format(observedPrecip)} mm of rain so far")
+                        if (normalPrecipMm != null) {
+                            append(", against ${"%.0f".format(normalPrecipMm)} mm in a normal year")
+                            if (droughtStress > 0.2) {
+                                append(". A dry autumn makes for duller colour that does not last as long")
+                            }
+                        }
+                        append(".")
+                    },
                 ),
                 Factor(
-                    "Diurnal range", meanDiurnal, "drives vividness",
-                    "Mean day-night spread of ${"%.1f".format(meanDiurnal)}°C over the last two weeks.",
+                    "Warm days, cool nights", meanDiurnal, "makes it brighter",
+                    "About ${"%.0f".format(meanDiurnal)}°C between the day's high and low " +
+                        "lately. The bigger that gap, the brighter the colour.",
                 ),
             ),
         )

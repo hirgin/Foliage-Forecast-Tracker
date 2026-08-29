@@ -88,15 +88,15 @@ class CoolingDegreeDayModelTest {
         }
         val score = CoolingDegreeDayModel.score(CellInput(44.0, 200), days, august.plusDays(20))
         assertEquals(0.0, score.progression, 1e-9)
-        assertEquals("not yet", score.factors.single { it.name == "Photoperiod" }.effect)
+        assertEquals("not started", score.factors.single { it.name == "Shorter days" }.effect)
     }
 
     @Test
     fun `the gate opens once days are short enough`() {
         val days = season(meanC = 11.0)
         val late = CoolingDegreeDayModel.score(CellInput(44.0, 200), days, LocalDate.of(2026, 10, 15))
-        assertEquals("has triggered", late.factors.single { it.name == "Photoperiod" }.effect)
-        assertTrue(late.factors.single { it.name == "Cooling" }.value > 0)
+        assertEquals("has started", late.factors.single { it.name == "Shorter days" }.effect)
+        assertTrue(late.factors.single { it.name == "Cool weather" }.value > 0)
     }
 
     // --- bounds and shape -------------------------------------------------
@@ -139,7 +139,7 @@ class CoolingDegreeDayModelTest {
         val days = season(meanC = 12.0)
         val early = LocalDate.of(2026, 9, 11)
         val p = CoolingDegreeDayModel.score(CellInput(44.0, 200), days, early)
-        val cooling = p.factors.single { it.name == "Cooling" }.value
+        val cooling = p.factors.single { it.name == "Cool weather" }.value
         val straightLine = CoolingDegreeDayModel.PEAK_PROGRESSION * cooling / CoolingDegreeDayModel.S_PEAK
 
         assertTrue(cooling > 0, "nothing accumulated by $early, so this proves nothing")
@@ -179,7 +179,7 @@ class CoolingDegreeDayModelTest {
         assertTrue(peak != null)
         val cooling = CoolingDegreeDayModel
             .score(CellInput(44.0, 200), days, peak!!)
-            .factors.single { it.name == "Cooling" }.value
+            .factors.single { it.name == "Cool weather" }.value
         assertTrue(
             cooling in (CoolingDegreeDayModel.S_PEAK * 0.85)..(CoolingDegreeDayModel.S_PEAK * 1.15),
             "peak reached at $cooling, expected near ${CoolingDegreeDayModel.S_PEAK}",
@@ -236,11 +236,36 @@ class CoolingDegreeDayModelTest {
     }
 
     @Test
-    fun `says plainly when a figure came from normals`() {
+    fun `says plainly when a figure came from a typical year`() {
+        // Worded for a reader rather than a modeller: "normals" is the term of
+        // art, "a typical year" is what it means. The panel still has to admit
+        // it, whichever words it uses.
         val score = CoolingDegreeDayModel.score(
             CellInput(44.0, 200), season(12.0, kind = WeatherKind.CLIMATOLOGY), seasonEnd,
         )
-        assertTrue("normals" in score.factors.single { it.name == "Cooling" }.detail)
+        val detail = score.factors.single { it.name == "Cool weather" }.detail
+        assertTrue("typical year" in detail, "should say where the figure came from: $detail")
+    }
+
+    @Test
+    fun `explains itself without jargon`() {
+        // The panel is read by someone standing in a forest, not someone
+        // reading the source. These are the words that sent people to a
+        // glossary.
+        val jargon = listOf(
+            "senescence", "photoperiod", "degree-day", "degree day",
+            "diurnal", "climatolog", "normals", "forcing", "provenance",
+        )
+        val score = CoolingDegreeDayModel.score(
+            CellInput(44.0, 200), season(12.0, kind = WeatherKind.CLIMATOLOGY), seasonEnd,
+            normalPrecipMm = 200.0, precipFrom = seasonStart,
+        )
+        for (f in score.factors) {
+            val text = "${f.name} ${f.effect} ${f.detail}".lowercase()
+            for (word in jargon) {
+                assertTrue(word !in text, "\"$word\" appears in: ${f.name} — ${f.detail}")
+            }
+        }
     }
 
     // --- how long peak lasts ---------------------------------------------
