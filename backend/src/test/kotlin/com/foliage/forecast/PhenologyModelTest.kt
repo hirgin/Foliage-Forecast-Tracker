@@ -342,4 +342,55 @@ class PhenologyModelTest {
         assertEquals(0.0, f.value)
         assertEquals("neutral", f.effect)
     }
+
+    // --- climatological chilling, corrected to a cell's elevation ---------
+
+    @Test
+    fun `a small elevation difference cannot erase a mild climate's chilling`() {
+        // The bug this guards. Coastal cells sitting a few tens of metres below
+        // their parent's mean elevation had a month of chilling subtracted
+        // away, leaving neighbouring cells in one res 5 parent -- identical
+        // weather -- at 30 and 5 accumulated chill days.
+        val base = 0.2                      // a mild autumn barely reaching the threshold
+        val warmerBy = 0.3                  // roughly 45 m below the parent
+        val adjusted = PhenologyModel.adjustClimatologicalChill(base, warmerBy)
+        assertTrue(adjusted > 0.0, "chilling was wiped out entirely: $adjusted")
+        assertTrue(adjusted > base * 0.8, "correction far too strong for a mild climate: $adjusted")
+    }
+
+    @Test
+    fun `corrects a reliably cold cell close to linearly`() {
+        // Where the threshold binds nightly the old behaviour was right, and
+        // must be preserved: a colder cell chills by about the full difference.
+        val base = 6.0                      // deep autumn, below the threshold every night
+        val colderBy = -2.0                 // a ridge, 300 m up
+        val adjusted = PhenologyModel.adjustClimatologicalChill(base, colderBy)
+        assertEquals(8.0, adjusted, 0.01)
+    }
+
+    @Test
+    fun `is monotonic in elevation`() {
+        // Higher is colder is more chilling, at any base. A ridge must never
+        // chill less than the valley below it.
+        val base = 2.0
+        val ridge = PhenologyModel.adjustClimatologicalChill(base, -1.5)
+        val level = PhenologyModel.adjustClimatologicalChill(base, 0.0)
+        val valley = PhenologyModel.adjustClimatologicalChill(base, 1.5)
+        assertTrue(ridge > level, "$ridge should exceed $level")
+        assertTrue(level > valley, "$level should exceed $valley")
+        assertEquals(base, level, 1e-9)
+    }
+
+    @Test
+    fun `never returns negative chilling`() {
+        assertEquals(0.0, PhenologyModel.adjustClimatologicalChill(0.0, 5.0))
+        assertTrue(PhenologyModel.adjustClimatologicalChill(4.0, 50.0) >= 0.0)
+    }
+
+    @Test
+    fun `leaves a cell at its parent's elevation untouched`() {
+        for (base in listOf(0.0, 0.3, 2.0, 9.0)) {
+            assertEquals(base, PhenologyModel.adjustClimatologicalChill(base, 0.0), 1e-9)
+        }
+    }
 }

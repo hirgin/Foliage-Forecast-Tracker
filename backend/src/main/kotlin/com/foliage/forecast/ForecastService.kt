@@ -284,8 +284,9 @@ class ForecastService(
         val tmin = LapseRate.adjust(tminC, cell.elevationM, referenceElevationM)
         val chill = if (kind == com.foliage.domain.WeatherKind.CLIMATOLOGY) {
             chillNormals?.get(MonthDay.from(day))?.let { base ->
-                val cooling = (tmin ?: 0.0) - (tminC ?: 0.0)
-                (base - cooling).coerceAtLeast(0.0)
+                // Scaled by how often the threshold actually binds rather than
+                // shifted outright; see PhenologyModel.adjustClimatologicalChill.
+                PhenologyModel.adjustClimatologicalChill(base, (tmin ?: 0.0) - (tminC ?: 0.0))
             }
         } else {
             null

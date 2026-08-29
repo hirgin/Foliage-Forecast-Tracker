@@ -55,6 +55,44 @@ object PhenologyModel {
     /** Day length below which temperate broadleaf senescence is taken to begin. */
     const val PHOTOPERIOD_THRESHOLD_H = 13.0
 
+    /**
+     * Accumulated chilling above which the threshold is taken to bind on
+     * essentially every night, in degree-nights per day.
+     *
+     * Only used to correct climatological chilling to a cell's own elevation.
+     * See [adjustClimatologicalChill].
+     */
+    const val CHILL_ADJUST_SATURATION = 3.0
+
+    /**
+     * Climatological chilling corrected to a cell's own elevation.
+     *
+     * [base] is a five-year mean of `max(0, threshold - tmin)`, and [coolingC]
+     * is how much colder this cell is than the parent reading it inherits
+     * (negative when the cell is colder, matching a lapse-rate adjustment).
+     *
+     * **Shifting the mean by the full temperature difference is wrong.** The
+     * derivative of `E[max(0, T - tmin)]` with respect to a temperature shift
+     * is `P(tmin < T)`, not 1. Where the threshold rarely binds -- which is
+     * most of a mild coastal autumn -- that probability is near zero and the
+     * correction should be near zero too.
+     *
+     * Subtracting the whole difference instead let a few tens of metres of
+     * elevation erase a month of chilling. Sampled across coastal southern New
+     * England the result was bimodal, either 0-5 or 27-33 accumulated chill
+     * days with nothing in between, and two cells sharing one res 5 parent --
+     * so identical weather -- came out at 30 and 5.
+     *
+     * The binding probability is approximated by how much chilling there
+     * already is, saturating once there is enough to imply the threshold is
+     * crossed nightly. That is first-order correct at both ends: no correction
+     * where nothing chills, a full linear one where everything does.
+     */
+    fun adjustClimatologicalChill(base: Double, coolingC: Double): Double {
+        val binding = (base / CHILL_ADJUST_SATURATION).coerceIn(0.0, 1.0)
+        return (base - coolingC * binding).coerceAtLeast(0.0)
+    }
+
     /** Nights below this accumulate chilling and accelerate colour. */
     const val CHILL_THRESHOLD_C = 7.0
 
