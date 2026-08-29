@@ -15,6 +15,30 @@ function toIso(ms) {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 }
 
+/**
+ * The next frame of playback, or null once the season has run out.
+ *
+ * Pure so it can be tested without rendering; see dates.test.js.
+ */
+export function nextFrame(index, total) {
+  return index >= total ? null : index + 1;
+}
+
+/**
+ * Where pressing play should start from.
+ *
+ * Rewinds when the season has already played through. Without this, play at
+ * the last day advances to `total + 1`, which is immediately out of range, so
+ * playback stopped on its first tick and the button looked broken -- the
+ * season could only ever be watched once per page load.
+ *
+ * A date before the season starts is treated the same way, since it is equally
+ * outside the range the slider can step through.
+ */
+export function playFrom(index, total) {
+  return index >= total || index < 0 ? 0 : index;
+}
+
 export function formatDay(iso) {
   const d = new Date(parseDay(iso));
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
@@ -44,8 +68,8 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
     if (!playing) return undefined;
     timer.current = setInterval(() => {
       onChange((current) => {
-        const next = Math.round((parseDay(current) - start) / DAY_MS) + 1;
-        if (next > total) {
+        const next = nextFrame(Math.round((parseDay(current) - start) / DAY_MS), total);
+        if (next === null) {
           setPlaying(false);
           return current;
         }
@@ -54,6 +78,20 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
     }, 140);
     return () => clearInterval(timer.current);
   }, [playing, start, total, onChange]);
+
+  const finished = index >= total;
+
+  const toggle = () => {
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
+    // Rewind before starting, so a second press after the season has run
+    // through replays it instead of sitting on the last day.
+    const from = playFrom(index, total);
+    if (from !== index) onChange(toIso(start + from * DAY_MS));
+    setPlaying(true);
+  };
 
   const monthTicks = useMemo(() => {
     const ticks = [];
@@ -70,10 +108,12 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
     <div className="slider">
       <button
         className="slider__play"
-        onClick={() => setPlaying((p) => !p)}
-        aria-label={playing ? 'Pause' : 'Play through the season'}
+        onClick={toggle}
+        aria-label={
+          playing ? 'Pause' : finished ? 'Replay the season' : 'Play through the season'
+        }
       >
-        {playing ? '❚❚' : '▶'}
+        {playing ? '❚❚' : finished ? '↻' : '▶'}
       </button>
 
       <div className="slider__track">

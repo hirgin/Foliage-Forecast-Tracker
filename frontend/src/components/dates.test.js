@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDay } from './TimeSlider';
+import { formatDay, nextFrame, playFrom } from './TimeSlider';
 
 describe('formatDay', () => {
   it('formats a date as day and short month', () => {
@@ -36,6 +36,63 @@ describe('formatDay', () => {
     months.forEach((name, i) => {
       const mm = String(i + 1).padStart(2, '0');
       expect(formatDay(`2026-${mm}-15`)).toBe(`15 ${name}`);
+    });
+  });
+});
+
+describe('playback', () => {
+  // A 76-day season is indexes 0..75, so `total` is 75.
+  const TOTAL = 75;
+
+  describe('nextFrame', () => {
+    it('advances a day at a time', () => {
+      expect(nextFrame(0, TOTAL)).toBe(1);
+      expect(nextFrame(40, TOTAL)).toBe(41);
+    });
+
+    it('advances onto the final day', () => {
+      // The last day must be shown, not skipped: peak colour is the point.
+      expect(nextFrame(TOTAL - 1, TOTAL)).toBe(TOTAL);
+    });
+
+    it('reports the end rather than running past it', () => {
+      expect(nextFrame(TOTAL, TOTAL)).toBeNull();
+    });
+  });
+
+  describe('playFrom', () => {
+    it('rewinds once the season has played through', () => {
+      // The bug this guards: pressing play on the last day advanced to
+      // total + 1, which is out of range, so playback stopped on its first
+      // tick. The season could only be watched once per page load and the
+      // button looked broken.
+      expect(playFrom(TOTAL, TOTAL)).toBe(0);
+    });
+
+    it('carries on from where playback was paused', () => {
+      expect(playFrom(30, TOTAL)).toBe(30);
+      expect(playFrom(0, TOTAL)).toBe(0);
+    });
+
+    it('rewinds from a date before the season starts', () => {
+      // Equally outside the range the slider can step through.
+      expect(playFrom(-5, TOTAL)).toBe(0);
+    });
+
+    it('rewinds from beyond the end too', () => {
+      expect(playFrom(TOTAL + 3, TOTAL)).toBe(0);
+    });
+
+    it('replays the whole season, not just its last day', () => {
+      // End to end: from a finished season, stepping from playFrom must reach
+      // the end again rather than stopping immediately.
+      let i = playFrom(TOTAL, TOTAL);
+      let steps = 0;
+      while (i !== null) {
+        i = nextFrame(i, TOTAL);
+        steps += 1;
+      }
+      expect(steps).toBe(TOTAL + 1);
     });
   });
 });

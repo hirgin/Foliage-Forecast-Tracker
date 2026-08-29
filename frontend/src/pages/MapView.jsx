@@ -109,22 +109,26 @@ export default function MapView({ nav }) {
           </div>
         )}
 
-        {/* Everything below folds away on a phone. The date and how much is
-            near peak are the answer; the legend and the caveats are reference. */}
-        <div className="panel__more">
+        {/* The legend stays visible at every size. Without it the colours on
+            the map mean nothing, and the counts are how you see where the
+            season actually is. On a phone it lays out in two columns. */}
         {Boolean(cells.length) && (
           <section className="legend">
             <h2>Stage</h2>
-            {STAGES.map((s) => (
-              <div className="legend__row" key={s.key}>
-                <span className="swatch" style={{ background: `rgb(${s.rgb.join(',')})` }} />
-                <span className="legend__label">{s.label}</span>
-                <span className="legend__count">{(counts[s.key] ?? 0).toLocaleString()}</span>
-              </div>
-            ))}
+            <div className="legend__rows">
+              {STAGES.map((s) => (
+                <div className="legend__row" key={s.key}>
+                  <span className="swatch" style={{ background: `rgb(${s.rgb.join(',')})` }} />
+                  <span className="legend__label">{s.label}</span>
+                  <span className="legend__count">{(counts[s.key] ?? 0).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
           </section>
         )}
 
+        {/* Reference rather than answer: folded away on a phone. */}
+        <div className="panel__more">
         {beyondHorizon && (
           <p className="note note--warn">
             Beyond the 16-day weather forecast. This date is estimated from a

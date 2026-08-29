@@ -327,9 +327,26 @@ footer a { color: var(--accent); }
     cursor: pointer;
   }
 
-  /* Folded away until asked for. Both are reference material, not the answer. */
+  /* Folded away until asked for. Both are reference material, not the answer.
+     The legend deliberately is not among them -- hiding it leaves the map a
+     field of unexplained colour. */
   .panel:not(.panel--open) .nav,
   .panel:not(.panel--open) .panel__more { display: none; }
+
+  /* Two columns, so six stages and their counts cost three rows instead of
+     six. Counts sit right against their label rather than pushed to a far
+     edge, which at this width would strand them across a gap. */
+  .legend { margin-top: 10px; }
+  .legend h2 { margin-bottom: 6px; }
+  .legend__rows {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 12px;
+    row-gap: 1px;
+  }
+  .legend__row { font-size: 11.5px; gap: 6px; padding: 1.5px 0; }
+  .legend__label { flex: none; }
+  .legend__count { margin-left: auto; }
 
   .panel h1 { font-size: 15px; }
   .panel .sub { font-size: 11px; }
