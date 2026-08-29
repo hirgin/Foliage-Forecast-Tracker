@@ -86,6 +86,35 @@ class ForecastController(
      * Recomputed rather than read: storing per-factor contributions would
      * nearly triple the forecast table (ADR-0004), and this serves one cell.
      */
+    /**
+     * The daily inputs the model scores for one cell.
+     *
+     * A diagnostic rather than a product endpoint. Questions about the model
+     * turn out to be questions about its inputs, and reading the scoring code
+     * is no substitute for seeing the temperatures a cell actually gets. This
+     * is what the cooling-degree-day work in ADR-0008 is measured against.
+     */
+    @GetMapping("/cells/{h3}/weather")
+    fun weather(@PathVariable h3: String): ResponseEntity<List<DayInputDto>> {
+        val index = grid.fromAddress(h3) ?: return ResponseEntity.badRequest().build()
+        val days = forecastService.inputsFor(index) ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(
+            days.map {
+                DayInputDto(
+                    day = it.day.toString(),
+                    kind = it.kind.name,
+                    tmaxC = it.tmaxC,
+                    tminC = it.tminC,
+                    // Mean of the two, which is what a cooling-degree-day model
+                    // accumulates against. Null unless both are present.
+                    tmeanC = if (it.tmaxC != null && it.tminC != null) (it.tmaxC!! + it.tminC!!) / 2 else null,
+                    precipMm = it.precipMm,
+                    chillUnits = it.chillUnits,
+                )
+            },
+        )
+    }
+
     @GetMapping("/cells/{h3}/explain")
     fun explain(
         @PathVariable h3: String,
@@ -146,3 +175,13 @@ data class ExplainResponse(
 )
 
 data class FactorDto(val name: String, val value: Double, val effect: String, val detail: String)
+
+data class DayInputDto(
+    val day: String,
+    val kind: String,
+    val tmaxC: Double?,
+    val tminC: Double?,
+    val tmeanC: Double?,
+    val precipMm: Double?,
+    val chillUnits: Double?,
+)

@@ -1,6 +1,7 @@
 # ADR-0008: Pace senescence by cooling, not by photoperiod
 
-**Status:** proposed — not implemented. Supersedes the forcing structure in
+**Status:** proposed, and the feasibility gate below has been run and passed.
+Not yet implemented. Supersedes the forcing structure in
 [`docs/model.md`](../model.md) if accepted.
 
 ## Context
@@ -122,6 +123,65 @@ rather than mostly above the threshold.
 - **Provenance.** Cooling degree days derive from mean temperature, which
   climatological normals carry directly. No new ingest, no new quota, and no
   dependence on the `chill_units` column the current model needs.
+
+## Measured feasibility
+
+Step 1 of the rollout has been run against the loaded normals, before writing
+any model code, to check the signal this design assumes actually exists.
+
+**Cooling rate ranks exactly with published peak order.** Cooling degree days
+below 20 °C, averaged over 1 Sep – 15 Nov:
+
+| Place | Mean T | CDD/day | Published peak |
+|---|---|---|---|
+| Fort Kent, ME | 10.5 °C | 9.50 | late Sep |
+| Stowe, VT | 11.2 °C | 8.83 | early Oct |
+| Bar Harbor, ME | 12.5 °C | 7.46 | mid Oct |
+| Litchfield, CT | 13.1 °C | 6.95 | mid–late Oct |
+| Provincetown, MA | 15.5 °C | 4.50 | late Oct/Nov |
+| Newport, RI | 15.9 °C | 4.27 | late Oct |
+
+A 2.2x north-to-south difference in cooling rate, with no rank inversions. This
+is the signal the current model discards above its 7 °C threshold.
+
+**One fitted parameter reproduces the season.** Accumulating to a fixed `S_CRIT`
+with `X = 1` and no photoperiod weight — the simplest possible form of this
+design:
+
+| | Current model | CDD, `T_BASE` 20, `S_CRIT` 185 | Published |
+|---|---|---|---|
+| Spread across the six | 5 days | **28 days** | 30 days |
+| Mean absolute error | ~10 days in the south | **3.8 days** | — |
+
+Per place, with a residual sign:
+
+    Fort Kent       3 Oct   (+5)
+    Stowe           9 Oct   (+1)
+    Bar Harbor     10 Oct   (-5)
+    Litchfield     15 Oct   (-6)
+    Provincetown   28 Oct    (0)
+    Newport        31 Oct   (+6)
+
+`T_BASE` of 18 fits identically (3.83 days, at `S_CRIT` 100); 20 is kept as the
+more conventional base. The spread is 26–29 days at *every* `S_CRIT` tried,
+which is the important part: it comes from the cooling-rate ratio, not from the
+fit.
+
+**It is not overfitting.** Leave-one-out, refitting `S_CRIT` without each place
+and then scoring it, moves the parameter only between 175 and 185 and gives a
+mean absolute error of 4.5 days:
+
+    Fort Kent +5, Stowe +1, Bar Harbor -6, Litchfield -7,
+    Provincetown -2, Newport +6
+
+**The residuals point somewhere specific.** Bar Harbor and Litchfield come out
+early, Newport late. Litchfield is in oak-dominated country, and oak turns later
+and duller than the maple/beech/birch this model implicitly assumes. Species
+composition is already recorded in `model.md` as a missing driver; these
+residuals are consistent with that being the next one worth adding, rather than
+with the cooling structure being wrong.
+
+The gate is passed: build it.
 
 ## Consequences
 

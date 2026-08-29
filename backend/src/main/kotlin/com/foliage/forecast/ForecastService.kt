@@ -138,23 +138,35 @@ class ForecastService(
         }
     }
 
-    /** Everything the explain endpoint needs for one cell on one day. */
-    fun explain(h3: Long, day: LocalDate, year: Int = LocalDate.now().year): FoliageScore? {
+    /**
+     * The exact daily series the model scores for one cell.
+     *
+     * Exposed because the inputs are what questions about the model turn out
+     * to be about. Diagnosing why peak barely moves between Maine and Rhode
+     * Island meant knowing what temperatures each cell actually sees, and no
+     * amount of reading the scoring code substitutes for that. See ADR-0008.
+     */
+    fun inputsFor(h3: Long, year: Int = LocalDate.now().year): List<DayInput>? {
         val cell = cells.findByH3(h3) ?: return null
         val parentSeries = weather.seriesByCell(listOf(cell.parentRes5))[cell.parentRes5] ?: return null
 
         val siblings = cells.findByParent(cell.parentRes5)
         val reference = siblings.mapNotNull { it.elevationM }.takeIf { it.isNotEmpty() }?.average()
-        val chill = normals.chillUnitsByCell()[cell.parentRes5]
-        // Same merge as computeState, or the explanation would describe
-        // different inputs from the ones that produced the score on the map.
-        val inputs = mergeSources(
+        // Same merge as computeState, or a diagnosis would describe different
+        // inputs from the ones that produced the score on the map.
+        return mergeSources(
             coarse = parentSeries,
             fine = weather.seriesByCell(listOf(cell.h3))[cell.h3].orEmpty(),
             cell = cell,
             reference = reference,
-            chillNormals = chill,
+            chillNormals = normals.chillUnitsByCell()[cell.parentRes5],
         )
+    }
+
+    /** Everything the explain endpoint needs for one cell on one day. */
+    fun explain(h3: Long, day: LocalDate, year: Int = LocalDate.now().year): FoliageScore? {
+        val cell = cells.findByH3(h3) ?: return null
+        val inputs = inputsFor(h3, year) ?: return null
         val cumulative = cumulativePrecip(normals.precipNormalsByCell()[cell.parentRes5], season.days(year))
 
         return PhenologyModel.score(
