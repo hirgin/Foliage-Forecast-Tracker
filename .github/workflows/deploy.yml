@@ -25,10 +25,20 @@ permissions:
   pages: write
   id-token: write
 
-# Never let two deploys race; let a newer commit supersede an in-flight run.
+# Runs queue rather than cancel, because this workflow does two jobs at once
+# and they want opposite things. The build step is also the *loader*: it spends
+# a slice of the weather API's daily allowance backfilling states, and that
+# allowance does not come back. Cancelling an in-flight run to let a newer
+# commit through threw away whatever loading it had done and spent the quota
+# for nothing -- which happened three times in one afternoon of ordinary
+# pushing, each time silently.
+#
+# Superseding is still right for the *deployment*, so that moved to the deploy
+# job below. Builds now queue and run to completion; only the last one to
+# finish publishes.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-build
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -160,6 +170,12 @@ jobs:
 
   deploy:
     name: Deploy to Pages
+    # Superseding belongs here and not on the build: a queued deployment that
+    # has been overtaken has nothing worth finishing, and Pages takes one at a
+    # time regardless.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: true
     needs: build
     runs-on: ubuntu-latest
     environment:
