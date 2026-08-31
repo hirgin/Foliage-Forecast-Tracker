@@ -6,8 +6,9 @@ How this site decides what colour a hexagon should be, written for a human.
 > records when a given place actually peaked, so nothing here has been
 > validated against reality. What *has* been checked is that the model is
 > internally consistent, and that its timing is **calibrated** so modelled
-> peaks fall inside published peak windows — mean absolute error 6.0 days over
-> ten reference places from Maine to Virginia to Minnesota. Agreement with
+> peaks fall inside published peak windows — mean absolute error 7.1 days over
+> ten reference places from Maine to Virginia to Minnesota, with no systematic
+> bias left (mean signed error −1.5 days). Agreement with
 > published norms is evidence of plausibility, not of accuracy. Read the
 > [limitations](#what-this-model-cannot-do) before trusting a number.
 
@@ -223,12 +224,21 @@ What it looked like from outside was a modelling failure: the whole country ran
 
 Refitted against ten reference places spanning the country:
 
+Measured end to end, by rescoring the country and reading peak dates back out
+of the API — not from the offline fit, which came out a day optimistic because
+it left out the lapse-rate downscale and the drought term that real scoring
+applies:
+
 | | Before (185 / shape 1.5) | After (100 / shape 1.0) |
 |---|---|---|
-| Mean absolute error | 12.4 days | **6.0 days** |
-| Places within 5 days | 1 of 10 | **6 of 10** |
-| Peak lasts | 7.1 days | 7.1 days |
-| Season length | 25 days | 28 days |
+| Mean absolute error | 9.9 days | **7.1 days** |
+| Mean *signed* error | **+8.7 days — late everywhere** | **−1.5 days** |
+| Peak lasts | 7.1 days | 7.0 days |
+
+The signed figure is the one that matters. The refit did not merely reduce
+error, it removed a systematic bias: every reference place used to run late,
+and now they scatter either side of their published window. What is left is
+scatter, and it has a name — species.
 
 **Shape had to move with it.** The peak band is a fixed *fraction* of `S_PEAK`
 wide — 0.35 of it at shape 1.5 — so cutting the constant also halved how long
@@ -344,10 +354,10 @@ progression showed the difference plainly.
 
   | Place | Error | Forest |
   |---|---|---|
-  | Ely, MN | +14 days late | aspen–birch |
-  | Duluth, MN | +12 late | aspen–birch |
-  | Marquette, MI | +8 late | aspen–birch |
-  | Litchfield, CT | −15 early | oak–hickory |
+  | Ely, MN | +12 days late | aspen–birch |
+  | Duluth, MN | +9 late | aspen–birch |
+  | Marquette, MI | +7 late | aspen–birch |
+  | Litchfield, CT | −19 early | oak–hickory |
 
   Aspen and birch turn well before the maple–beech this model implicitly
   assumes, and oak well after. Weather cannot explain a split that tracks

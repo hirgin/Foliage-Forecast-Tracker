@@ -350,11 +350,18 @@ Mean absolute error had drifted from the 3.8 days recorded above to **12.4**.
 
 **Refitting fixes most of it.** `S_PEAK` 185 → **100**:
 
+Measured by rescoring the country and reading peak dates back out of the API.
+The offline fit predicted 6.0 days; end to end it is 7.1, because that fit
+omitted the lapse-rate downscale and drought terms real scoring applies.
+
 | | Before | After |
 |---|---|---|
-| Mean absolute error | 12.4 days | **6.0 days** |
-| Places within 5 days | 1 of 10 | **6 of 10** |
-| Places exact | 0 | 4 |
+| Mean absolute error | 9.9 days | **7.1 days** |
+| Mean *signed* error | **+8.7 days — late everywhere** | **−1.5 days** |
+| Peak lasts | 7.1 days | 7.0 days |
+
+The signed figure is the point: the refit removed a *bias*, not just error.
+Every reference place ran late before; now they fall either side.
 
 **Shape had to move with it**, and this is the part that is easy to get wrong.
 The peak band is a fixed *fraction* of `S_PEAK` wide — 0.35 of it at shape 1.5
@@ -397,10 +404,10 @@ Two changes, both in `CoolingDegreeDayModelTest`:
 The residuals no longer form a geographic pattern; they form a *species* one,
 in both directions at once — aspen–birch late, oak early:
 
-    Ely, MN         +14    aspen-birch
-    Duluth, MN      +12    aspen-birch
-    Marquette, MI    +8    aspen-birch
-    Litchfield, CT  -15    oak-hickory
+    Ely, MN         +12    aspen-birch
+    Duluth, MN       +9    aspen-birch
+    Marquette, MI    +7    aspen-birch
+    Litchfield, CT  -19    oak-hickory
 
 A Great Lakes warm bias was checked first and ruled out: lakeside Duluth and
 Marquette run 1.6 °C above inland Ely, which is genuinely how those places
