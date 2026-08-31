@@ -18,6 +18,25 @@ class IngestRunRecorder(private val jdbc: JdbcTemplate) {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * When each state's forecast weather was last refreshed successfully.
+     *
+     * Keyed by the FIPS in the job name. Used to refresh the stalest states
+     * first, so a capped nightly refresh still comes round to everything
+     * instead of always redoing the same few.
+     */
+    fun lastForecastRefreshByState(): Map<String, java.time.Instant> = jdbc.query(
+        """
+        SELECT SUBSTRING(job, LENGTH('weather-forecast:') + 1) AS fips,
+               MAX(finished_at) AS last_run
+        FROM ingest_run
+        WHERE job LIKE 'weather-forecast:%' AND status = 'succeeded'
+        GROUP BY fips
+        """.trimIndent(),
+    ) { rs, _ ->
+        rs.getString("fips") to (rs.getTimestamp("last_run")?.toInstant() ?: java.time.Instant.EPOCH)
+    }.toMap()
+
     fun start(source: String, job: String): Long {
         val keys = GeneratedKeyHolder()
         jdbc.update({ conn ->

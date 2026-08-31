@@ -40,6 +40,7 @@ class WeatherBackfill(
     private val normals: NormalRepository,
     private val weatherIngest: WeatherIngest,
     private val forecastService: ForecastService,
+    private val audit: com.foliage.ingest.audit.IngestRunRecorder,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -60,17 +61,40 @@ class WeatherBackfill(
      * Only complete states are touched. A half-loaded one is the backfill's
      * job, and refreshing its observations would not make it scoreable.
      */
-    fun refreshLoaded(budget: Duration = Duration.ofMinutes(60)): RefreshResult {
+    fun refreshLoaded(
+        maxStates: Int = 8,
+        budget: Duration = Duration.ofMinutes(45),
+    ): RefreshResult {
         val deadline = Instant.now().plus(budget)
         val covered = runCatching { normals.cellsWithNormals() }.getOrDefault(emptySet())
+        val lastRefreshed = runCatching { audit.lastForecastRefreshByState() }
+            .getOrDefault(emptyMap())
         val refreshed = mutableListOf<String>()
         var quotaSpent = false
 
-        for (state in ConusStates.ALL) {
+        // Stalest first, and capped.
+        //
+        // Refreshing every loaded state every night looks right and starves
+        // the backfill. A forecast refresh costs roughly a tenth of what
+        // climatology does per res 5 parent, but there are 19,904 parents to
+        // cover: once twenty-odd states are loaded, refreshing all of them
+        // would consume the whole daily allowance and the load would stall
+        // there permanently, with no sign of why.
+        //
+        // A cap plus staleness ordering keeps the cost flat as the map grows.
+        // Every state still comes round; it just takes a few nights rather
+        // than one, which is well inside how fast a foliage forecast moves.
+        val candidates = ConusStates.ALL
+            .mapNotNull { state ->
+                val fips = runCatching { cells.stateFipsFor(state) }.getOrNull() ?: return@mapNotNull null
+                val parents = cells.distinctRes5Parents(fips)
+                if (parents.isEmpty() || !covered.containsAll(parents)) null else state to fips
+            }
+            .sortedBy { (_, fips) -> lastRefreshed[fips] ?: Instant.EPOCH }
+
+        for ((state, fips) in candidates) {
+            if (refreshed.size >= maxStates) break
             if (Instant.now().isAfter(deadline)) break
-            val fips = runCatching { cells.stateFipsFor(state) }.getOrNull() ?: continue
-            val parents = cells.distinctRes5Parents(fips)
-            if (parents.isEmpty() || !covered.containsAll(parents)) continue
 
             try {
                 weatherIngest.refreshForecast(fips)
@@ -86,8 +110,11 @@ class WeatherBackfill(
                 log.error("refreshing {} failed: {}", state, e.message)
             }
         }
-        log.info("refreshed {} loaded states, quotaSpent={}", refreshed.size, quotaSpent)
-        return RefreshResult(refreshed, quotaSpent)
+        log.info(
+            "refreshed {} of {} loaded states, quotaSpent={}",
+            refreshed.size, candidates.size, quotaSpent,
+        )
+        return RefreshResult(refreshed, candidates.size, quotaSpent)
     }
 
     /**
@@ -178,5 +205,7 @@ data class BackfillResult(
 
 data class RefreshResult(
     val statesRefreshed: List<String>,
+    /** How many were eligible, so a capped run can be told from a complete one. */
+    val statesLoaded: Int,
     val stoppedOnQuota: Boolean,
 )

@@ -176,6 +176,19 @@ export default function MapView({ nav }) {
             when foliage actually peaks, so this has not been validated against
             reality. <a href="#/how-it-works">How it works</a>.
           </p>
+          {/* How far the load has got. Most of the map is grey while the
+              nightly backfill works through the country against a metered
+              weather API, and a map that is merely unfinished should say so
+              rather than look broken. */}
+          {meta.data?.statesForecast != null && meta.data.statesForecast < meta.data.stateCount && (
+            <p className="build">
+              Forecast so far for {meta.data.statesForecast} of {meta.data.stateCount} states
+              {meta.data.cellsForecast != null && meta.data.cellCount
+                ? ` · ${Math.round((100 * meta.data.cellsForecast) / meta.data.cellCount)}% of the map`
+                : ''}
+              . The rest is still loading, a few states a night.
+            </p>
+          )}
           {meta.data && (
             <p className="build">
               model {meta.data.modelVersion}

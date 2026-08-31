@@ -302,6 +302,19 @@ class StaticExporter(
                 "coverage" to coverageLabel(grid6.mapNotNull { it.stateName }.distinct().sorted()),
                 "stateCount" to grid6.mapNotNull { it.stateName }.distinct().size,
                 "cellCount" to grid6.size,
+                // How far the nightly backfill has got. The load takes about a
+                // month of daily runs against a metered API, and without this
+                // the only way to tell whether a night's run did anything was
+                // to read CI logs. The site should be able to say.
+                // Cells that have a forecast at all, not cells that reach
+                // peak. A cell scored somewhere too warm to turn never peaks,
+                // and counting only peaks understated how much of the map is
+                // actually done.
+                "cellsForecast" to timelines.keys.count { indexOf.containsKey(it) },
+                "statesForecast" to grid6
+                    .filter { timelines.containsKey(it.h3) }
+                    .mapNotNull { it.stateName }
+                    .distinct().size,
                 "placeCount" to resolved.size,
                 "shardCount" to shards.size,
                 "seasonStart" to season.start(year).toString(),

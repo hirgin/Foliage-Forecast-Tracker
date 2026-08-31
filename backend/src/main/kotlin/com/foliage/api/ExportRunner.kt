@@ -68,6 +68,8 @@ class ExportRunner(
         val backfillStates = env.getProperty("foliage.export.backfill-states", "6").toInt()
         val backfillMinutes = env.getProperty("foliage.export.backfill-minutes", "90").toLong()
         val refreshMinutes = env.getProperty("foliage.export.refresh-minutes", "45").toLong()
+        // Capped so the refresh cannot crowd out the backfill as the map grows.
+        val refreshStates = env.getProperty("foliage.export.refresh-states", "8").toInt()
 
         log.info(
             "exporting {}, refresh scope {}",
@@ -120,10 +122,10 @@ class ExportRunner(
                     )
                     listOf(refreshState)
                 } else {
-                    val r = weatherBackfill.refreshLoaded(Duration.ofMinutes(refreshMinutes))
+                    val r = weatherBackfill.refreshLoaded(refreshStates, Duration.ofMinutes(refreshMinutes))
                     log.info(
-                        "refreshed {} loaded states, stoppedOnQuota={}",
-                        r.statesRefreshed.size, r.stoppedOnQuota,
+                        "refreshed {} of {} loaded states, stoppedOnQuota={}",
+                        r.statesRefreshed.size, r.statesLoaded, r.stoppedOnQuota,
                     )
                     r.statesRefreshed
                 }
