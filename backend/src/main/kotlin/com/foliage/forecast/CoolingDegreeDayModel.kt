@@ -21,10 +21,9 @@ import java.time.LocalDate
  *
  * **Calibrated, not assumed.** [S_PEAK] is fitted so modelled peaks land in
  * published windows, which is a change of stance from the rest of the model
- * and is recorded as such in docs/model.md. Measured against six reference
- * places it gives a 28-day spread against a published 30, and a mean absolute
- * error of 3.8 days; leave-one-out moves the parameter only between 175 and
- * 185 and costs 0.7 days, so it is not fitting noise.
+ * and is recorded as such in docs/model.md. Measured against ten reference
+ * places from Maine to Virginia to Minnesota it gives a mean absolute error
+ * of 6.0 days, four of them exact.
  *
  * What it still cannot do is unchanged and stated there too: 84% of a season
  * is climatology, so this describes a typical year rather than this one, and
@@ -60,8 +59,26 @@ object CoolingDegreeDayModel {
      * The one fitted parameter. Everything else here is chosen from physical
      * reasoning; this sets absolute timing, while the spread between places
      * comes from their cooling rates and is 26-29 days at any value tried.
+     *
+     * **Refitted from 185 after the climatology changed.** 185 was fitted
+     * against normals built from five years of archive sampled at res 5. The
+     * weather pipeline now uses three years sampled at res 4 -- a deliberate
+     * trade for load speed -- which shifts every cooling total, and a
+     * parameter calibrated against the old totals no longer means what it
+     * did. Left alone it put the whole country 6 to 9 days late, which is the
+     * kind of error that looks like a modelling failure and is really a stale
+     * constant. Refitting against ten reference places spanning Maine to
+     * Virginia to Minnesota takes mean absolute error from 12.4 days to 6.0.
+     *
+     * The residuals that remain are not noise and are not fixable here: the
+     * aspen-birch north (Duluth, Ely, Marquette) still runs 8 to 14 days late
+     * and oak-heavy Litchfield 15 days early. Both are species composition,
+     * which this model does not represent at all. See docs/model.md.
+     *
+     * The lesson worth keeping: a fitted constant is coupled to the data it
+     * was fitted against. Changing the ingest changed the model.
      */
-    const val S_PEAK = 185.0
+    const val S_PEAK = 100.0
 
     /** Where peak sits on the 0-100 progression scale, at the middle of the PEAK band. */
     const val PEAK_PROGRESSION = 82.0
@@ -69,20 +86,33 @@ object CoolingDegreeDayModel {
     /**
      * Shape of accumulation into visible colour.
      *
-     * Above 1, so colour comes on slowly at first rather than the moment the
-     * photoperiod gate opens: a forest does not start turning the day the
-     * trigger fires.
+     * At 1 this is a plain exponential approach to fully turned: senescence as
+     * first-order decay of the chlorophyll still left, fastest when there is
+     * most to lose. That is the conventional kinetics and it needs no
+     * justification beyond itself.
      *
-     * This was a plain power curve, which is convex — steepest exactly at
-     * peak — so a stand tore through the peak band in 2.4 to 5.2 days. Real
-     * peak colour holds for something closer to a week. A Weibull shape starts
-     * slowly *and* saturates, so the top of the curve flattens and peak lasts.
+     * **Lowered from 1.5 when [S_PEAK] was refitted, and the two are coupled.**
+     * The peak band is a fixed *fraction* of [S_PEAK] wide -- 0.35 of it at
+     * shape 1.5 -- so cutting the constant from 185 to 100 also halved how
+     * long peak lasts, from 7.1 days to 4.9. That is a real loss: peak holding
+     * for about a week is a property this model was deliberately given, and
+     * timing should not have been bought with it. Shape 1.0 widens the band
+     * back to 0.53 of [S_PEAK] and restores peak to 7.1 days with the season
+     * slightly longer at 27, while mean absolute error stays at 6.0 days
+     * against 5.9 for the nominally best fit. Free, in other words.
+     *
+     * What is given up is the slow start that shape above 1 provided. Nothing
+     * is actually lost: the photoperiod gate already says nothing happens
+     * before the trigger, and after it the *weather* supplies the gradual
+     * onset, because mid-September days sit near [T_BASE_C] and accumulate
+     * almost nothing. Onset is gradual because early autumn is warm, which is
+     * the real reason, rather than because the curve was shaped to look that
+     * way.
      *
      * It does not move peak: [SCALE] is derived so [PEAK_PROGRESSION] lands
-     * exactly at [S_PEAK] whatever the shape, which keeps the calibration and
-     * every measured peak date intact.
+     * exactly at [S_PEAK] whatever the shape.
      */
-    const val SHAPE = 1.5
+    const val SHAPE = 1.0
 
     /**
      * Scale of the accumulation curve, derived rather than fitted so [S_PEAK]
@@ -141,10 +171,9 @@ object CoolingDegreeDayModel {
             ?: 0.0
 
         val effective = cooling * (1 + DROUGHT_ACCELERATION * droughtStress)
-        // Weibull. Slow to start, then saturating, so peak colour holds for
-        // about a week instead of a couple of days. Approaches 100 without
-        // reaching it, which is the honest shape: a stand is never more than
-        // fully turned.
+        // Saturating, so peak colour holds for about a week instead of a
+        // couple of days. Approaches 100 without reaching it, which is the
+        // honest shape: a stand is never more than fully turned.
         val progression = (100.0 * (1 - Math.exp(-Math.pow(effective / SCALE, SHAPE))))
             .coerceIn(0.0, 100.0)
 

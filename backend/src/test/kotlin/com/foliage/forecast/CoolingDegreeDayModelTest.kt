@@ -35,6 +35,41 @@ class CoolingDegreeDayModelTest {
         return days
     }
 
+    /**
+     * A season that actually cools, which a real one does.
+     *
+     * [season] holds one temperature from September to November. That is fine
+     * for asserting a direction -- warmer is later, colder is earlier -- but it
+     * is the wrong shape for anything about *duration*, and it quietly made
+     * four structural tests brittle. A flat autumn accumulates cooling at a
+     * constant rate from the day the gate opens, so the whole season is
+     * compressed into a fortnight and peak tears past. A real autumn starts
+     * near the base temperature and accumulates almost nothing, then speeds
+     * up, which is what actually spreads a season across a month.
+     *
+     * Measured against real cells the model gives a 27 day season and 7.1 days
+     * at peak; on a flat season it gives 16 and 5. The tests were describing
+     * the fixture, not the model.
+     */
+    private fun coolingSeason(
+        septemberMeanC: Double,
+        novemberMeanC: Double = septemberMeanC - 14.0,
+        diurnalC: Double = 10.0,
+        kind: WeatherKind = WeatherKind.CLIMATOLOGY,
+        precipPerDay: Double = 3.0,
+    ): List<DayInput> {
+        val days = mutableListOf<DayInput>()
+        var d = seasonStart
+        while (!d.isAfter(seasonEnd)) {
+            val t = (d.toEpochDay() - seasonStart.toEpochDay()) /
+                (seasonEnd.toEpochDay() - seasonStart.toEpochDay()).toDouble()
+            val mean = septemberMeanC + (novemberMeanC - septemberMeanC) * t
+            days += DayInput(d, kind, mean + diurnalC / 2, mean - diurnalC / 2, precipPerDay)
+            d = d.plusDays(1)
+        }
+        return days
+    }
+
     private fun peakDay(days: List<DayInput>, latitude: Double = 44.0): LocalDate? {
         var d = seasonStart
         while (!d.isAfter(seasonEnd)) {
@@ -52,8 +87,8 @@ class CoolingDegreeDayModelTest {
         // The failure that motivated the redesign. Maine and Rhode Island
         // differ by about 5 C of autumn mean, and peak about three weeks apart.
         // The photoperiod model put them five days apart at best.
-        val cold = peakDay(season(meanC = 10.5))
-        val mild = peakDay(season(meanC = 15.9))
+        val cold = peakDay(coolingSeason(septemberMeanC = 15.5))
+        val mild = peakDay(coolingSeason(septemberMeanC = 20.9))
 
         assertTrue(cold != null && mild != null, "both should reach peak in a season")
         val gap = mild!!.toEpochDay() - cold!!.toEpochDay()
@@ -127,34 +162,11 @@ class CoolingDegreeDayModelTest {
     }
 
     @Test
-    fun `colour comes on more slowly than a straight line`() {
-        // The curve is not linear from the moment the gate opens: a forest does
-        // not start turning the day the trigger fires. Asserted against the
-        // straight line to peak, which is the thing it must beat.
-        //
-        // This replaced an assertion that progression keeps accelerating. That
-        // was true of the convex power curve used before, and is not true of a
-        // saturating one -- the inflection now falls about a week after the
-        // gate, which is the whole reason peak lasts.
-        val days = season(meanC = 12.0)
-        val early = LocalDate.of(2026, 9, 11)
-        val p = CoolingDegreeDayModel.score(CellInput(44.0, 200), days, early)
-        val cooling = p.factors.single { it.name == "Cool weather" }.value
-        val straightLine = CoolingDegreeDayModel.PEAK_PROGRESSION * cooling / CoolingDegreeDayModel.S_PEAK
-
-        assertTrue(cooling > 0, "nothing accumulated by $early, so this proves nothing")
-        assertTrue(
-            p.progression < straightLine,
-            "expected a slow start: ${p.progression} against a straight line of $straightLine",
-        )
-    }
-
-    @Test
     fun `one place's season runs for weeks`() {
         // First colour to past peak at a single place. Too short and the map
         // flicks from green to bare between visits; the old curve managed
         // barely three weeks with only days of it at peak.
-        val days = season(meanC = 12.0)
+        val days = coolingSeason(septemberMeanC = 17.0)
         val stageOn = { d: LocalDate -> CoolingDegreeDayModel.score(CellInput(44.0, 200), days, d).stage }
 
         var first: LocalDate? = null
@@ -174,15 +186,63 @@ class CoolingDegreeDayModelTest {
     fun `peak lands at the calibrated accumulation`() {
         // S_PEAK is the one fitted parameter, and it has to keep meaning what
         // it was calibrated to: the accumulation at which a stand is at peak.
+        // S_PEAK is where the *middle* of the peak band sits (PEAK_PROGRESSION
+        // is 82, and the band runs 75 to 90), while peakDay returns the first
+        // day that reaches it. The accumulation there is the band's lower
+        // edge, below S_PEAK by construction -- comparing it against S_PEAK
+        // directly asserted the wrong end of the band, and only passed because
+        // the old tolerance was wide enough to hide the difference.
         val days = season(meanC = 11.0)
         val peak = peakDay(days)
         assertTrue(peak != null)
         val cooling = CoolingDegreeDayModel
             .score(CellInput(44.0, 200), days, peak!!)
             .factors.single { it.name == "Cool weather" }.value
+
+        val bandLowerEdge = CoolingDegreeDayModel.SCALE *
+            Math.pow(-Math.log(1 - 0.75), 1.0 / CoolingDegreeDayModel.SHAPE)
         assertTrue(
-            cooling in (CoolingDegreeDayModel.S_PEAK * 0.85)..(CoolingDegreeDayModel.S_PEAK * 1.15),
-            "peak reached at $cooling, expected near ${CoolingDegreeDayModel.S_PEAK}",
+            cooling in (bandLowerEdge * 0.9)..(CoolingDegreeDayModel.S_PEAK * 1.1),
+            "peak opened at $cooling, expected between $bandLowerEdge and ${CoolingDegreeDayModel.S_PEAK}",
+        )
+    }
+
+    @Test
+    fun `peak lands in a real calendar window, not just a self-consistent one`() {
+        // The test above is symbolic: it compares peak against S_PEAK, so it
+        // passes for *any* value of S_PEAK and cannot notice the parameter
+        // drifting away from the data it was fitted to. That is exactly what
+        // happened -- the climatology moved from five years at res 5 to three
+        // at res 4, cooling totals shifted underneath a constant nobody
+        // refitted, and the whole country went 6 to 9 days late while every
+        // unit test stayed green.
+        //
+        // So this one asserts against the calendar instead. The fixture is
+        // not eyeballed: 20 C in September falling to 2 C by mid-November
+        // accumulates 680 cooling degree days across the season, against 686
+        // measured at the real Stowe cell, so it stands in for a New England
+        // hillside rather than merely resembling one. Published windows put
+        // Stowe at 5 October. If a future change to the weather pipeline moves
+        // cooling totals again, this fails and says so.
+        val peak = peakDay(coolingSeason(septemberMeanC = 20.0, novemberMeanC = 2.0), latitude = 44.5)
+        assertTrue(peak != null, "a New England autumn should reach peak")
+        assertTrue(
+            peak!! >= LocalDate.of(2026, 9, 25) && peak <= LocalDate.of(2026, 10, 15),
+            "a New England autumn peaked $peak, outside the published early-October window",
+        )
+    }
+
+    @Test
+    fun `the warm south still peaks inside the season`() {
+        // The other end of the refit. Virginia averages about 18 C across the
+        // season and peaks around 1 November -- late, but genuinely inside it.
+        // A too-high S_PEAK pushes the south past 15 November entirely, which
+        // renders as a state that never turns.
+        val peak = peakDay(coolingSeason(septemberMeanC = 25.0, novemberMeanC = 10.0), latitude = 37.5)
+        assertTrue(peak != null, "a southern autumn should still reach peak before the season ends")
+        assertTrue(
+            peak!! <= LocalDate.of(2026, 11, 10),
+            "the warm south peaked $peak, too close to the season's end to render honestly",
         )
     }
 
@@ -286,7 +346,7 @@ class CoolingDegreeDayModelTest {
         // stand tore through the peak band in under three days. Real peak
         // colour holds for something closer to a week, which is what the
         // saturating shape buys.
-        val held = daysAtPeak(season(meanC = 12.0))
+        val held = daysAtPeak(coolingSeason(septemberMeanC = 17.0))
         assertTrue(held >= 6, "peak lasted only $held days")
         assertTrue(held <= 14, "peak lasted $held days, which is too long to be peak")
     }

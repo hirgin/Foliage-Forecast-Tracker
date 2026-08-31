@@ -6,9 +6,9 @@ How this site decides what colour a hexagon should be, written for a human.
 > records when a given place actually peaked, so nothing here has been
 > validated against reality. What *has* been checked is that the model is
 > internally consistent, and that its timing is **calibrated** so modelled
-> peaks fall inside published peak windows — mean absolute error 4.2 days over
-> six reference places. Agreement with published norms is evidence of
-> plausibility, not of accuracy. Read the
+> peaks fall inside published peak windows — mean absolute error 6.0 days over
+> ten reference places from Maine to Virginia to Minnesota. Agreement with
+> published norms is evidence of plausibility, not of accuracy. Read the
 > [limitations](#what-this-model-cannot-do) before trusting a number.
 
 > **Structure changed in `0.2.0-cdd`.** Senescence is now paced by *cooling*
@@ -205,6 +205,57 @@ chilling credit on climatological days.
 The calibration is guarded by a test. Changing a constant without moving the
 test fails the build.
 
+### Recalibrated in `0.2.1`, after the ingest moved underneath it
+
+A fitted constant is coupled to the data it was fitted against, and this is
+what that costs when you forget it.
+
+`S_PEAK` — the cooling total at which a stand is at peak — was fitted at 185
+against normals built from **five years** of archive sampled at **res 5**. The
+weather pipeline later moved to **three years** sampled at **res 4**, a
+deliberate trade that cut a month off the national load. That changes every
+cooling total in the model, so 185 no longer meant what it was calibrated to
+mean. Nothing failed. Every unit test stayed green, because they all compared
+peak against `S_PEAK` symbolically and so passed for *any* value of it.
+
+What it looked like from outside was a modelling failure: the whole country ran
+6 to 9 days late, and the Upper Midwest 15 to 19. It was a stale constant.
+
+Refitted against ten reference places spanning the country:
+
+| | Before (185 / shape 1.5) | After (100 / shape 1.0) |
+|---|---|---|
+| Mean absolute error | 12.4 days | **6.0 days** |
+| Places within 5 days | 1 of 10 | **6 of 10** |
+| Peak lasts | 7.1 days | 7.1 days |
+| Season length | 25 days | 28 days |
+
+**Shape had to move with it.** The peak band is a fixed *fraction* of `S_PEAK`
+wide — 0.35 of it at shape 1.5 — so cutting the constant also halved how long
+peak lasts, to 4.9 days. Timing should not be bought with duration. Shape 1.0
+widens the band to 0.53 of `S_PEAK`, restoring peak to 7.1 days and lengthening
+the season, while mean absolute error stays at 6.0 against 5.9 for the
+nominally best fit. It is also the more conventional model: a plain exponential
+approach to fully turned is senescence as first-order decay of the chlorophyll
+still left.
+
+What is given up is the slow start that a shape above 1 provided. Nothing real
+is lost — the photoperiod gate already says nothing happens before the trigger,
+and after it the *weather* supplies the gradual onset, because mid-September
+days sit near the 20 °C base and accumulate almost nothing. Onset is gradual
+because early autumn is warm, which is the actual reason.
+
+**The tests learned two lessons.** They now assert against the *calendar*, not
+against `S_PEAK`, so a constant drifting away from its data fails the build
+instead of passing silently. And the structural tests — season length, peak
+duration, cold-versus-mild separation — were moved off a fixture that held one
+temperature from September to November. A flat autumn accumulates cooling at a
+constant rate and compresses the season into a fortnight; on it the model
+scores 16 days and 5 at peak, against 27 and 7.1 on real cells. Those tests
+were describing the fixture rather than the model. The replacement fixture
+declines from 20 °C to 2 °C, which accumulates 680 cooling degree days against
+686 measured at the real Stowe cell.
+
 ## Does colour really move north to south?
 
 Yes, but weakly within Vermont — and establishing that took three measurements,
@@ -286,10 +337,24 @@ progression showed the difference plainly.
   Before `0.2.0-cdd` the gradient was −1.40 and the season 21 days wide. See
   [ADR-0008](adr/0008-cooling-degree-day-senescence.md).
 
-- **Species composition is the largest identifiable residual.** Litchfield,
-  Connecticut is the worst reference place at six days early, and it sits in
-  oak country. Oak turns later and duller than the maple/beech/birch this model
-  implicitly assumes. That is the next driver worth adding.
+- **Species composition is the largest identifiable residual**, and after the
+  `0.2.1` recalibration it is essentially the *only* structured one left. The
+  remaining errors line up by forest type rather than by geography or weather,
+  and they point in both directions at once:
+
+  | Place | Error | Forest |
+  |---|---|---|
+  | Ely, MN | +14 days late | aspen–birch |
+  | Duluth, MN | +12 late | aspen–birch |
+  | Marquette, MI | +8 late | aspen–birch |
+  | Litchfield, CT | −15 early | oak–hickory |
+
+  Aspen and birch turn well before the maple–beech this model implicitly
+  assumes, and oak well after. Weather cannot explain a split that tracks
+  species this cleanly — the Upper Midwest sites were checked for a Great Lakes
+  warm bias first, and their normals are sound: lakeside Duluth and Marquette
+  run 1.6 °C above inland Ely, which is genuinely how those places differ.
+  Species is the next driver worth adding, and it is worth roughly a week.
 
 - **It does not model cloud cover or wind.** Both affect how a display is
   actually experienced, and a windstorm can end a season overnight.

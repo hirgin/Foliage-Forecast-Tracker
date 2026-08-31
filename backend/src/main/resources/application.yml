@@ -45,7 +45,7 @@ foliage:
     kind: cooling
   # Bumped for the cooling-degree-day model (ADR-0008). Forecast rows carry
   # this, so a mixed table can be told apart after a partial rescore.
-  model-version: "0.2.0-cdd"
+  model-version: "0.2.1-cdd"
   grid:
     # H3 resolution the forecast is computed at (~3 km edge). See ADR-0002.
     resolution: 6
@@ -127,7 +127,12 @@ foliage:
     start: "09-01"
     end: "11-15"
   admin:
-    # Guards the bootstrap trigger. Off by default; enabled in the local profile.
+    # Guards the pipeline triggers. Off by default, and switched on for the
+    # local profile in the block at the end of this file -- which is where it
+    # always claimed to be, and was not: the comment said "enabled in the local
+    # profile" while nothing enabled it, so every admin call 404'd until
+    # someone remembered to export FOLIAGE_ADMIN_ENABLED by hand. The override
+    # stays available for CI, which sets it explicitly.
     enabled: ${FOLIAGE_ADMIN_ENABLED:false}
   cors:
     allowed-origins: http://localhost:5173
@@ -135,3 +140,15 @@ foliage:
 logging:
   level:
     com.foliage: DEBUG
+
+---
+# Local development. The datasource lives in application-local.yml, which is
+# gitignored; this holds only what is safe to commit.
+spring:
+  config:
+    activate:
+      on-profile: local
+
+foliage:
+  admin:
+    enabled: true

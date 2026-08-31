@@ -1,6 +1,6 @@
 # ADR-0008: Pace senescence by cooling, not by photoperiod
 
-**Status:** accepted and implemented, model version `0.2.0-cdd`. Supersedes the
+**Status:** accepted and implemented, model version `0.2.1-cdd` (refitted; see the amendment at the end). Supersedes the
 forcing structure described in [`docs/model.md`](../model.md).
 
 Measured over the seven scored states after implementation: the gradient went
@@ -329,3 +329,83 @@ actually plan a trip inside.
 Duration varies by place, and in the right direction: a mild coast holds peak
 longer than a cold interior, because leaf drop is driven by frost and wind and
 those arrive sooner in the north.
+
+---
+
+## Amendment, `0.2.1` — refitted after the ingest changed underneath it
+
+Everything above still holds structurally. The numbers in it do not, and the
+reason is worth recording, because nothing broke and no test failed.
+
+`S_CRIT`/`S_PEAK` was fitted at 185 against normals built from **five years** of
+archive sampled at **res 5**. The weather pipeline afterwards moved to **three
+years** at **res 4** — a deliberate trade that cut roughly a month off the
+national load. That shifts every cooling total the model accumulates, so a
+constant calibrated against the old totals silently stopped meaning what it was
+fitted to mean.
+
+The symptom looked like a modelling failure: measured against ten reference
+places the whole country ran 6 to 9 days late, and the Upper Midwest 15 to 19.
+Mean absolute error had drifted from the 3.8 days recorded above to **12.4**.
+
+**Refitting fixes most of it.** `S_PEAK` 185 → **100**:
+
+| | Before | After |
+|---|---|---|
+| Mean absolute error | 12.4 days | **6.0 days** |
+| Places within 5 days | 1 of 10 | **6 of 10** |
+| Places exact | 0 | 4 |
+
+**Shape had to move with it**, and this is the part that is easy to get wrong.
+The peak band is a fixed *fraction* of `S_PEAK` wide — 0.35 of it at shape 1.5
+— so halving the constant also halved how long peak lasts, from 7.1 days to
+4.9. The saturating curve was added in the first place to make peak hold for
+about a week; buying timing with that duration would have undone it. Shape 1.5
+→ **1.0** widens the band to 0.53 of `S_PEAK`, restoring peak to 7.1 days and
+lengthening the season from 25 to 28, while mean absolute error stays at 6.0
+against 5.9 for the nominally best fit. The trade is free.
+
+Shape 1.0 is also the more conventional model — a plain exponential approach to
+fully turned, senescence as first-order decay of the chlorophyll still left.
+The slow start that shape above 1 provided is given up, and nothing real is
+lost with it: the photoperiod gate already withholds progress before the
+trigger, and after it the weather supplies the gradual onset, because
+mid-September days sit near the 20 °C base and accumulate almost nothing.
+
+### Why no test caught this
+
+Every test compared peak against `S_PEAK` *symbolically*, so each one passed
+for any value of it. They verified internal consistency and could not, even in
+principle, notice the constant drifting away from its data.
+
+Two changes, both in `CoolingDegreeDayModelTest`:
+
+- **Assert against the calendar.** A New England fixture must peak in early
+  October and a southern one before the season ends. These fail when cooling
+  totals move again.
+- **Stop testing the fixture.** The structural tests — season length, peak
+  duration, cold-versus-mild separation — ran on a season holding *one*
+  temperature from September to November. A flat autumn accumulates cooling at
+  a constant rate and compresses the season into a fortnight: on it the model
+  scores a 16 day season with 5 days at peak, against 27 and 7.1 on real cells.
+  Three of those tests failed on the refit for that reason alone. The
+  replacement declines 20 °C → 2 °C, accumulating 680 cooling degree days
+  against 686 measured at the real Stowe cell.
+
+### What is left
+
+The residuals no longer form a geographic pattern; they form a *species* one,
+in both directions at once — aspen–birch late, oak early:
+
+    Ely, MN         +14    aspen-birch
+    Duluth, MN      +12    aspen-birch
+    Marquette, MI    +8    aspen-birch
+    Litchfield, CT  -15    oak-hickory
+
+A Great Lakes warm bias was checked first and ruled out: lakeside Duluth and
+Marquette run 1.6 °C above inland Ely, which is genuinely how those places
+differ. Species composition, already recorded in `model.md` as the largest
+missing driver, is worth about a week and is the next thing to add.
+
+**The lesson worth keeping:** a fitted constant is coupled to the data it was
+fitted against. Changing the ingest changed the model.
