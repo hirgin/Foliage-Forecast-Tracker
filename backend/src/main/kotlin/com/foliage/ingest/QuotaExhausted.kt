@@ -23,4 +23,29 @@ package com.foliage.ingest
  * try harder.
  */
 class QuotaExhausted(source: String, val reason: String) :
-    RuntimeException("$source quota exhausted: $reason. Wait for the window to reset and re-run.")
+    RuntimeException("$source quota exhausted: $reason. Wait for the window to reset and re-run.") {
+
+    /**
+     * Which allowance ran out, read back off the message.
+     *
+     * Both abort the run identically, so for a while everything logged this as
+     * the *daily* allowance being spent. That reads as "nothing more will load
+     * until tomorrow", and when the limit was actually the hourly one it was
+     * wrong by a factor of twenty-four -- a load that could have resumed in
+     * forty minutes looked finished for the day, and nobody re-ran it.
+     *
+     * Handling does not change. What is reported does.
+     */
+    val window: String = when {
+        reason.contains("hourly", ignoreCase = true) -> "hourly"
+        reason.contains("daily", ignoreCase = true) -> "daily"
+        else -> "current"
+    }
+
+    /** Plain-language wait, for a log line someone reads at 2am. */
+    val resumesIn: String = when (window) {
+        "hourly" -> "within the hour"
+        "daily" -> "tomorrow"
+        else -> "once the window resets"
+    }
+}

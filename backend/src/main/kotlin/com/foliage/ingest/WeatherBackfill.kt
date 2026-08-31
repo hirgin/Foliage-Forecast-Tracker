@@ -118,7 +118,10 @@ class WeatherBackfill(
                 forecastService.computeState(fips)
                 refreshed += state
             } catch (e: QuotaExhausted) {
-                log.info("daily allowance spent refreshing {}; the rest keep yesterday's data", state)
+                log.info(
+                    "{} allowance spent refreshing {}; the rest keep yesterday's data, and this resumes {}",
+                    e.window, state, e.resumesIn,
+                )
                 quotaSpent = true
                 break
             } catch (e: Exception) {
@@ -193,7 +196,7 @@ class WeatherBackfill(
                 // whatever this run managed is kept and tomorrow resumes with
                 // the remainder -- which is what stops a state bigger than one
                 // day's allowance from blocking the queue forever.
-                log.info("daily allowance spent during {}; stopping until it resets", state)
+                log.info("{} allowance spent during {}; stopping, resumes {}", e.window, state, e.resumesIn)
                 quotaSpent = true
                 break
             } catch (e: Exception) {
