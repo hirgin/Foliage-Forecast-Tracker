@@ -45,6 +45,41 @@ const LABEL_COLOR = '#ffffff';
 const LABEL_HALO = 'rgba(6, 8, 5, 0.92)';
 const LABEL_HALO_WIDTH = 1.8;
 
+/**
+ * State outlines, made visible.
+ *
+ * The style draws them at hsl(0, 0%, 21%) -- nearly black, which is right for
+ * a bare dark basemap and wrong here. They sit above the hexagons, so a
+ * near-black line over a saturated orange cell reads as a smudge rather than a
+ * border, and on empty ground it disappears into the background entirely.
+ *
+ * A light line with real transparency works over both: bright enough to follow
+ * against colour, soft enough not to draw the eye away from the data, which is
+ * what the map is actually for. Country borders get the same treatment a shade
+ * stronger, since there are far fewer of them.
+ */
+const STATE_BORDER = 'rgba(226, 232, 220, 0.5)';
+const COUNTRY_BORDER = 'rgba(232, 238, 226, 0.65)';
+
+// Slightly wider than the style's own at the zooms people actually use. Below
+// about zoom 4 the whole country is on screen and heavier lines would box in
+// the hexagons rather than frame them.
+const BORDER_WIDTH = ['interpolate', ['exponential', 1.3], ['zoom'], 3, 0.8, 5, 1.2, 8, 1.8, 12, 3, 22, 15];
+
+function brightenBoundaries(map) {
+  for (const [id, color] of [
+    ['boundary_state', STATE_BORDER],
+    ['boundary_country_z0-4', COUNTRY_BORDER],
+    ['boundary_country_z5-', COUNTRY_BORDER],
+  ]) {
+    // Guarded: the basemap style is fetched at runtime and is free to rename
+    // its layers, and a missing one should not take the map down with it.
+    if (!map.getLayer(id)) continue;
+    map.setPaintProperty(id, 'line-color', color);
+    map.setPaintProperty(id, 'line-width', BORDER_WIDTH);
+  }
+}
+
 function brightenLabels(map) {
   for (const layer of map.getStyle().layers) {
     // Only layers that actually draw text; symbol layers also cover icons and
@@ -104,6 +139,7 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
     // before then.
     map.on('load', () => {
       brightenLabels(map);
+      brightenBoundaries(map);
       setStyleReady(true);
     });
     // Already loaded is possible if the style came from cache between
