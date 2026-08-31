@@ -157,18 +157,27 @@ class WeatherBackfill(
             )
 
             try {
-                weatherIngest.refreshForecast(fips)
+                // Climatology first, because it is the scarce half and it is
+                // resumable in chunks. A state larger than a day's allowance
+                // takes several nights, and fetching its observations up front
+                // each time would spend the allowance on work that has to be
+                // redone anyway.
                 weatherIngest.buildClimatology(fips)
-                // Only score once the weather behind it is complete. A state
+
+                // Only reached once climatology is complete for this state.
+                weatherIngest.refreshForecast(fips)
+
+                // And only score once the weather behind it is whole. A state
                 // with observations but no normals has no weather for most of
                 // autumn, scores without error and never reaches peak, and
                 // would render as a confident "no change" all season.
                 forecastService.computeState(fips)
                 done += state
             } catch (e: QuotaExhausted) {
-                // Not a failure. The allowance resets and tomorrow's run picks
-                // up exactly here, so stop rather than burning the rest of the
-                // job on requests that cannot succeed.
+                // Not a failure. Climatology writes each chunk as it lands, so
+                // whatever this run managed is kept and tomorrow resumes with
+                // the remainder -- which is what stops a state bigger than one
+                // day's allowance from blocking the queue forever.
                 log.info("daily allowance spent during {}; stopping until it resets", state)
                 quotaSpent = true
                 break
