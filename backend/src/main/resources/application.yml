@@ -98,7 +98,11 @@ foliage:
     # chilling and drought accumulation from the start of the season.
     past-days: 92
     # Years of archive averaged into the climatological fallback.
-    climatology-years: 5
+    # Three rather than five. Each year is a separate archive fetch per cell,
+    # so this is a direct 40% cut in the slowest half of the pipeline. The
+    # cost is noisier normals: chilling is still computed per year and then
+    # averaged, which is what matters, but averaged over fewer years.
+    climatology-years: 3
   hrrr:
     # AWS Open Data, no credentials. See ADR-0006.
     base-url: https://noaa-hrrr-bdp-pds.s3.amazonaws.com

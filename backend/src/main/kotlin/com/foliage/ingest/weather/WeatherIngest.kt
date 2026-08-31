@@ -36,6 +36,8 @@ class WeatherIngest(
     private val season: Season,
     private val audit: IngestRunRecorder,
     @Value("\${foliage.weather.climatology-years}") private val climatologyYears: Int,
+    @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
+    @Value("\${foliage.grid.metro-population}") private val metroPopulation: Int,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -165,19 +167,24 @@ class WeatherIngest(
         var earliest: LocalDate? = null
         var latest: LocalDate? = null
         try {
-            val allParents = if (stateFips == null) cells.allRes5Parents()
-                             else cells.distinctRes5Parents(stateFips)
-            // Resume: whatever an earlier run managed is not fetched again.
+            // Fetched once per res 4 cell and written to each of its res 5
+            // children. The archive is ERA5 at 9-28 km and a res 5 cell is
+            // about 8 km, so asking per res 5 parent requested the same grid
+            // square up to seven times over. Only parents carrying cells that
+            // are actually scored are included, which drops another third.
+            val groups = cells.scoreableParentsByRes4(stateFips, minCanopyPct, metroPopulation)
             val covered = normals.cellsWithNormals()
-            val parents = allParents.filterNot { it in covered }
+            // Resume: a group whose children all have normals is already done.
+            val todo = groups.filterValues { children -> !covered.containsAll(children) }
             val year = today.year
+            val childCount = todo.values.sumOf { it.size }
             log.info(
-                "climatology for {}: {} of {} parents still needed",
-                scope, parents.size, allParents.size,
+                "climatology for {}: {} of {} res 4 cells still needed, covering {} res 5 parents",
+                scope, todo.size, groups.size, childCount,
             )
 
-            for (chunk in parents.chunked(chunkSize)) {
-                val points = chunk.map { grid.centroid(it) }
+            for (chunk in todo.entries.chunked(chunkSize)) {
+                val points = chunk.map { grid.centroid(it.key) }
 
                 // Accumulate per cell, per calendar day, across past seasons.
                 val sums = HashMap<Pair<Int, MonthDay>, MutableList<DailyRecord>>()
@@ -194,11 +201,15 @@ class WeatherIngest(
                 // Normals go to their own table and are never overwritten by
                 // daily ingest -- the drought term needs them on days we also
                 // have observations for. See the amendment to ADR-0005.
-                val normalRows = sums.map { (key, recs) ->
+                // One reading, written to every res 5 child of that res 4 cell,
+                // so everything downstream keeps looking normals up exactly as
+                // it did before.
+                val normalRows = sums.flatMap { (key, recs) ->
                     val (i, md) = key
                     val minima = recs.mapNotNull { it.tminC }
+                    chunk[i].value.map { child ->
                     WeatherNormal(
-                        h3 = chunk[i],
+                        h3 = child,
                         monthDay = md,
                         resolution = source.nativeResolution,
                         tmaxC = recs.meanOf { it.tmaxC },
@@ -217,33 +228,41 @@ class WeatherIngest(
                             ?.let { m -> m.count { it <= 0.0 }.toDouble() / m.size },
                         yearsAveraged = climatologyYears,
                     )
+                    }
                 }
                 normals.upsertAll(normalRows)
 
                 // The same means also seed weather_daily as a fallback
                 // estimate, under the usual precedence rule.
-                val rows = sums.mapNotNull { (key, recs) ->
+                val rows = sums.flatMap { (key, recs) ->
                     val (i, md) = key
-                    val day = runCatching { md.atYear(year) }.getOrNull() ?: return@mapNotNull null
-                    DailyRecord(
-                        day = day,
-                        tmaxC = recs.meanOf { it.tmaxC },
-                        tminC = recs.meanOf { it.tminC },
-                        precipMm = recs.meanOf { it.precipMm },
-                        radiationMj = recs.meanOf { it.radiationMj },
-                    ).toWeatherDay(chunk[i], WeatherKind.CLIMATOLOGY)
+                    val day = runCatching { md.atYear(year) }.getOrNull()
+                    if (day == null) {
+                        emptyList()
+                    } else {
+                        // Written to every res 5 child, same as the normals.
+                        chunk[i].value.map { child ->
+                            DailyRecord(
+                                day = day,
+                                tmaxC = recs.meanOf { it.tmaxC },
+                                tminC = recs.meanOf { it.tminC },
+                                precipMm = recs.meanOf { it.precipMm },
+                                radiationMj = recs.meanOf { it.radiationMj },
+                            ).toWeatherDay(child, WeatherKind.CLIMATOLOGY)
+                        }
+                    }
                 }
                 written += weather.upsertAll(rows).toLong()
                 cellsDone += chunk.size
                 rows.minOfOrNull { it.day }?.let { d -> earliest = earliest?.coerceAtMost(d) ?: d }
                 rows.maxOfOrNull { it.day }?.let { d -> latest = latest?.coerceAtLeast(d) ?: d }
-                log.info("climatology {}: {} of {} parents done", scope, cellsDone, parents.size)
+                log.info("climatology {}: {} of {} res 4 cells done", scope, cellsDone, todo.size)
             }
 
             audit.succeed(runId, written)
             return WeatherIngestResult(
                 stateFips = scope,
-                cellsRequested = parents.size,
+                cellsRequested = todo.size,
                 cellsWithData = cellsDone,
                 rowsWritten = written,
                 yearsAveraged = climatologyYears,

@@ -196,6 +196,48 @@ class CellRepository(private val jdbc: JdbcTemplate) {
         stateName,
     ).firstOrNull()
 
+    /**
+     * Res 5 parents that actually carry cells worth forecasting, grouped under
+     * their res 4 grandparent.
+     *
+     * Two savings over taking every parent in a state, both large.
+     *
+     * **Only parents with scoreable cells.** The plain parent list includes
+     * ground that is neither forest nor city, so weather was being fetched for
+     * 31,476 parents to serve 19,904 that are ever scored.
+     *
+     * **Grouped by res 4, because that is the resolution the source actually
+     * has.** Open-Meteo's archive is ERA5 at 9-28 km; a res 5 cell is about 8
+     * km, so fetching one reading per res 5 parent asks the same grid square
+     * for the same numbers up to seven times. Res 4 is around 22 km, inside
+     * the source's own resolution, and the elevation detail res 5 appeared to
+     * add is recovered by the lapse-rate downscale anyway -- which is the
+     * whole argument for scoring at res 6 in the first place. See ADR-0005.
+     */
+    fun scoreableParentsByRes4(
+        stateFips: String?,
+        minCanopyPct: Int,
+        metroPopulation: Int,
+    ): Map<Long, List<Long>> {
+        val where = StringBuilder(
+            "WHERE (canopy_pct IS NULL OR canopy_pct >= ? " +
+                "OR parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p " +
+                "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?))",
+        )
+        val args = mutableListOf<Any>(minCanopyPct, metroPopulation)
+        if (stateFips != null) {
+            where.append(" AND state_fips = ?")
+            args += stateFips
+        }
+        val out = HashMap<Long, MutableSet<Long>>()
+        jdbc.query(
+            "SELECT DISTINCT parent_res4, parent_res5 FROM cell $where",
+            { rs, _ -> rs.getLong("parent_res4") to rs.getLong("parent_res5") },
+            *args.toTypedArray(),
+        ).forEach { (res4, res5) -> out.getOrPut(res4) { LinkedHashSet() }.add(res5) }
+        return out.mapValues { it.value.toList() }
+    }
+
     fun distinctRes5Parents(stateFips: String): List<Long> = jdbc.queryForList(
         "SELECT DISTINCT parent_res5 FROM cell WHERE state_fips = ? ORDER BY parent_res5",
         Long::class.java, stateFips,

@@ -41,7 +41,22 @@ class WeatherBackfill(
     private val weatherIngest: WeatherIngest,
     private val forecastService: ForecastService,
     private val audit: com.foliage.ingest.audit.IngestRunRecorder,
+    @org.springframework.beans.factory.annotation.Value("\${foliage.grid.min-canopy-pct}")
+    private val minCanopyPct: Int,
+    @org.springframework.beans.factory.annotation.Value("\${foliage.grid.metro-population}")
+    private val metroPopulation: Int,
 ) {
+
+    /**
+     * The res 5 parents a state actually needs weather for.
+     *
+     * Has to match what the climatology build loads, or a state would never
+     * look complete: it covers only parents carrying cells that are scored,
+     * where the plain parent list also counts ground that is neither forest
+     * nor city -- 31,476 parents nationally against 19,904 worth having.
+     */
+    private fun scoreableParents(fips: String): List<Long> =
+        cells.scoreableParentsByRes4(fips, minCanopyPct, metroPopulation).values.flatten()
 
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -87,7 +102,7 @@ class WeatherBackfill(
         val candidates = ConusStates.ALL
             .mapNotNull { state ->
                 val fips = runCatching { cells.stateFipsFor(state) }.getOrNull() ?: return@mapNotNull null
-                val parents = cells.distinctRes5Parents(fips)
+                val parents = scoreableParents(fips)
                 if (parents.isEmpty() || !covered.containsAll(parents)) null else state to fips
             }
             .sortedBy { (_, fips) -> lastRefreshed[fips] ?: Instant.EPOCH }
@@ -145,7 +160,7 @@ class WeatherBackfill(
                 continue
             }
 
-            val parents = cells.distinctRes5Parents(fips)
+            val parents = scoreableParents(fips)
             if (parents.isNotEmpty() && covered.containsAll(parents)) {
                 skipped += state
                 continue
