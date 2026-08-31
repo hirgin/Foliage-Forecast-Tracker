@@ -47,6 +47,38 @@ import US_MASK from './us-mask.json';
 /** Matches --bg in styles.css, so masked ground reads as page, not as sea. */
 const MASK_FILL = '#0f0d0a';
 
+/** Twice the signed area of a ring; positive when it winds counterclockwise. */
+function signedArea(ring) {
+  let total = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    total += (ring[i][0] - ring[j][0]) * (ring[i][1] + ring[j][1]);
+  }
+  return -total;
+}
+
+/**
+ * The country itself, as a polygon — the mask turned inside out.
+ *
+ * The mask's first ring is the world and the rest are the United States
+ * punched out of it, so dropping the world ring and treating each remaining
+ * ring as its own polygon gives the country. Derived rather than shipped
+ * twice, so the two can never disagree.
+ *
+ * **Winding has to be corrected, not inherited.** In the mask those rings are
+ * holes, so they wind clockwise; reused unchanged as exterior rings they
+ * describe everything *except* the United States, and the `within` filter
+ * built on them hid every label on the map rather than only the foreign ones.
+ * Filling a polygon does not care about winding and testing a point against
+ * one does, which is exactly the sort of difference that shows up as a blank
+ * screen with no error.
+ */
+const US_OUTLINE = {
+  type: 'MultiPolygon',
+  coordinates: US_MASK.geometry.coordinates
+    .slice(1)
+    .map((ring) => [signedArea(ring) > 0 ? ring : [...ring].reverse()]),
+};
+
 /**
  * Hexagons are inserted beneath the first symbol layer, so all fifteen of the
  * style's label layers paint over them natively -- no second tile fetch, and
@@ -169,12 +201,67 @@ function fenceZoomOut(map) {
 function maskEverythingElse(map) {
   if (map.getSource('outside-us')) return;
   map.addSource('outside-us', { type: 'geojson', data: US_MASK });
-  map.addLayer({
-    id: 'outside-us',
-    type: 'fill',
-    source: 'outside-us',
-    paint: { 'fill-color': MASK_FILL, 'fill-opacity': 1 },
-  });
+
+  // Under the labels, not over them.
+  //
+  // Added plainly, the mask lands on top of every layer including the basemap's
+  // symbols, and then it clips any label whose text overhangs the coastline --
+  // San Diego, Houston, half of Florida -- because the text is drawn from the
+  // dot outwards and the water beside it is painted over. Zoomed out, a label
+  // spans about five degrees, so no amount of margin around the coast fixes
+  // it; the mask simply has to sit underneath.
+  //
+  // The cost is that foreign labels now draw over the masked ground. Nothing
+  // in the vector tiles carries a country on a city, so they cannot be
+  // filtered out: the `place` layer has name, class, rank and capital, and no
+  // country code at all. Between a US city whose name is half painted over and
+  // a Canadian one floating on empty ground, the first is a bug and the second
+  // is a blank map with a word on it.
+  // Specifically below the *place names*, which is not the same as below the
+  // first symbol layer. This style puts `water_name` at index 8, so anchoring
+  // to the first symbol dropped the mask underneath every road, railway and
+  // boundary, and Quebec kept its motorways. The place labels are the last
+  // seven layers in the style; going in front of the first of them puts the
+  // mask above all the geometry and below all the names.
+  const firstPlaceLabel = map.getStyle().layers.find((l) => l.id.startsWith('place_'));
+  map.addLayer(
+    {
+      id: 'outside-us',
+      type: 'fill',
+      source: 'outside-us',
+      paint: { 'fill-color': MASK_FILL, 'fill-opacity': 1 },
+    },
+    firstPlaceLabel?.id,
+  );
+
+  // Then drop every place name that is not in the country.
+  //
+  // The vector tiles carry no country on a city, so this cannot be filtered on
+  // an attribute -- but it can be filtered on geometry. `within` tests each
+  // label's point against a polygon, which is the country test the tiles do
+  // not provide, and it is applied on top of each layer's own filter rather
+  // than replacing it so the style's zoom and rank rules still hold.
+  //
+  // Without this the mask trades one problem for another: labels sit above it
+  // by necessity, so hiding Canada's landmass while leaving its names strews
+  // NUNAVUT, MONTERREY and HAVANA across blank ground.
+  for (const layer of map.getStyle().layers) {
+    if (!layer.id.startsWith('place_')) continue;
+
+    // Country names go entirely rather than by geometry. The only one that
+    // would survive the filter is "UNITED STATES", set across a map that shows
+    // nothing else.
+    if (layer.id.startsWith('place_country')) {
+      map.setLayoutProperty(layer.id, 'visibility', 'none');
+      continue;
+    }
+
+    const existing = map.getFilter(layer.id);
+    map.setFilter(
+      layer.id,
+      existing ? ['all', existing, ['within', US_OUTLINE]] : ['within', US_OUTLINE],
+    );
+  }
 }
 
 /**
