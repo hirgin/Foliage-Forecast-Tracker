@@ -93,6 +93,69 @@ function brightenLabels(map) {
 
 const FALLBACK_VIEW = { longitude: -72.65, latitude: 43.92, zoom: 7 };
 
+/**
+ * How far the map lets you wander: the lower 48, with a margin.
+ *
+ * This is a forecast for the continental US and nothing is scored outside it,
+ * so panning to the Pacific or zooming out to the globe only ever shows empty
+ * ocean and a country the size of a postage stamp. Fencing the view keeps
+ * every gesture landing somewhere that has data.
+ *
+ * Drawn to the actual coastlines rather than padded out. Since these bounds
+ * set how far you may zoom out -- the floor is whatever fits them -- every
+ * degree of slack is spent widening the view, and on a tall phone that slack
+ * is paid vertically at several times the rate: padding to -128/51 pulled the
+ * horizon down to Panama before the country fitted across.
+ */
+const US_BOUNDS = [[-125.5, 24.0], [-66.5, 49.5]];
+
+/**
+ * Stops the zoom out once the whole country is on screen.
+ *
+ * Paired with [US_BOUNDS]: bounds alone stop you panning away but not zooming
+ * out, and at zoom 2 the US sits in the middle of a world map.
+ *
+ * This cannot be a constant, which is the mistake it replaces. A fixed floor
+ * of 3 fits the country on a desktop pane and strands a phone halfway: a
+ * 375 px viewport covers far less ground at the same zoom, so the eastern half
+ * filled the screen and there was no way to pull back and see the rest. The
+ * floor has to be whatever zoom fits [US_BOUNDS] in *this* viewport, which is
+ * what cameraForBounds computes -- so it is recomputed whenever the map is
+ * resized, including on a phone rotating.
+ */
+function fenceZoomOut(map) {
+  // Briefly clear the old floor, or a floor higher than the fitting zoom makes
+  // cameraForBounds return the floor itself and the fence never loosens.
+  map.setMinZoom(0);
+  const camera = map.cameraForBounds(US_BOUNDS);
+  if (camera?.zoom == null) return;
+  map.setMinZoom(camera.zoom);
+  if (map.getZoom() < camera.zoom) map.setZoom(camera.zoom);
+}
+
+/**
+ * Keeps the middle of the screen over the country.
+ *
+ * This is deliberately *not* maplibre's own `maxBounds`, which was tried first
+ * and is the wrong shape of constraint. `maxBounds` holds the whole viewport
+ * inside the box, so on a tall phone -- 375 by 812 -- keeping a 29 degree tall
+ * box on screen forces a zoom at which the 64 degree wide country cannot fit,
+ * and no zoom floor can undo that. It fenced the map by making it useless.
+ *
+ * Clamping the centre separates the two concerns: [fenceZoomOut] decides how
+ * far out you may zoom, this decides where you may go, and neither dictates
+ * the other. Zoomed out on a phone the country sits in frame with ocean either
+ * side, which is correct -- that is what the country looks like on a phone.
+ */
+function clampCentre(map) {
+  const [[west, south], [east, north]] = US_BOUNDS;
+  const centre = map.getCenter();
+  const lng = Math.min(Math.max(centre.lng, west), east);
+  const lat = Math.min(Math.max(centre.lat, south), north);
+  // Only when it actually moved, or setCenter re-fires move and spins.
+  if (lng !== centre.lng || lat !== centre.lat) map.setCenter([lng, lat]);
+}
+
 /** Bounding box of the loaded cells, from their H3 indexes. */
 function boundsOf(cells) {
   if (!cells.length) return null;
@@ -130,6 +193,9 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
       style: STYLE_URL,
       center: [FALLBACK_VIEW.longitude, FALLBACK_VIEW.latitude],
       zoom: FALLBACK_VIEW.zoom,
+      // No repeated copies of the world either side. Nothing is scored
+      // outside the US, so the copies are empty basemap.
+      renderWorldCopies: false,
       attributionControl: false,
     });
     const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
@@ -140,8 +206,13 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
     map.on('load', () => {
       brightenLabels(map);
       brightenBoundaries(map);
+      fenceZoomOut(map);
       setStyleReady(true);
     });
+    // A phone rotating, or a desktop pane being dragged wider, changes how
+    // much ground a zoom level covers -- so the floor has to move with it.
+    map.on('resize', () => fenceZoomOut(map));
+    map.on('move', () => clampCentre(map));
     // Already loaded is possible if the style came from cache between
     // constructing the map and attaching this listener.
     if (map.isStyleLoaded()) setStyleReady(true);
