@@ -35,6 +35,7 @@ class AdminController(
     private val staticExporter: StaticExporter,
     private val placeIngest: PlaceIngest,
     private val weatherBackfill: WeatherBackfill,
+    private val normals: com.foliage.persistence.NormalRepository,
 ) {
 
     @PostMapping("/bootstrap-grid")
@@ -109,6 +110,28 @@ class AdminController(
         @RequestParam(defaultValue = "6") maxStates: Int,
         @RequestParam(defaultValue = "90") maxMinutes: Long,
     ): BackfillResult = weatherBackfill.run(maxStates, java.time.Duration.ofMinutes(maxMinutes))
+
+    /**
+     * Rebuilds a state's normals from scratch under the current method.
+     *
+     * For a state loaded across a change in how climatology is fetched, whose
+     * cells would otherwise disagree about how many years they average and how
+     * coarse a reading they came from.
+     */
+    @PostMapping("/reload-climatology")
+    fun reloadClimatology(@RequestParam stateFips: String): Map<String, Any> {
+        val before = normals.yearsAveragedByState(stateFips)
+        val dropped = normals.deleteByState(stateFips)
+        val rebuilt = weatherIngest.buildClimatology(stateFips)
+        forecastService.computeState(stateFips)
+        return mapOf(
+            "stateFips" to stateFips,
+            "yearsAveragedBefore" to before,
+            "normalsDropped" to dropped,
+            "cellsRefetched" to rebuilt.cellsRequested,
+            "yearsAveragedAfter" to normals.yearsAveragedByState(stateFips),
+        )
+    }
 
     /** Writes the season out as static JSON for CDN publishing. */
     @PostMapping("/export")

@@ -106,6 +106,28 @@ class NormalRepository(private val jdbc: JdbcTemplate) {
         Long::class.java,
     ).toSet()
 
+    /**
+     * How many normals a state holds at each `years_averaged`.
+     *
+     * A state loaded across a change in method carries both, which means its
+     * cells disagree about how many years they average and how coarse the
+     * source reading was. That is a seam, not a gradient.
+     */
+    fun yearsAveragedByState(stateFips: String): Map<Int, Long> = jdbc.query(
+        "SELECT n.years_averaged AS y, COUNT(*) AS n FROM weather_normal n " +
+            "JOIN cell c ON c.parent_res5 = n.h3 WHERE c.state_fips = ? GROUP BY n.years_averaged",
+        { rs, _ -> rs.getInt("y") to rs.getLong("n") },
+        stateFips,
+    ).toMap()
+
+    /** Drops a state's normals so they can be rebuilt by one consistent method. */
+    fun deleteByState(stateFips: String): Int = jdbc.update(
+        "DELETE n FROM weather_normal n " +
+            "JOIN (SELECT DISTINCT parent_res5 FROM cell WHERE state_fips = ?) c " +
+            "ON c.parent_res5 = n.h3",
+        stateFips,
+    )
+
     fun count(): Long =
         jdbc.queryForObject("SELECT COUNT(*) FROM weather_normal", Long::class.java) ?: 0
 }
