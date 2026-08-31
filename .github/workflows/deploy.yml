@@ -93,28 +93,34 @@ jobs:
           FOLIAGE_DB_USER: ${{ secrets.FOLIAGE_DB_USER }}
           FOLIAGE_DB_PASSWORD: ${{ secrets.FOLIAGE_DB_PASSWORD }}
         run: |
+          # Refreshing existing states and extending the map are separate
+          # jobs with separate budgets, because they compete for one metered
+          # allowance and one of them is optional.
+          #
+          # A scheduled run does both. A push does only the backfill, and a
+          # smaller one -- CI runs from a different address than a developer
+          # machine, so it has its own allowance, and leaving that unused
+          # while the country is 84% grey is waste. Bounded tightly so a
+          # deploy still finishes quickly.
           REFRESH=false
+          BACKFILL_STATES=4
+          BACKFILL_MINUTES=35
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.refresh }}" = "true" ]; then
             REFRESH=true
+            BACKFILL_STATES=8
+            BACKFILL_MINUTES=90
           fi
-          # On a scheduled run the job also backfills the next few states that
-          # have no weather yet. The free Open-Meteo allowance covers roughly
-          # 650 res 5 parents a day against a country needing 19,904, so the
-          # map fills in over about a month of nightly runs rather than one
-          # long job. Ninety minutes leaves plenty of room under the six hour
-          # ceiling for the export that follows.
-          #
           # Blank means "every state whose weather is complete", which is what
           # a nightly refresh should mean. It was pinned to Vermont's FIPS back
           # when Vermont was the only state loaded; leaving it that way would
           # have frozen every other state on the day it landed while Vermont
           # alone stayed current. Name a single FIPS here only to override.
           REFRESH_STATE=
-          echo "refresh=$REFRESH scope=${REFRESH_STATE:-whole grid}"
+          echo "refresh=$REFRESH backfill=${BACKFILL_STATES} states / ${BACKFILL_MINUTES} min"
           # Kept on one line: the indented backslash continuations produced
           # runs of whitespace inside --args, which Gradle splits into empty
           # arguments.
-          ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.refresh=$REFRESH --foliage.export.refresh-state=$REFRESH_STATE --foliage.export.backfill=$REFRESH --foliage.export.backfill-states=6 --foliage.export.backfill-minutes=90"
+          ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.refresh=$REFRESH --foliage.export.refresh-state=$REFRESH_STATE --foliage.export.backfill=true --foliage.export.backfill-states=$BACKFILL_STATES --foliage.export.backfill-minutes=$BACKFILL_MINUTES"
 
       - name: Check the export produced data
         run: |
