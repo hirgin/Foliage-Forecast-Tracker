@@ -197,4 +197,15 @@ describe('cells with no forecast yet', () => {
     const pending = foliageColor({ progression: null, stage: null, confidence: 0 });
     expect(chroma(pending)).toBeLessThan(chroma(stageColor('PEAK')));
   });
+
+  it('does not look like ground with no data', () => {
+    // The bug this guards: past peak was darkened to separate it from red and
+    // lost its colour doing so, landing at chroma 37 beside the "not
+    // forecast" grey's 6. Over a dark basemap a whole state past peak then
+    // read as missing rather than turning.
+    const chroma = ([r, g, b]) => Math.max(r, g, b) - Math.min(r, g, b);
+    const past = chroma(stageColor('PAST_PEAK'));
+    const pending = chroma(foliageColor({ progression: null, stage: null, confidence: 0 }));
+    expect(past).toBeGreaterThan(pending * 4);
+  });
 });

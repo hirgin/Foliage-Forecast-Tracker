@@ -13,17 +13,20 @@ export const STAGES = [
   { key: 'PARTIAL', label: 'Partial', rgb: [212, 163, 39] },
   { key: 'NEAR_PEAK', label: 'Near peak', rgb: [224, 124, 42] },
   { key: 'PEAK', label: 'Peak', rgb: [204, 62, 44] },
-  // Darker and less red-leaning than it looks like it needs to be. Against
-  // peak's red it was the same brightness -- a relative luminance of 88.5
-  // against 90.9 -- so the two differed only in colourfulness, which is the
-  // weakest channel to rely on and the first one red-green colour blindness
-  // takes away. Since the ramp blends within a stage toward the next anchor,
-  // a cell late in the peak band was already most of the way to this colour,
-  // and peak now lasts seven to ten days rather than two or three, so many
-  // more cells sit there. Dropping the luminance to 77.6 separates them by
-  // brightness as well as hue, which survives both a small hexagon and a
-  // colour-blind viewer.
-  { key: 'PAST_PEAK', label: 'Past peak', rgb: [96, 74, 59] },
+  // Darker than peak's red so the two separate by brightness and not only by
+  // hue -- they were 88.5 against 90.9, which is the same brightness, and hue
+  // alone is the first thing red-green colour blindness takes away.
+  //
+  // But the first attempt at that took the colour out along with the
+  // brightness, landing at chroma 37 against the "not forecast" grey's 6.
+  // Over a dark basemap at 45-70% alpha those read the same, so a large area
+  // past peak looked like ground with no data rather than leaves on the turn.
+  // New York was the first state big enough to show it.
+  //
+  // So: keep the brightness gap from red, put the colour back. A russet at
+  // chroma 62 cannot be mistaken for the neutral grey of missing data, and
+  // stays 12 luminance below peak.
+  { key: 'PAST_PEAK', label: 'Past peak', rgb: [108, 74, 46] },
 ];
 
 /**
