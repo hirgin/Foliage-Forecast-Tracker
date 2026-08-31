@@ -26,6 +26,28 @@ import { foliageColor, stageLabel } from './colors';
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
 /**
+ * Everything that is not the United States, as one polygon.
+ *
+ * A ring around the world with the country punched out of it as holes.
+ * Rendered over the basemap, it hides Canada, Mexico, the Caribbean and the
+ * oceans in a single fill, which is the only way to actually stop them being
+ * drawn -- constraining the camera stops you *travelling* there but the
+ * basemap still renders whatever is in frame, and this map is only ever about
+ * the lower 48.
+ *
+ * Derived from the us-atlas national outline, which is built from the same
+ * Census TIGER boundaries the grid bootstrap tiles states against, so the
+ * coastline here and the coastline the hexagons stop at come from one source.
+ * Trimmed to CONUS, rounded to four decimals -- about 11 m, far finer than a
+ * 3 km hexagon -- and committed rather than fetched, because the border of the
+ * United States does not change often enough to be worth a build step.
+ */
+import US_MASK from './us-mask.json';
+
+/** Matches --bg in styles.css, so masked ground reads as page, not as sea. */
+const MASK_FILL = '#0f0d0a';
+
+/**
  * Hexagons are inserted beneath the first symbol layer, so all fifteen of the
  * style's label layers paint over them natively -- no second tile fetch, and
  * the style's own label collision handling still applies.
@@ -134,6 +156,28 @@ function fenceZoomOut(map) {
 }
 
 /**
+ * Covers every country that is not this one.
+ *
+ * Added on top of the basemap's own layers and therefore above its labels too,
+ * which is the point: hiding the label layers alone would leave the landmass
+ * of Ontario and Chihuahua drawn in, and filtering the basemap's fills per
+ * country is not something the vector tiles support.
+ *
+ * deck.gl's hexagons are added afterwards and so sit above this. The mask is
+ * scenery; it must never cover data.
+ */
+function maskEverythingElse(map) {
+  if (map.getSource('outside-us')) return;
+  map.addSource('outside-us', { type: 'geojson', data: US_MASK });
+  map.addLayer({
+    id: 'outside-us',
+    type: 'fill',
+    source: 'outside-us',
+    paint: { 'fill-color': MASK_FILL, 'fill-opacity': 1 },
+  });
+}
+
+/**
  * Keeps the middle of the screen over the country.
  *
  * This is deliberately *not* maplibre's own `maxBounds`, which was tried first
@@ -150,10 +194,31 @@ function fenceZoomOut(map) {
 function clampCentre(map) {
   const [[west, south], [east, north]] = US_BOUNDS;
   const centre = map.getCenter();
-  const lng = Math.min(Math.max(centre.lng, west), east);
-  const lat = Math.min(Math.max(centre.lat, south), north);
-  // Only when it actually moved, or setCenter re-fires move and spins.
-  if (lng !== centre.lng || lat !== centre.lat) map.setCenter([lng, lat]);
+  const view = map.getBounds();
+
+  // How much the clamp has to allow for depends on how much is on screen,
+  // which is the part a plain bounding-box clamp gets wrong. Holding only the
+  // centre inside the box lets you drag the centre onto the west coast while
+  // zoomed out, putting the Atlantic seaboard off-screen and filling half the
+  // map with masked ocean -- technically inside the fence, useless to look at.
+  const halfW = (view.getEast() - view.getWest()) / 2;
+  const halfH = (view.getNorth() - view.getSouth()) / 2;
+
+  // When the viewport is wider than the country there is no choice to make:
+  // any pan only moves the country off-centre, so pin that axis. Otherwise
+  // keep the visible edges inside the bounds.
+  const lng = halfW >= (east - west) / 2
+    ? (west + east) / 2
+    : Math.min(Math.max(centre.lng, west + halfW), east - halfW);
+  const lat = halfH >= (north - south) / 2
+    ? (south + north) / 2
+    : Math.min(Math.max(centre.lat, south + halfH), north - halfH);
+
+  // Only when it actually moved, and not for sub-pixel differences, or
+  // setCenter re-fires move and the two fight each other every frame.
+  if (Math.abs(lng - centre.lng) > 1e-6 || Math.abs(lat - centre.lat) > 1e-6) {
+    map.setCenter([lng, lat]);
+  }
 }
 
 /** Bounding box of the loaded cells, from their H3 indexes. */
@@ -206,6 +271,7 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
     map.on('load', () => {
       brightenLabels(map);
       brightenBoundaries(map);
+      maskEverythingElse(map);
       fenceZoomOut(map);
       setStyleReady(true);
     });

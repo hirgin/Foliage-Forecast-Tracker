@@ -151,8 +151,27 @@ it.
 - NASA MODIS/VIIRS vegetation indices via AppEEARS — candidate source for a
   future ML calibration of the model. Not currently ingested.
 
+## National outline (map presentation only)
+
+- **us-atlas** national boundary — <https://github.com/topojson/us-atlas>,
+  derived from the same Census TIGER boundaries `ConusStates` names its states
+  after, so the coastline the mask draws and the coastline the hexagons stop at
+  agree.
+
+Used purely for presentation: the map covers everything that is not the United
+States with a single filled polygon, because constraining the camera stops you
+*travelling* to Canada but the basemap still draws it. Never read by the model
+or the ingest.
+
+Committed as `frontend/src/map/us-mask.json` rather than fetched — trimmed to
+CONUS, rounded to four decimals (about 11 m, far finer than a 3 km hexagon),
+72 KB. The border of the United States does not change often enough to justify
+a build step, and a committed asset is one fewer thing that can fail at deploy
+time.
+
 ## Licensing note
 
 All currently ingested sources are either US federal public-domain works (NOAA,
-USGS, USFS) or openly licensed (Open-Meteo, CC BY 4.0). Attribution appears in
-the app's "How It Works" page.
+USGS, USFS) or openly licensed (Open-Meteo, CC BY 4.0). The national outline
+used for the map mask is ISC-licensed and Census-derived. Attribution appears
+in the app's "How It Works" page.
