@@ -157,6 +157,21 @@ export default function MapView({ nav }) {
                 <span className="legend__count">{notForecast.toLocaleString()}</span>
               </div>
             )}
+            {/*
+              The gaps need explaining as much as the colours do.
+
+              The grid is masked to real forest, so farmland, towns and water
+              get no hexagon at all and the basemap shows through. Across the
+              farm belt that is a quarter of them -- 75% of cells present in a
+              sample of Ohio, 80% in Maryland, against 100% in Vermont -- which
+              scatters holes through the map and reads as something broken.
+              Every other absence on this map is labelled; this one was not,
+              so it was the one people asked about.
+            */}
+            <p className="legend__note">
+              Gaps are ground with no forest to forecast — fields, towns and
+              water. Most common through the farm belt.
+            </p>
           </section>
         )}
 

@@ -96,6 +96,15 @@ h2 {
 }
 .legend__label { flex: 1; }
 .legend__count { font-variant-numeric: tabular-nums; opacity: 0.75; }
+/* Explains the holes in the grid, not a stage. Subordinate to the rows above:
+   it is a footnote to the legend, not another entry in it. */
+.legend__note {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  opacity: 0.85;
+}
 
 footer { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 footer p { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
