@@ -63,6 +63,19 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
         return counts.sumOf { it.size }
     }
 
+    /**
+     * How many cells hold a score on one day.
+     *
+     * A count rather than [byDay] because the export uses it to find where the
+     * data stops, and pulling every row for a hundred days to measure their
+     * length would cost more than the export itself.
+     */
+    fun countByDay(day: LocalDate): Int = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM foliage_forecast WHERE day = ?",
+        Int::class.java,
+        Date.valueOf(day),
+    ) ?: 0
+
     /** Every cell's score on one day — the map's primary query. */
     fun byDay(day: LocalDate): List<StoredForecast> = jdbc.query(
         """

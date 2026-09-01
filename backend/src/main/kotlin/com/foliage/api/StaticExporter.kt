@@ -99,9 +99,42 @@ class StaticExporter(
     private fun worthRescuing(place: com.foliage.domain.Place): Boolean =
         place.population >= 1_000 || place.kind != com.foliage.ingest.places.PlaceKind.TOWN
 
+    /**
+     * Fraction of the grid that must carry a forecast for a day to be worth
+     * publishing.
+     *
+     * Low, because a day that is thinly covered is still a real day: states
+     * fill in one at a time, and waiting for all of them would hold the whole
+     * season back for the slowest. What this excludes is days nothing has
+     * reached yet.
+     */
+    private val MIN_DAY_COVERAGE = 0.25
+
+    /**
+     * The season, truncated to the days that actually have a forecast.
+     *
+     * Extending the season to 15 December was correct for the model and wrong
+     * to publish immediately: every state's normals had to be refetched for
+     * the added month, and until that finished the map had a calendar it could
+     * not fill. Playing the season through ran off the end of the data and the
+     * country turned grey -- which reads as the forecast collapsing in
+     * December rather than as a load in progress.
+     *
+     * Publishing only as far as the data reaches means the slider always ends
+     * on a real day, and grows by itself as the backfill lands. Nothing is
+     * hidden that exists, and nothing is offered that does not.
+     */
+    private fun publishableDays(all: List<LocalDate>, gridSize: Int): List<LocalDate> {
+        val threshold = (gridSize * MIN_DAY_COVERAGE).toInt()
+        val last = all.lastOrNull { forecasts.countByDay(it) >= threshold }
+        // Never return nothing: a completely empty forecast table is a
+        // different failure, and the caller already refuses that with a clear
+        // message rather than writing an empty season.
+        return if (last == null) all else all.filter { !it.isAfter(last) }
+    }
+
     /** [stateFips] null exports the whole loaded grid. */
     fun export(target: Path, stateFips: String?, year: Int = LocalDate.now().year): ExportResult {
-        val days = season.days(year)
         // Forest only, the same floor the forecast scores at, for the same
         // reason plus a second one: every exported cell costs three bytes per
         // day in each daily file, so shipping the unforested two thirds would
@@ -111,6 +144,10 @@ class StaticExporter(
                      else cells.findByState(stateFips, minCanopyPct, metroPopulation))
             .sortedBy { it.h3 }
         require(grid6.isNotEmpty()) { "no cells for ${stateFips ?: "the grid"}" }
+
+        // After the grid, because how far the data reaches is measured against
+        // how big the grid is.
+        val days = publishableDays(season.days(year), grid6.size)
 
         Files.createDirectories(target.resolve("forecast"))
         for (res in aggregateResolutions) Files.createDirectories(target.resolve("forecast-r$res"))
@@ -346,8 +383,10 @@ class StaticExporter(
                     .distinct().size,
                 "placeCount" to resolved.size,
                 "shardCount" to shards.size,
-                "seasonStart" to season.start(year).toString(),
-                "seasonEnd" to season.end(year).toString(),
+                "seasonStart" to days.first().toString(),
+                // The last day with data, not the last day in the calendar.
+                // See publishableDays.
+                "seasonEnd" to days.last().toString(),
                 "generatedAt" to java.time.Instant.now().toString(),
                 "mode" to "static",
             ),
