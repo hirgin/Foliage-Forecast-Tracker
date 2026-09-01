@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { cellToLatLng } from 'h3-js';
+import { NO_FOREST_RGB, NO_FOREST_ALPHA } from './colors';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { foliageColor, stageLabel } from './colors';
 
@@ -436,7 +437,7 @@ function boundsOf(cells) {
   return [[minLon, minLat], [maxLon, maxLat]];
 }
 
-export default function FoliageMap({ cells, selected, onSelect, focus, onZoom }) {
+export default function FoliageMap({ cells, bareCells = [], resolution = 6, selected, onSelect, focus, onZoom }) {
   const [hovered, setHovered] = useState(null);
   // Whether the basemap style is in place. The hexagons are interleaved into
   // it, so they cannot be added before it exists.
@@ -462,6 +463,11 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
       // No repeated copies of the world either side. Nothing is scored
       // outside the US, so the copies are empty basemap.
       renderWorldCopies: false,
+      // Required for interleaved deck.gl: the hexagons render into this map's
+      // own WebGL context, and without multisampling their edges alias and
+      // everything drawn alongside them -- labels included -- comes out softer
+      // than the basemap alone would be.
+      antialias: true,
       attributionControl: false,
     });
     const overlay = new MapboxOverlay({ interleaved: true, layers: [] });
@@ -516,6 +522,27 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
 
   const layers = useMemo(
     () => [
+      // Ground with no forest, drawn first so the forecast always sits on top
+      // of it. Flat, unpickable and unlabelled: it is there to close the holes
+      // in the grid, not to be read.
+      //
+      // Only at res 6. The coarse levels aggregate whatever forest a cell
+      // contains, so a 22 km hexagon over farmland already exists wherever any
+      // of its children is forest, and the holes this fills are a res 6
+      // phenomenon.
+      bareCells.length > 0 && resolution === 6
+        ? new H3HexagonLayer({
+          id: 'no-forest',
+          data: bareCells,
+          beforeId: BEFORE_LAYER,
+          getHexagon: (d) => d,
+          getFillColor: [...NO_FOREST_RGB, NO_FOREST_ALPHA],
+          stroked: false,
+          filled: true,
+          extruded: false,
+          pickable: false,
+        })
+        : null,
       new H3HexagonLayer({
         id: 'foliage',
         data: cells,
@@ -541,8 +568,10 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
           getLineWidth: [selected],
         },
       }),
-    ],
-    [cells, selected, onSelect],
+    // The bare layer is conditional, so drop the null when it is off rather
+    // than handing deck.gl a hole in the list.
+    ].filter(Boolean),
+    [cells, bareCells, resolution, selected, onSelect],
   );
 
   useEffect(() => {

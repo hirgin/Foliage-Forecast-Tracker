@@ -145,6 +145,33 @@ class StaticExporter(
             ),
         )
 
+        // --- the rest of the grid, as bare hexagons -----------------------
+        //
+        // Everything tiled that is not forest: farmland, towns, water. It has
+        // no forecast and never will, so it is written as a plain list of
+        // indexes and nothing else -- no elevation, no canopy, and crucially
+        // no entry in any daily file.
+        //
+        // That distinction is what makes this affordable. The reason these
+        // cells were left out originally was that every exported cell costs
+        // three bytes per day in each of 76 daily files, so carrying the
+        // unforested two thirds through the daily pipeline would roughly
+        // double the payload. Carrying them once, as identity alone, costs a
+        // single file and leaves the daily files exactly as they were.
+        //
+        // They are drawn flat and unlabelled. Without them the map has a hole
+        // wherever there is no forest -- a quarter of Ohio, a fifth of
+        // Maryland -- which reads as broken data rather than as farmland.
+        val scoreable = HashSet(order)
+        val bare = (if (stateFips == null) cells.findAll(0, metroPopulation)
+                    else cells.findByState(stateFips, 0, metroPopulation))
+            .filter { it.h3 !in scoreable }
+            .sortedBy { it.h3 }
+        writeJson(
+            target.resolve("cells-bare.json"),
+            mapOf("count" to bare.size, "h3" to bare.map { grid.toAddress(it.h3) }),
+        )
+
         // The coarse level's own index. Same contract as cells.json: position
         // is identity in every packed file at this resolution.
         val coarseLevels = aggregateResolutions.map { res ->
@@ -302,6 +329,8 @@ class StaticExporter(
                 "coverage" to coverageLabel(grid6.mapNotNull { it.stateName }.distinct().sorted()),
                 "stateCount" to grid6.mapNotNull { it.stateName }.distinct().size,
                 "cellCount" to grid6.size,
+                // Tiled but not forest, drawn flat so the grid has no holes.
+                "bareCellCount" to bare.size,
                 // How far the nightly backfill has got. The load takes about a
                 // month of daily runs against a metered API, and without this
                 // the only way to tell whether a night's run did anything was

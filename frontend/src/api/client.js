@@ -84,6 +84,29 @@ async function staticIndex() {
   return indexPromise;
 }
 
+let barePromise = null;
+
+/**
+ * The tiled cells that are not forest, as indexes only.
+ *
+ * Fetched separately and once, never per date. These carry no forecast and
+ * never will, so they are not in any daily file -- the whole point of holding
+ * them apart is that adding them cost one file rather than doubling every
+ * daily one.
+ *
+ * Only ever drawn flat. A caller that fails to get them still gets a working
+ * map with holes in it, which is what the map was before, so this resolves to
+ * an empty list rather than rejecting.
+ */
+export async function fetchBareCells() {
+  if (!barePromise) {
+    barePromise = request('/cells-bare.json')
+      .then((r) => r.h3 ?? [])
+      .catch(() => []);
+  }
+  return barePromise;
+}
+
 const shardKey = (h3) => cellToParent(h3, SHARD_RES);
 
 /**

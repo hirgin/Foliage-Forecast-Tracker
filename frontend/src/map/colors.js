@@ -45,6 +45,22 @@ export const STAGES = [
 export const NO_FORECAST_RGB = [92, 90, 86];
 export const NO_FORECAST_ALPHA = 120;
 
+/**
+ * Ground that is tiled but carries no forest -- farmland, towns, water.
+ *
+ * A different claim from [NO_FORECAST_RGB], and it has to look like one: that
+ * grey means "not computed yet" and will eventually turn a colour, while this
+ * never will. So it sits darker and flatter, close enough to the basemap to
+ * read as ground rather than as data, but present enough that the grid has no
+ * holes in it.
+ *
+ * Drawn at all because the alternative was worse. Leaving these cells out left
+ * the map pitted wherever there is no forest -- a quarter of Ohio, a fifth of
+ * Maryland -- and a hole reads as broken data, not as a cornfield.
+ */
+export const NO_FOREST_RGB = [46, 48, 44];
+export const NO_FOREST_ALPHA = 132;
+
 const BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s]));
 
 export function stageColor(stage) {

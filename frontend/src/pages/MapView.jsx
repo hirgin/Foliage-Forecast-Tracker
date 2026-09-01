@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForecast, useMeta } from '../api/hooks';
-import { resolutionForZoom, cellWidthKm, h3ForPlace } from '../api/client';
+import { resolutionForZoom, cellWidthKm, h3ForPlace, fetchBareCells } from '../api/client';
 import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
@@ -30,6 +30,22 @@ export default function MapView({ nav }) {
   // country on screen, so the map falls back to a coarser export when zoomed
   // out and swaps back on the way in.
   const [resolution, setResolution] = useState(6);
+
+  // The unforested rest of the grid, so the map has no holes in it. Fetched
+  // once and never per date: these cells carry no forecast, which is exactly
+  // why they can be held apart from the daily files.
+  //
+  // Not fetched until something would actually be drawn with it. It is an
+  // index of every tiled cell that is not forest -- around 122,000 of them,
+  // the largest single file the site serves -- and it is only drawn at res 6,
+  // so anyone who looks at the national view and leaves never pays for it.
+  const [bareCells, setBareCells] = useState([]);
+  useEffect(() => {
+    if (resolution !== 6) return undefined;
+    let live = true;
+    fetchBareCells().then((h3) => { if (live) setBareCells(h3); });
+    return () => { live = false; };
+  }, [resolution]);
   // Where the map should centre. Carries a nonce so choosing the same place
   // twice still recentres, rather than being ignored as an unchanged prop.
   const [focus, setFocus] = useState(null);
@@ -72,6 +88,8 @@ export default function MapView({ nav }) {
     <div className={selected ? 'app app--detail' : 'app'}>
       <FoliageMap
         cells={cells}
+        bareCells={bareCells}
+        resolution={resolution}
         selected={selected}
         onSelect={onSelect}
         focus={focus}
