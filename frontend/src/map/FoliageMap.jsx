@@ -197,13 +197,69 @@ const US_BOUNDS = [[-125.5, 24.0], [-66.5, 49.5]];
  */
 const ZOOM_HEADROOM = 0.6;
 
+/**
+ * The same allowance on a phone, where it mostly is not needed.
+ *
+ * On a wide screen the headroom is what clears the sidebar, because the fit
+ * knows nothing about it. On a phone [chromePadding] has already fitted the
+ * country to the space below the sheet, so the full allowance is spent
+ * shrinking a map that is small to begin with -- 0.6 of a level is a third off
+ * every dimension. Just enough to keep it off the edges.
+ *
+ * Measured rather than guessed: at 0.15 the view spanned 53.5 degrees against
+ * a country 59 wide, so Washington and Maine were clipped off either side.
+ * 0.4 spans 62 and leaves a margin.
+ */
+const NARROW_ZOOM_HEADROOM = 0.4;
+
+/**
+ * Width below which the panel stops being a sidebar and becomes a sheet across
+ * the top of the screen. Mirrors the breakpoint in styles.css.
+ */
+const NARROW_PX = 620;
+
+/**
+ * How much of the map the interface is covering, on a phone.
+ *
+ * Only on a phone. On a wide screen the panel is a 262 px sidebar with the
+ * country beside it, and padding for it there costs more than it gives: it is
+ * 40% of a narrow window, so the fit solves for a strip and the country comes
+ * out small and marooned. But on a phone the panel is a sheet across the whole
+ * top, taking over half the height, and the map centres the country in the
+ * full canvas -- which puts it squarely underneath.
+ *
+ * Measured from the panel rather than assumed, because it grows and shrinks
+ * with its own content and collapses when the toggle is pressed.
+ */
+function chromePadding(map) {
+  const canvas = map.getCanvas();
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  if (width > NARROW_PX) return { top: 0, right: 0, bottom: 0, left: 0 };
+
+  const panel = document.querySelector('.panel');
+  const gap = 12;
+  const top = panel ? Math.min(panel.getBoundingClientRect().bottom + gap, height * 0.62) : 0;
+
+  // The slider sits at the bottom on every size, and the attribution under it.
+  return { top: Math.max(top, 0), right: 0, bottom: 96, left: 0 };
+}
+
 function fenceZoomOut(map) {
+  // Set on the map rather than passed to the fit, so that *every* camera move
+  // works in the same frame -- the fit, the clamp, and flying to a search
+  // result all agree on where the middle of the map is.
+  map.setPadding(chromePadding(map));
+
   // Briefly clear the old floor, or a floor higher than the fitting zoom makes
   // cameraForBounds return the floor itself and the fence never loosens.
   map.setMinZoom(0);
+  // No padding argument: cameraForBounds already honours the map's own, and
+  // passing it here as well applies it twice.
   const camera = map.cameraForBounds(US_BOUNDS);
   if (camera?.zoom == null) return;
-  const floor = camera.zoom - ZOOM_HEADROOM;
+  const narrow = map.getCanvas().clientWidth <= NARROW_PX;
+  const floor = camera.zoom - (narrow ? NARROW_ZOOM_HEADROOM : ZOOM_HEADROOM);
   map.setMinZoom(floor);
   if (map.getZoom() < floor) map.setZoom(floor);
 }
@@ -313,19 +369,36 @@ function maskEverythingElse(map) {
  */
 let clamping = false;
 
+/**
+ * The part of the map the interface is not sitting on, in degrees.
+ *
+ * Deliberately not getBounds, which describes the whole canvas. Once the map
+ * carries padding, getCenter reports the middle of the *padded* box, and
+ * measuring the span from one while clamping the centre of the other leaves
+ * the two disagreeing -- every correction lands slightly off, and the next
+ * `move` corrects it again for ever.
+ */
+function visibleSpan(map) {
+  const canvas = map.getCanvas();
+  const pad = map.getPadding();
+  const sw = map.unproject([pad.left, canvas.clientHeight - pad.bottom]);
+  const ne = map.unproject([canvas.clientWidth - pad.right, pad.top]);
+  return { width: ne.lng - sw.lng, height: ne.lat - sw.lat };
+}
+
 function clampCentre(map) {
   if (clamping) return;
   const [[west, south], [east, north]] = US_BOUNDS;
   const centre = map.getCenter();
-  const view = map.getBounds();
+  const span = visibleSpan(map);
 
   // How much the clamp has to allow for depends on how much is on screen,
   // which is the part a plain bounding-box clamp gets wrong. Holding only the
   // centre inside the box lets you drag the centre onto the west coast while
   // zoomed out, putting the Atlantic seaboard off-screen and filling half the
   // map with masked ocean -- technically inside the fence, useless to look at.
-  const halfW = (view.getEast() - view.getWest()) / 2;
-  const halfH = (view.getNorth() - view.getSouth()) / 2;
+  const halfW = span.width / 2;
+  const halfH = span.height / 2;
 
   // When the viewport is wider than the country there is no choice to make:
   // any pan only moves the country off-centre, so pin that axis. Otherwise
@@ -407,6 +480,18 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
     // much ground a zoom level covers -- so the floor has to move with it.
     map.on('resize', () => fenceZoomOut(map));
     map.on('move', () => clampCentre(map));
+
+    // The panel is measured, so the fence has to be recomputed whenever it
+    // changes size -- and it changes constantly: it starts as one line saying
+    // the forecast is loading, grows a legend of six stages, and collapses
+    // entirely when the toggle is pressed. Measuring it once on load would
+    // frame the country against a panel that no longer exists.
+    let panelWatcher;
+    const panel = document.querySelector('.panel');
+    if (panel && typeof ResizeObserver !== 'undefined') {
+      panelWatcher = new ResizeObserver(() => fenceZoomOut(map));
+      panelWatcher.observe(panel);
+    }
     // Already loaded is possible if the style came from cache between
     // constructing the map and attaching this listener.
     if (map.isStyleLoaded()) setStyleReady(true);
@@ -422,6 +507,7 @@ export default function FoliageMap({ cells, selected, onSelect, focus, onZoom })
     overlayRef.current = overlay;
 
     return () => {
+      panelWatcher?.disconnect();
       map.remove();
       mapRef.current = null;
       overlayRef.current = null;
