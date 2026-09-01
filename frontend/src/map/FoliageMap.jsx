@@ -98,6 +98,35 @@ const BEFORE_LAYER = 'water_name';
  * near-peak hexagon. An outline keeps it legible over anything the ramp can
  * produce, dark ground included.
  */
+/**
+ * Label sizes, because the basemap's own hierarchy is upside down here.
+ *
+ * OpenFreeMap ships `place_state` at size 10 and `place_city_large` at 14, so
+ * Chicago is drawn half again as large as ILLINOIS. That is a reasonable call
+ * for a general-purpose map, where you are usually looking for a city. It is
+ * the wrong one for a map of the whole country whose subject is regional: the
+ * states are the frame you read the forecast against, and they should be the
+ * largest thing on it.
+ *
+ * Cities are then ordered among themselves by `rank`, which OpenMapTiles
+ * derives from importance -- 1 is a capital or a major metropolis, 10 is a
+ * market town. Ranking them by size rather than giving every city one size
+ * means Chicago still reads as bigger than Peoria without either competing
+ * with the state it sits in.
+ */
+const STATE_LABEL_SIZE = ['interpolate', ['linear'], ['zoom'], 3, 13, 5, 16, 8, 20, 12, 24];
+
+/** Falls back to a middling rank, since not every place carries one. */
+const CITY_RANK = ['coalesce', ['get', 'rank'], 8];
+const CITY_LABEL_SIZE = ['interpolate', ['linear'], CITY_RANK, 1, 12.5, 4, 11, 8, 9.5, 12, 8.5];
+
+const SMALLER_PLACES = {
+  place_town: 9.5,
+  place_village: 9,
+  place_suburb: 8.5,
+  place_other: 8.5,
+};
+
 const LABEL_COLOR = '#ffffff';
 const LABEL_HALO = 'rgba(6, 8, 5, 0.92)';
 const LABEL_HALO_WIDTH = 1.8;
@@ -220,6 +249,16 @@ async function prepareStyle() {
     if (layer.id.startsWith('place_country')) {
       layer.layout = { ...layer.layout, visibility: 'none' };
       continue;
+    }
+
+    // Put the hierarchy the right way up: states largest, then cities ordered
+    // among themselves by importance, then everything below them.
+    if (layer.id === 'place_state') {
+      layer.layout = { ...layer.layout, 'text-size': STATE_LABEL_SIZE };
+    } else if (layer.id === 'place_city' || layer.id === 'place_city_large') {
+      layer.layout = { ...layer.layout, 'text-size': CITY_LABEL_SIZE };
+    } else if (SMALLER_PLACES[layer.id]) {
+      layer.layout = { ...layer.layout, 'text-size': SMALLER_PLACES[layer.id] };
     }
     layer.filter = layer.filter
       ? ['all', layer.filter, ['within', US_OUTLINE]]
@@ -560,7 +599,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     // A phone rotating, or a desktop pane being dragged wider, changes how
     // much ground a zoom level covers -- so the floor has to move with it.
     map.on('resize', () => fenceZoomOut(map));
-    map.on('move', () => clampCentre(map));
+    map.on('moveend', () => clampCentre(map));
 
     // The panel is measured, so the fence has to be recomputed whenever it
     // changes size -- and it changes constantly: it starts as one line saying
