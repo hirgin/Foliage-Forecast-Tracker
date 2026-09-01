@@ -159,7 +159,39 @@ class WeatherBackfill(
 
         val covered = runCatching { normals.cellsWithNormals(seasonDays()) }.getOrDefault(emptySet())
 
-        for (state in ConusStates.ALL) {
+        // Emptiest first, not foliage-first.
+        //
+        // [ConusStates.ALL] is ordered by how much anyone cares about a state's
+        // autumn, which is the right order for a cold start: it puts New
+        // England on the map first and the desert southwest last. It is the
+        // wrong order once every state has *some* data, because it then spends
+        // the allowance topping up states that already work while states with
+        // actual holes in them wait behind.
+        //
+        // That is not hypothetical. Lowering the canopy floor left 14,575
+        // hexagons with no forecast at all -- 79% of North Dakota, 51% of
+        // South Dakota, 44% of Nevada -- and every one of those states sits at
+        // the back of the foliage-first queue precisely because nobody visits
+        // them for the leaves. Ordering by how much of a state is missing
+        // sends the allowance where the map is emptiest.
+        //
+        // Ties keep the foliage-first order, so a cold start still behaves as
+        // it did: with nothing loaded every state is equally empty by share,
+        // and Maine goes first.
+        val byNeed = ConusStates.ALL
+            .mapNotNull { state ->
+                val fips = runCatching { cells.stateFipsFor(state) }.getOrNull()
+                    ?: return@mapNotNull null
+                val parents = runCatching { scoreableParents(fips) }.getOrDefault(emptyList())
+                if (parents.isEmpty()) return@mapNotNull null
+                val missing = parents.count { it !in covered }
+                Triple(state, missing.toDouble() / parents.size, missing)
+            }
+            .filter { (_, _, missing) -> missing > 0 }
+            .sortedByDescending { (_, share, _) -> share }
+            .map { (state, _, _) -> state }
+
+        for (state in byNeed) {
             if (done.size >= maxStates) break
             if (Instant.now().isAfter(deadline)) {
                 stoppedForTime = true
