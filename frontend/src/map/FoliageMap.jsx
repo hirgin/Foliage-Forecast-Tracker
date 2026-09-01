@@ -178,6 +178,65 @@ const US_BOUNDS = [[-125.5, 24.0], [-66.5, 49.5]];
 const OPENING_VIEW = US_BOUNDS;
 
 /**
+ * The basemap style with everything this map needs already in it.
+ *
+ * All of this used to be applied in the map's `load` handler, which is too
+ * late by one frame -- and one frame is enough to see. The style loads, the
+ * map paints the entire world in the basemap's own grey, and only then does
+ * the mask go on and the rest of the planet vanish. Every visit opened with a
+ * world map that flickered out.
+ *
+ * Fetching the style ourselves and handing MapLibre an object rather than a
+ * URL closes the gap: the mask, the label filtering and the colours are all
+ * present in the very first paint, so nothing outside the United States is
+ * ever drawn at all. The style is fetched either way; this only decides who
+ * fetches it.
+ */
+async function prepareStyle() {
+  const style = await fetch(STYLE_URL).then((r) => r.json());
+
+  const borders = {
+    boundary_state: STATE_BORDER,
+    'boundary_country_z0-4': COUNTRY_BORDER,
+    'boundary_country_z5-': COUNTRY_BORDER,
+  };
+
+  for (const layer of style.layers) {
+    if (borders[layer.id]) {
+      layer.paint = { ...layer.paint, 'line-color': borders[layer.id], 'line-width': BORDER_WIDTH };
+    }
+    // Road shields have their own colouring and are left alone, as before.
+    if (layer.type === 'symbol' && layer.layout?.['text-field']) {
+      layer.paint = {
+        ...layer.paint,
+        'text-color': LABEL_COLOR,
+        'text-halo-color': LABEL_HALO,
+        'text-halo-width': LABEL_HALO_WIDTH,
+      };
+    }
+    if (!layer.id.startsWith('place_')) continue;
+    if (layer.id.startsWith('place_country')) {
+      layer.layout = { ...layer.layout, visibility: 'none' };
+      continue;
+    }
+    layer.filter = layer.filter
+      ? ['all', layer.filter, ['within', US_OUTLINE]]
+      : ['within', US_OUTLINE];
+  }
+
+  style.sources = { ...style.sources, 'outside-us': { type: 'geojson', data: US_MASK } };
+  const firstPlaceLabel = style.layers.findIndex((l) => l.id.startsWith('place_'));
+  style.layers.splice(firstPlaceLabel < 0 ? style.layers.length : firstPlaceLabel, 0, {
+    id: 'outside-us',
+    type: 'fill',
+    source: 'outside-us',
+    paint: { 'fill-color': MASK_FILL, 'fill-opacity': 1 },
+  });
+
+  return style;
+}
+
+/**
  * Stops the zoom out once the whole country is on screen.
  *
  * Paired with [US_BOUNDS]: bounds alone stop you panning away but not zooming
@@ -454,9 +513,15 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return undefined;
 
+    // Built synchronously from a style we already hold, so the first paint is
+    // already masked. If preparing it fails -- the style host is third-party --
+    // the URL is handed over instead and the load handler below applies the
+    // same changes a frame late, which is the old behaviour rather than a
+    // broken map.
+    const build = (style) => {
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: STYLE_URL,
+      style,
       bounds: OPENING_VIEW,
       // No repeated copies of the world either side. Nothing is scored
       // outside the US, so the copies are empty basemap.
@@ -512,10 +577,22 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
 
     mapRef.current = map;
     overlayRef.current = overlay;
+    return () => panelWatcher?.disconnect();
+    };
+
+    let disposePanelWatcher;
+    let cancelled = false;
+    prepareStyle()
+      .catch(() => STYLE_URL)
+      .then((style) => {
+        if (cancelled) return;
+        disposePanelWatcher = build(style);
+      });
 
     return () => {
-      panelWatcher?.disconnect();
-      map.remove();
+      cancelled = true;
+      disposePanelWatcher?.();
+      mapRef.current?.remove();
       mapRef.current = null;
       overlayRef.current = null;
     };
