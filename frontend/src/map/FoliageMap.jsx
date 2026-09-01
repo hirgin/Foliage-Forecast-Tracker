@@ -146,7 +146,6 @@ function brightenLabels(map) {
   }
 }
 
-const FALLBACK_VIEW = { longitude: -72.65, latitude: 43.92, zoom: 7 };
 
 /**
  * How far the map lets you wander: the lower 48, with a margin.
@@ -163,6 +162,20 @@ const FALLBACK_VIEW = { longitude: -72.65, latitude: 43.92, zoom: 7 };
  * horizon down to Panama before the country fitted across.
  */
 const US_BOUNDS = [[-125.5, 24.0], [-66.5, 49.5]];
+
+/**
+ * Where the map opens.
+ *
+ * The country, because that is what the site is about. It used to be Stowe,
+ * Vermont at zoom 7 -- correct when Vermont was the only state with data, and
+ * quietly wrong from the day the second one landed. Every visitor arrived
+ * zoomed into one hillside in New England and had to find the rest of the
+ * United States for themselves.
+ *
+ * Set on the constructor rather than corrected after load, so there is no
+ * first frame showing somewhere else.
+ */
+const OPENING_VIEW = US_BOUNDS;
 
 /**
  * Stops the zoom out once the whole country is on screen.
@@ -423,19 +436,6 @@ function clampCentre(map) {
   }
 }
 
-/** Bounding box of the loaded cells, from their H3 indexes. */
-function boundsOf(cells) {
-  if (!cells.length) return null;
-  let minLon = 180, minLat = 90, maxLon = -180, maxLat = -90;
-  for (const c of cells) {
-    const [lat, lon] = cellToLatLng(c.h3);
-    if (lon < minLon) minLon = lon;
-    if (lon > maxLon) maxLon = lon;
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-  }
-  return [[minLon, minLat], [maxLon, maxLat]];
-}
 
 export default function FoliageMap({ cells, bareCells = [], resolution = 6, selected, onSelect, focus, onZoom }) {
   const [hovered, setHovered] = useState(null);
@@ -445,7 +445,6 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
-  const fitted = useRef(false);
   // Held in a ref so the map is not rebuilt when the callback identity changes.
   const onZoomRef = useRef(onZoom);
   onZoomRef.current = onZoom;
@@ -458,8 +457,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: STYLE_URL,
-      center: [FALLBACK_VIEW.longitude, FALLBACK_VIEW.latitude],
-      zoom: FALLBACK_VIEW.zoom,
+      bounds: OPENING_VIEW,
       // No repeated copies of the world either side. Nothing is scored
       // outside the US, so the copies are empty basemap.
       renderWorldCopies: false,
@@ -480,6 +478,9 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
       brightenBoundaries(map);
       maskEverythingElse(map);
       fenceZoomOut(map);
+      // Again now that fenceZoomOut has set the padding, so the country is
+      // framed in the space the interface leaves rather than the whole canvas.
+      map.fitBounds(US_BOUNDS, { duration: 0 });
       setStyleReady(true);
     });
     // A phone rotating, or a desktop pane being dragged wider, changes how
@@ -598,29 +599,14 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     });
   }, [focus?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fit once, then leave the view alone. A hardcoded zoom only ever looks
-  // right at one window size.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !cells.length || fitted.current) return;
-
-    const bounds = boundsOf(cells);
-    if (!bounds) return;
-
-    // Pad for wherever the chrome actually is. On a wide screen the panel sits
-    // down the left; on a phone it is a sheet across the top, so reserving 330
-    // pixels on the left there both wasted the width the map needs most and
-    // left the country to drift under the panel.
-    const width = containerRef.current?.clientWidth ?? 0;
-    const wide = width > 720;
-    map.fitBounds(bounds, {
-      padding: wide
-        ? { top: 40, bottom: 110, left: 330, right: 40 }
-        : { top: 150, bottom: 100, left: 12, right: 12 },
-      duration: 0,
-    });
-    fitted.current = true;
-  }, [cells]);
+  // There is deliberately no fit-to-the-loaded-cells here any more.
+  //
+  // It existed to frame whatever data had arrived, back when that was one
+  // state. With the country loaded it fits to very nearly the country anyway,
+  // so all it did was wait for the first payload and then jerk the view a few
+  // degrees -- and while states are still loading it framed the *loaded* part,
+  // which is a map of the backfill's progress rather than a map of America.
+  // The opening view is the country, and it stays there until someone moves it.
 
   return (
     <div className="map">
