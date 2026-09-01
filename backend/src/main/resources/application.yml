@@ -50,8 +50,21 @@ foliage:
     # H3 resolution the forecast is computed at (~3 km edge). See ADR-0002.
     resolution: 6
     # A cell counts as forest at or above this canopy percentage. Applied at
-    # query time, never at ingest, so it can be retuned without re-sampling.
-    min-canopy-pct: 20
+    # query time, never at ingest, so it can be retuned without re-sampling --
+    # which is exactly what happened here.
+    #
+    # Lowered from 20. At 20 the map showed colour on 54% of the grid and
+    # nothing on the rest, which across the farm belt meant most of the screen
+    # had no forecast on it: Ohio scored half its cells, Iowa an eighth. But
+    # land with a scattering of trees still turns colour in autumn, and the
+    # distribution says the floor was in the wrong place -- 5% scores 73.5% of
+    # the grid against 54% at 20, while dropping further to 1% adds only 2.7
+    # points more. Nearly everything with any trees on it sits above 5, and
+    # nearly nothing sits between 0 and 5.
+    #
+    # What stays uncoloured after this is genuinely treeless: 38% of Iowa's
+    # cells record zero canopy, and no threshold will make row crops turn.
+    min-canopy-pct: 5
     # Built-up cells are kept regardless of canopy when they sit in a metro
     # of at least this many people. City street trees turn on the same
     # schedule as the woods outside town, and the canopy floor alone left

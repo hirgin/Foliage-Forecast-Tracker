@@ -30,6 +30,17 @@ Every external input, where it comes from, and what it costs.
 - <https://www.mrlc.gov/data/nlcd-all-usfs-tree-canopy-cover-conus>
 - Served from an ArcGIS ImageServer. 30 m raster, public domain. Defines which
   hexagons are forest.
+- **The floor is 5% canopy, not 20.** It is applied at query time rather than
+  at ingest, so it can be retuned without re-sampling a single tile — and it
+  was. At 20 the map carried colour on 54% of the grid and nothing on the
+  rest, which across the farm belt meant most of the screen had no forecast:
+  Ohio scored half its cells, Iowa an eighth. Land with a scattering of trees
+  still turns colour in autumn.
+- The distribution says where the floor belongs. 5% scores 73.5% of the grid
+  against 54.3% at 20, while going down to 1% adds only 2.7 points more —
+  nearly everything with any trees sits above 5, and nearly nothing sits
+  between 0 and 5. What stays uncoloured is genuinely treeless: 38% of Iowa's
+  cells record zero canopy, and no threshold makes row crops turn.
 - **Read as tiles via `exportImage`**, one degree at 3,700 px, which is the
   raster's native 30 m. Cells are grouped by tile so each is fetched once.
 
