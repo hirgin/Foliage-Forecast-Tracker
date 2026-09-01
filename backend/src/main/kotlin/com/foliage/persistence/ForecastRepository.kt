@@ -111,6 +111,33 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
         { rs, _ -> map(rs) },
     ).groupBy { it.h3 }
 
+    /**
+     * The same, for one batch of cells.
+     *
+     * [allTimelines] reads the entire forecast table in a single statement,
+     * which was fine at 4.6M rows and is not at 15M: lowering the canopy floor
+     * to 5% and running the season into December put it past what the hosted
+     * tier will serve at once, and the export died on
+     * "query has been cancelled due to exceeding the allowed memory limit".
+     * Not a slow query -- a refused one, so the whole deploy failed.
+     *
+     * The export already groups cells into res 3 shards to write them, so
+     * asking per shard costs one round trip per file it was going to write
+     * anyway, and no single statement is ever large enough to be refused.
+     */
+    fun timelinesFor(h3s: Collection<Long>): Map<Long, List<StoredForecast>> {
+        if (h3s.isEmpty()) return emptyMap()
+        val placeholders = h3s.joinToString(",") { "?" }
+        return jdbc.query(
+            """
+            SELECT h3, day, progression, intensity, stage, confidence
+            FROM foliage_forecast WHERE h3 IN ($placeholders) ORDER BY h3, day
+            """.trimIndent(),
+            { rs, _ -> map(rs) },
+            *h3s.toTypedArray(),
+        ).groupBy { it.h3 }
+    }
+
     /** Season bounds and row count, for /meta. */
     fun coverage(): Coverage? = jdbc.query(
         "SELECT MIN(day) lo, MAX(day) hi, COUNT(*) n, COUNT(DISTINCT h3) cells FROM foliage_forecast",

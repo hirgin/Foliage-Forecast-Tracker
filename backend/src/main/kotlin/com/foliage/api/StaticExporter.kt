@@ -100,15 +100,20 @@ class StaticExporter(
         place.population >= 1_000 || place.kind != com.foliage.ingest.places.PlaceKind.TOWN
 
     /**
-     * Fraction of the grid that must carry a forecast for a day to be worth
+     * How thin a day may be, relative to the fullest day, and still be worth
      * publishing.
      *
-     * Low, because a day that is thinly covered is still a real day: states
-     * fill in one at a time, and waiting for all of them would hold the whole
-     * season back for the slowest. What this excludes is days nothing has
-     * reached yet.
+     * Measured against the best day rather than against the grid, which is the
+     * correction that matters. A fixed fraction of the grid cannot tell "most
+     * of the country reaches this day" from "a quarter of it does": at a
+     * quarter, December passed the test while three quarters of the map was
+     * still grey there -- which is the tail this was supposed to remove.
+     *
+     * Relative to the fullest day it adapts on its own. While the refill is
+     * part done the season stops where the bulk of the data stops, and as
+     * states land it extends by itself, with no threshold to retune.
      */
-    private val MIN_DAY_COVERAGE = 0.25
+    private val MIN_DAY_COVERAGE = 0.9
 
     /**
      * The season, truncated to the days that actually have a forecast.
@@ -125,12 +130,21 @@ class StaticExporter(
      * hidden that exists, and nothing is offered that does not.
      */
     private fun publishableDays(all: List<LocalDate>, gridSize: Int): List<LocalDate> {
-        val threshold = (gridSize * MIN_DAY_COVERAGE).toInt()
-        val last = all.lastOrNull { forecasts.countByDay(it) >= threshold }
+        val counts = all.associateWith { forecasts.countByDay(it) }
+        val fullest = counts.values.maxOrNull() ?: 0
         // Never return nothing: a completely empty forecast table is a
         // different failure, and the caller already refuses that with a clear
         // message rather than writing an empty season.
-        return if (last == null) all else all.filter { !it.isAfter(last) }
+        if (fullest == 0) return all
+
+        val threshold = (fullest * MIN_DAY_COVERAGE).toInt()
+        val last = all.lastOrNull { counts.getValue(it) >= threshold } ?: return all
+        val kept = all.filter { !it.isAfter(last) }
+        log.info(
+            "publishing {} of {} days: the season is full to {} ({} of {} cells), and thinner after",
+            kept.size, all.size, last, counts.getValue(last), gridSize,
+        )
+        return kept
     }
 
     /** [stateFips] null exports the whole loaded grid. */
@@ -160,7 +174,6 @@ class StaticExporter(
 
         val peakDays = forecasts.peakDayByCell()
         val factorsByCell = forecastService.peakFactors(stateFips, peakDays, year)
-        val timelines = forecasts.allTimelines()
 
         var files = 0
         var bytes = 0L
@@ -265,7 +278,18 @@ class StaticExporter(
 
         // --- timelines and factors, sharded by res 3 ancestor -------------
         val shards = grid6.groupBy { shardOf(it.h3) }
+
+        // Gathered while writing rather than read separately. The meta block
+        // needs to know which cells carry a forecast, and that used to come
+        // from the whole-table read; counting them as each shard passes
+        // through costs nothing and avoids asking the database twice.
+        val cellsWithForecast = HashSet<Long>()
         for ((shard, members) in shards) {
+            // Read this shard's timelines rather than the whole table. See
+            // ForecastRepository.timelinesFor: the single-statement read was
+            // refused outright once the table passed 15M rows.
+            val timelines = forecasts.timelinesFor(members.map { it.h3 })
+            cellsWithForecast += timelines.keys
             val n = members.size
             val d = days.size
             val buf = PackedFormat.buffer(12 + 4 * n + PackedFormat.CHANNELS * n * d)
@@ -376,9 +400,9 @@ class StaticExporter(
                 // peak. A cell scored somewhere too warm to turn never peaks,
                 // and counting only peaks understated how much of the map is
                 // actually done.
-                "cellsForecast" to timelines.keys.count { indexOf.containsKey(it) },
+                "cellsForecast" to cellsWithForecast.count { indexOf.containsKey(it) },
                 "statesForecast" to grid6
-                    .filter { timelines.containsKey(it.h3) }
+                    .filter { cellsWithForecast.contains(it.h3) }
                     .mapNotNull { it.stateName }
                     .distinct().size,
                 "placeCount" to resolved.size,
