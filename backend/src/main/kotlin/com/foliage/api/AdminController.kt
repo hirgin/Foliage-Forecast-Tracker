@@ -36,6 +36,7 @@ class AdminController(
     private val placeIngest: PlaceIngest,
     private val weatherBackfill: WeatherBackfill,
     private val normals: com.foliage.persistence.NormalRepository,
+    private val modelValidation: com.foliage.validate.ModelValidation,
 ) {
 
     @PostMapping("/bootstrap-grid")
@@ -132,6 +133,22 @@ class AdminController(
             "yearsAveragedAfter" to normals.yearsAveragedByState(stateFips),
         )
     }
+
+    /**
+     * Measures the model against real observations of coloured leaves.
+     *
+     * The only check here that is not the model marking its own homework.
+     * Reads only -- it fetches from USA-NPN and compares, and writes nothing.
+     */
+    @PostMapping("/validate")
+    fun validate(
+        @RequestParam(required = false) states: String?,
+        @RequestParam(required = false) year: Int?,
+    ): com.foliage.validate.ValidationResult = modelValidation.run(
+        states = states?.split(",")?.map { it.trim().uppercase() }?.filter { it.isNotBlank() }
+            ?: com.foliage.grid.ConusStates.POSTAL,
+        year = year ?: java.time.LocalDate.now().year,
+    )
 
     /** Writes the season out as static JSON for CDN publishing. */
     @PostMapping("/export")

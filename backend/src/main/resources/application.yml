@@ -154,6 +154,17 @@ foliage:
     # with no sign of climbing, because subtropical Florida barely turns.
     start: "09-01"
     end: "12-15"
+  validation:
+    # USA-NPN. Ground truth for the model, and the only check in this project
+    # that is not the model marking its own homework. See ModelValidation.
+    #
+    # services.usanpn.org, not www.usanpn.org: the documented host serves a
+    # 404 page with a 200-shaped body, which parses as an empty result rather
+    # than failing, so pointing at it looks like "no observations exist".
+    npn-url: https://services.usanpn.org/npn_portal
+    # NPN asks callers to identify themselves. Honour system, no key.
+    request-src: foliage-forecast-portfolio
+
   admin:
     # Guards the pipeline triggers. Off by default, and switched on for the
     # local profile in the block at the end of this file -- which is where it

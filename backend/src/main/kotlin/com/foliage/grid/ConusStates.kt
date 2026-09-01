@@ -49,6 +49,25 @@ object ConusStates {
     val ALL: List<String> =
         NEW_ENGLAND + MID_ATLANTIC + GREAT_LAKES + APPALACHIAN + PLAINS + SOUTH + MOUNTAIN + PACIFIC
 
+    /**
+     * The same states as postal codes, for services that key on them.
+     *
+     * USA-NPN's observation API takes `VT`, not `Vermont` and not `50`, so a
+     * third spelling of the same 49 places has to exist somewhere. It lives
+     * here beside [ALL] rather than in the validation code, so the day a state
+     * is added there is one file to change and not two.
+     */
+    val POSTAL: List<String> = listOf(
+        "ME", "NH", "VT", "MA", "RI", "CT",
+        "NY", "PA", "NJ", "DE", "MD", "DC",
+        "MI", "WI", "MN", "OH", "IN", "IL",
+        "WV", "KY", "TN", "NC", "SC", "GA", "VA",
+        "MO", "IA", "KS", "NE", "SD", "ND",
+        "AL", "MS", "LA", "AR", "FL", "TX", "OK",
+        "MT", "WY", "CO", "NM", "ID", "UT", "AZ", "NV",
+        "WA", "OR", "CA",
+    )
+
     /** Named subsets a caller can bootstrap without listing states by hand. */
     val REGIONS: Map<String, List<String>> = mapOf(
         "new-england" to NEW_ENGLAND,
