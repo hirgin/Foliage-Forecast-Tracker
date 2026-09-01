@@ -112,9 +112,24 @@ jobs:
           # machine, so it has its own allowance, and leaving that unused
           # while the country is 84% grey is waste. Bounded tightly so a
           # deploy still finishes quickly.
+          # A push publishes, it does not load.
+          #
+          # Loading on every deploy was right while the country was mostly
+          # grey: the runner has its own API allowance and leaving it unused
+          # was waste. All 49 states are loaded now, so what it buys is small
+          # and what it costs is not -- a push spent up to 35 minutes
+          # backfilling before it published anything, and since runs queue
+          # rather than cancel, a few pushes in a row put the site 40 minutes
+          # or more behind the code. That is how the site came to be serving a
+          # build two commits old while the fix for the very problem being
+          # reported sat in a queue.
+          #
+          # Backfilling now happens on the schedule and on an explicit
+          # dispatch, which is where it belongs: it is nightly work, not part
+          # of shipping a change.
           REFRESH=false
-          BACKFILL_STATES=4
-          BACKFILL_MINUTES=35
+          BACKFILL_STATES=0
+          BACKFILL_MINUTES=0
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.refresh }}" = "true" ]; then
             REFRESH=true
             BACKFILL_STATES=8
