@@ -177,14 +177,35 @@ const US_BOUNDS = [[-125.5, 24.0], [-66.5, 49.5]];
  * what cameraForBounds computes -- so it is recomputed whenever the map is
  * resized, including on a phone rotating.
  */
+/**
+ * How much further out than an exact fit you may pull, in zoom levels.
+ *
+ * A floor set to the exact fit is uncomfortable: the country touches all four
+ * edges and the panel covers the west coast, so the whole of it is never
+ * actually visible at once. 0.6 is about half as much ground again, which
+ * clears the interface while keeping the country the subject of the frame.
+ *
+ * Fitting around the interface was tried instead of this and is worse. It is
+ * more correct in principle -- pad by the panel, fit to what is left -- but on
+ * a narrow window the panel is 40% of the width, so the fit solves for a
+ * strip and the country comes out small and marooned. It also meant giving the
+ * map a padding, which put getBounds and getCenter into different frames of
+ * reference and sent clampCentre into infinite recursion.
+ *
+ * Headroom costs nothing to give: everything outside the country is masked, so
+ * pulling back further reveals background rather than Canada.
+ */
+const ZOOM_HEADROOM = 0.6;
+
 function fenceZoomOut(map) {
   // Briefly clear the old floor, or a floor higher than the fitting zoom makes
   // cameraForBounds return the floor itself and the fence never loosens.
   map.setMinZoom(0);
   const camera = map.cameraForBounds(US_BOUNDS);
   if (camera?.zoom == null) return;
-  map.setMinZoom(camera.zoom);
-  if (map.getZoom() < camera.zoom) map.setZoom(camera.zoom);
+  const floor = camera.zoom - ZOOM_HEADROOM;
+  map.setMinZoom(floor);
+  if (map.getZoom() < floor) map.setZoom(floor);
 }
 
 /**
@@ -278,7 +299,22 @@ function maskEverythingElse(map) {
  * the other. Zoomed out on a phone the country sits in frame with ocean either
  * side, which is correct -- that is what the country looks like on a phone.
  */
+/**
+ * Guards against clampCentre re-entering itself.
+ *
+ * setCenter fires `move`, which is what calls this, so the correction calls
+ * itself. That was survivable while the two agreed on where the centre is;
+ * once the map carries padding they stop agreeing -- getBounds describes the
+ * whole canvas and getCenter describes the middle of the padded box -- so each
+ * correction computes a slightly different target and the recursion never
+ * bottoms out. It stack-overflowed on the first pan.
+ *
+ * One correction per gesture is all that was ever wanted.
+ */
+let clamping = false;
+
 function clampCentre(map) {
+  if (clamping) return;
   const [[west, south], [east, north]] = US_BOUNDS;
   const centre = map.getCenter();
   const view = map.getBounds();
@@ -304,7 +340,12 @@ function clampCentre(map) {
   // Only when it actually moved, and not for sub-pixel differences, or
   // setCenter re-fires move and the two fight each other every frame.
   if (Math.abs(lng - centre.lng) > 1e-6 || Math.abs(lat - centre.lat) > 1e-6) {
-    map.setCenter([lng, lat]);
+    clamping = true;
+    try {
+      map.setCenter([lng, lat]);
+    } finally {
+      clamping = false;
+    }
   }
 }
 
