@@ -101,9 +101,26 @@ class NormalRepository(private val jdbc: JdbcTemplate) {
      * allowance has rows and is still incomplete. Compared against a state's
      * parents, this is what makes the nightly run resume rather than restart.
      */
-    fun cellsWithNormals(): Set<Long> = jdbc.queryForList(
-        "SELECT DISTINCT h3 FROM weather_normal WHERE chill_units IS NOT NULL",
+    /**
+     * Parents whose normals cover the whole season.
+     *
+     * Day-aware, and it has to be. This used to return every parent holding
+     * *any* normals, which is the same answer right up until the season
+     * changes -- and then it is silently wrong in the worst way: extending the
+     * season to cover the Gulf states left all 28,687 parents looking complete,
+     * so the backfill would have skipped every one of them and the new days
+     * would simply never have been fetched. Every southern cell would have
+     * scored against a month of missing weather and quietly stopped
+     * progressing on 15 November, which looks exactly like a real forecast.
+     *
+     * Counting days instead means changing the season is enough on its own:
+     * everything becomes incomplete, and the backfill refills it.
+     */
+    fun cellsWithNormals(seasonDays: Int): Set<Long> = jdbc.queryForList(
+        "SELECT h3 FROM weather_normal WHERE chill_units IS NOT NULL " +
+            "GROUP BY h3 HAVING COUNT(DISTINCT month_day) >= ?",
         Long::class.java,
+        seasonDays,
     ).toSet()
 
     /**

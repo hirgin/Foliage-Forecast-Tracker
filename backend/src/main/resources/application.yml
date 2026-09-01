@@ -137,8 +137,23 @@ foliage:
     batch-size: 2000
   season:
     # Foliage season bounds, month-day. Everything outside this is not modelled.
+    #
+    # The end was 11-15, which is right for New England and cuts the Gulf
+    # states off in the middle of their autumn. Measured against the loaded
+    # grid: Louisiana reached peak in 0% of sampled cells and sat at 48%
+    # progression on 15 November with 98% of them still climbing; Alabama
+    # peaked in 29%, Texas in 37%, and all three were still rising on the last
+    # day. A season that ends while half the country is still turning is not a
+    # season, it is a window.
+    #
+    # 12-15 covers them. Deep South foliage runs into early December, and at
+    # roughly a point of progression a day Louisiana needs about another month
+    # from where 11-15 left it.
+    #
+    # Florida stays bare and that is not truncation: it sits at 1% progression
+    # with no sign of climbing, because subtropical Florida barely turns.
     start: "09-01"
-    end: "11-15"
+    end: "12-15"
   admin:
     # Guards the pipeline triggers. Off by default, and switched on for the
     # local profile in the block at the end of this file -- which is where it

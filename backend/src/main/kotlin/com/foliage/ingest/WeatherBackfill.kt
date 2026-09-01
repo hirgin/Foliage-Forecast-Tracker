@@ -41,6 +41,7 @@ class WeatherBackfill(
     private val weatherIngest: WeatherIngest,
     private val forecastService: ForecastService,
     private val audit: com.foliage.ingest.audit.IngestRunRecorder,
+    private val season: com.foliage.ingest.weather.Season,
     @org.springframework.beans.factory.annotation.Value("\${foliage.grid.min-canopy-pct}")
     private val minCanopyPct: Int,
     @org.springframework.beans.factory.annotation.Value("\${foliage.grid.metro-population}")
@@ -59,6 +60,15 @@ class WeatherBackfill(
         cells.scoreableParentsByRes4(fips, minCanopyPct, metroPopulation).values.flatten()
 
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * How many days a parent must hold before it counts as loaded.
+     *
+     * Extending the season has to make everything incomplete again, or the
+     * added days are never fetched and the map stops progressing partway
+     * through autumn without saying so.
+     */
+    private fun seasonDays(): Int = season.days(java.time.LocalDate.now().year).size
 
     /**
      * Brings every already-complete state up to date.
@@ -81,7 +91,7 @@ class WeatherBackfill(
         budget: Duration = Duration.ofMinutes(45),
     ): RefreshResult {
         val deadline = Instant.now().plus(budget)
-        val covered = runCatching { normals.cellsWithNormals() }.getOrDefault(emptySet())
+        val covered = runCatching { normals.cellsWithNormals(seasonDays()) }.getOrDefault(emptySet())
         val lastRefreshed = runCatching { audit.lastForecastRefreshByState() }
             .getOrDefault(emptyMap())
         val refreshed = mutableListOf<String>()
@@ -147,7 +157,7 @@ class WeatherBackfill(
         var quotaSpent = false
         var stoppedForTime = false
 
-        val covered = runCatching { normals.cellsWithNormals() }.getOrDefault(emptySet())
+        val covered = runCatching { normals.cellsWithNormals(seasonDays()) }.getOrDefault(emptySet())
 
         for (state in ConusStates.ALL) {
             if (done.size >= maxStates) break

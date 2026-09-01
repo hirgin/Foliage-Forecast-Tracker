@@ -173,7 +173,7 @@ class WeatherIngest(
             // square up to seven times over. Only parents carrying cells that
             // are actually scored are included, which drops another third.
             val groups = cells.scoreableParentsByRes4(stateFips, minCanopyPct, metroPopulation)
-            val covered = normals.cellsWithNormals()
+            val covered = normals.cellsWithNormals(season.days(today.year).size)
             // Resume: a group whose children all have normals is already done.
             val todo = groups.filterValues { children -> !covered.containsAll(children) }
             val year = today.year
