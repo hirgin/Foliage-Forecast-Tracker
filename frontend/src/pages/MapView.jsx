@@ -187,8 +187,9 @@ export default function MapView({ nav }) {
               so it was the one people asked about.
             */}
             <p className="legend__note">
-              Gaps are ground with no forest to forecast — fields, towns and
-              water. Most common through the farm belt.
+              Faded tiles are ground with too few trees to forecast — fields,
+              towns and water — coloured from the forest nearest them. Read
+              them as the season around there, not as a forecast for that spot.
             </p>
           </section>
         )}

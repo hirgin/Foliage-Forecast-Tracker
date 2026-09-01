@@ -92,6 +92,21 @@ const BOUNDS = {
 const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
+ * Which stage a progression falls in — the client-side twin of
+ * PhenologyModel.stageOf, and it has to keep matching it.
+ *
+ * Scored cells carry their stage from the backend and never need this. It is
+ * for the cells filled in from their neighbours, whose progression is an
+ * average computed here and so has no stage attached to it.
+ */
+export function stageForProgression(progression) {
+  for (const [stage, [lo, hi]] of Object.entries(BOUNDS)) {
+    if (progression >= lo && progression < hi) return stage;
+  }
+  return progression >= 100 ? 'PAST_PEAK' : 'NO_CHANGE';
+}
+
+/**
  * Colour by progression, interpolating between stage anchors.
  *
  * Flat-filling each stage hid a real signal. Northern Vermont runs about six

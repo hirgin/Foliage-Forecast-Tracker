@@ -3,7 +3,8 @@ import maplibregl from 'maplibre-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { cellToLatLng } from 'h3-js';
-import { NO_FOREST_RGB, NO_FOREST_ALPHA } from './colors';
+import { NO_FOREST_RGB, NO_FOREST_ALPHA, progressionColor, stageForProgression } from './colors';
+import { donorsFor, fillValue } from './neighbourFill';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { foliageColor, stageLabel } from './colors';
 
@@ -504,6 +505,11 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
+  // Read by the donor memo, which must see the current cells without taking a
+  // dependency on them; see the note there.
+  const cellsRef = useRef(cells);
+  cellsRef.current = cells;
+
   // Held in a ref so the map is not rebuilt when the callback identity changes.
   const onZoomRef = useRef(onZoom);
   onZoomRef.current = onZoom;
@@ -598,6 +604,31 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     };
   }, []);
 
+  // A scored cell's colour is a measurement; a filled one is a reading of the
+  // country around it. Drawn a shade fainter so the two are distinguishable at
+  // a glance without turning the middle of the map back into an absence.
+  const FILLED_ALPHA = 150;
+
+  /** The date's scored cells, by index. Rebuilt per date; the values change. */
+  const scoredByH3 = useMemo(() => new Map(cells.map((c) => [c.h3, c])), [cells]);
+
+  // Which neighbours each treeless cell borrows from.
+  //
+  // Keyed on how many cells there are rather than on the cells themselves,
+  // which is deliberate. The *set* of scored hexagons is the export's index
+  // and does not change while the page is open -- only the values in them do,
+  // once per move of the time slider. Depending on the array would rebuild
+  // 122,000 neighbour searches every time the date changed, which is the
+  // expensive half of this and none of it would differ.
+  const scoredCount = cells.length;
+  const donors = useMemo(
+    () => (bareCells.length > 0 && resolution === 6
+      ? donorsFor(bareCells, new Set(cellsRef.current.map((c) => c.h3)))
+      : new Map()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bareCells, resolution, scoredCount],
+  );
+
   const layers = useMemo(
     () => [
       // Ground with no forest, drawn first so the forecast always sits on top
@@ -614,7 +645,16 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
           data: bareCells,
           beforeId: BEFORE_LAYER,
           getHexagon: (d) => d,
-          getFillColor: [...NO_FOREST_RGB, NO_FOREST_ALPHA],
+          // Coloured from the country around it rather than left neutral. See
+          // neighbourFill: this is a regional reading, not a claim about trees
+          // on ground that has none, so it is drawn fainter than a scored cell
+          // and named separately in the legend.
+          getFillColor: (d) => {
+            const value = fillValue(donors.get(d) ?? [], scoredByH3);
+            if (value == null) return [...NO_FOREST_RGB, NO_FOREST_ALPHA];
+            return [...progressionColor(value, stageForProgression(value)), FILLED_ALPHA];
+          },
+          updateTriggers: { getFillColor: [cells, donors] },
           stroked: false,
           filled: true,
           extruded: false,
@@ -649,7 +689,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     // The bare layer is conditional, so drop the null when it is off rather
     // than handing deck.gl a hole in the list.
     ].filter(Boolean),
-    [cells, bareCells, resolution, selected, onSelect],
+    [cells, bareCells, resolution, selected, onSelect, donors, scoredByH3],
   );
 
   useEffect(() => {
