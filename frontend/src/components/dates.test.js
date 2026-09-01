@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { formatDay, nextFrame, playFrom } from './TimeSlider';
+import {
+  formatDay, nextFrame, playFrom, nextSpeed, frameMs, BASE_FRAME_MS,
+} from './TimeSlider';
 
 describe('formatDay', () => {
   it('formats a date as day and short month', () => {
@@ -94,5 +96,34 @@ describe('playback', () => {
       }
       expect(steps).toBe(TOTAL + 1);
     });
+  });
+});
+
+describe('playback speed', () => {
+  it('cycles through the speeds and wraps', () => {
+    expect(nextSpeed(0.5)).toBe(1);
+    expect(nextSpeed(1)).toBe(2);
+    expect(nextSpeed(2)).toBe(4);
+    expect(nextSpeed(4)).toBe(0.5);
+  });
+
+  it('falls back to normal speed if handed something unknown', () => {
+    // Defensive rather than theoretical: a stale value from a previous build
+    // should not leave the button cycling through nothing.
+    expect(nextSpeed(3)).toBe(0.5);
+  });
+
+  it('turns a multiplier into a frame interval', () => {
+    expect(frameMs(1)).toBe(BASE_FRAME_MS);
+    expect(frameMs(2)).toBe(BASE_FRAME_MS / 2);
+    expect(frameMs(0.5)).toBe(BASE_FRAME_MS * 2);
+  });
+
+  it('keeps a whole season watchable at every speed', () => {
+    // 106 days now the season runs to December. Slowest should stay under a
+    // minute and fastest should not be a flicker.
+    const season = 106;
+    expect((frameMs(0.5) * season) / 1000).toBeLessThan(60);
+    expect((frameMs(4) * season) / 1000).toBeGreaterThan(2);
   });
 });

@@ -155,6 +155,26 @@ footer a { color: var(--accent); }
 }
 .slider__play:hover { background: rgba(255, 255, 255, 0.11); }
 
+/* Sits beside the play button and is deliberately quieter than it: pressing
+   play is the thing people came to do, changing the rate is an adjustment to
+   it. Pill rather than circle so the two do not read as a pair of equals, and
+   tabular figures so the label does not jump width between 0.5 and 4. */
+.slider__speed {
+  flex: none;
+  height: 30px;
+  min-width: 38px;
+  padding: 0 8px;
+  border-radius: 15px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.slider__speed:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+
 .slider__track { flex: 1; position: relative; }
 
 .slider__track input[type="range"] {

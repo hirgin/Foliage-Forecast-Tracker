@@ -25,6 +25,33 @@ export function nextFrame(index, total) {
 }
 
 /**
+ * Playback speeds, as multipliers of [BASE_FRAME_MS].
+ *
+ * Worth having now that a season is 106 days rather than 76: at one frame per
+ * 140 ms a full playthrough runs about fifteen seconds, which is a long time
+ * to sit through when you are checking one region, and too fast to follow when
+ * you are watching a front move down the country.
+ *
+ * Kept to a short cycle rather than a dropdown. There is one control's worth of
+ * room next to the play button, and four steps covers "slow enough to read" to
+ * "quick enough to skim" without a menu.
+ */
+export const SPEEDS = [0.5, 1, 2, 4];
+
+/** One frame at normal speed. */
+export const BASE_FRAME_MS = 140;
+
+export function frameMs(speed) {
+  return Math.round(BASE_FRAME_MS / speed);
+}
+
+/** The next speed in the cycle, wrapping back to the slowest. */
+export function nextSpeed(speed) {
+  const i = SPEEDS.indexOf(speed);
+  return SPEEDS[(i + 1) % SPEEDS.length] ?? 1;
+}
+
+/**
  * Where pressing play should start from.
  *
  * Rewinds when the season has already played through. Without this, play at
@@ -46,6 +73,7 @@ export function formatDay(iso) {
 
 export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, horizonDate }) {
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const timer = useRef(null);
 
   const { start, total } = useMemo(() => {
@@ -75,9 +103,9 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
         }
         return toIso(start + next * DAY_MS);
       });
-    }, 140);
+    }, frameMs(speed));
     return () => clearInterval(timer.current);
-  }, [playing, start, total, onChange]);
+  }, [playing, speed, start, total, onChange]);
 
   const finished = index >= total;
 
@@ -114,6 +142,15 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
         }
       >
         {playing ? '❚❚' : finished ? '↻' : '▶'}
+      </button>
+
+      <button
+        className="slider__speed"
+        onClick={() => setSpeed(nextSpeed(speed))}
+        aria-label={`Playback speed: ${speed} times. Press to change.`}
+        title="Playback speed"
+      >
+        {speed}&times;
       </button>
 
       <div className="slider__track">
