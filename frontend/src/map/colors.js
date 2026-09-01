@@ -57,9 +57,17 @@ export const NO_FORECAST_ALPHA = 120;
  * Drawn at all because the alternative was worse. Leaving these cells out left
  * the map pitted wherever there is no forest -- a quarter of Ohio, a fifth of
  * Maryland -- and a hole reads as broken data, not as a cornfield.
+ *
+ * **Bright enough to see, which the first attempt was not.** At [46, 48, 44]
+ * and 52% alpha this composited to rgb(31, 31, 28) over the basemap: an
+ * honest neutral in the abstract and indistinguishable from a hole on screen,
+ * so the map still looked pitted across Iowa and Kansas. Being subordinate to
+ * the stage colours is worth nothing if it reads as missing data. It is now
+ * near-opaque and clearly a drawn tile -- still plainly not one of the six
+ * stage colours, but unmistakably something rather than nothing.
  */
-export const NO_FOREST_RGB = [46, 48, 44];
-export const NO_FOREST_ALPHA = 132;
+export const NO_FOREST_RGB = [62, 66, 58];
+export const NO_FOREST_ALPHA = 236;
 
 const BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s]));
 
