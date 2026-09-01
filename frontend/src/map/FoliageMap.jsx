@@ -5,6 +5,7 @@ import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { cellToLatLng } from 'h3-js';
 import { NO_FOREST_RGB, NO_FOREST_ALPHA, progressionColor, stageForProgression } from './colors';
 import { donorsFor, fillValue } from './neighbourFill';
+import { bucketByAncestor, ancestorsInView, cellsInView } from './viewport';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { foliageColor, stageLabel } from './colors';
 
@@ -499,6 +500,8 @@ function clampCentre(map) {
 
 export default function FoliageMap({ cells, bareCells = [], resolution = 6, selected, onSelect, focus, onZoom }) {
   const [hovered, setHovered] = useState(null);
+  // The visible bounds, refreshed on moveend. Null until the map first settles.
+  const [view, setView] = useState(null);
   // Whether the basemap style is in place. The hexagons are interleaved into
   // it, so they cannot be added before it exists.
   const [styleReady, setStyleReady] = useState(false);
@@ -577,7 +580,14 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     // Report zoom so the page can swap to the coarser export when hexagons
     // would be smaller than a pixel. On moveend rather than on every frame:
     // this decides which file to fetch, and doing it mid-gesture would thrash.
-    const report = () => onZoomRef.current?.(map.getZoom());
+    const report = () => {
+      onZoomRef.current?.(map.getZoom());
+      // What is on screen, so the layers can be given that and not the country.
+      const b = map.getBounds();
+      setView({
+        west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth(),
+      });
+    };
     map.on('moveend', report);
     map.on('load', report);
 
@@ -612,6 +622,34 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
   /** The date's scored cells, by index. Rebuilt per date; the values change. */
   const scoredByH3 = useMemo(() => new Map(cells.map((c) => [c.h3, c])), [cells]);
 
+  // Only res 6 needs this. The coarse levels are a few thousand hexagons for
+  // the whole country, which is less work to draw than to filter.
+  const windowed = resolution === 6 && view != null;
+
+  // Bucketed once per dataset, not per move: this is the single pass over
+  // everything, and it is what makes each pan cheap afterwards.
+  const cellBuckets = useMemo(
+    () => (windowed ? bucketByAncestor(cells.map((c) => c.h3)) : null),
+    // The *set* of cells is the export's index and does not change with the
+    // date, so this survives the time slider; see the donor memo below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [windowed, cells.length],
+  );
+  const bareBuckets = useMemo(
+    () => (windowed ? bucketByAncestor(bareCells) : null),
+    [windowed, bareCells],
+  );
+
+  const visible = useMemo(() => {
+    if (!windowed) return { cells, bare: bareCells };
+    const ancestors = ancestorsInView(view);
+    const onScreen = new Set(cellsInView(cellBuckets, ancestors));
+    return {
+      cells: cells.filter((c) => onScreen.has(c.h3)),
+      bare: cellsInView(bareBuckets, ancestors),
+    };
+  }, [windowed, view, cells, bareCells, cellBuckets, bareBuckets]);
+
   // Which neighbours each treeless cell borrows from.
   //
   // Keyed on how many cells there are rather than on the cells themselves,
@@ -621,13 +659,33 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
   // 122,000 neighbour searches every time the date changed, which is the
   // expensive half of this and none of it would differ.
   const scoredCount = cells.length;
-  const donors = useMemo(
-    () => (bareCells.length > 0 && resolution === 6
-      ? donorsFor(bareCells, new Set(cellsRef.current.map((c) => c.h3)))
-      : new Map()),
+
+  /** Every scored hexagon in the country, for the neighbour search to hit. */
+  const scoredH3 = useMemo(
+    () => new Set(cellsRef.current.map((c) => c.h3)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bareCells, resolution, scoredCount],
+    [scoredCount],
   );
+
+  // Searched for the hexagons on screen, and remembered.
+  //
+  // Doing the whole country up front cost 1.2 seconds on the main thread, for
+  // 122,000 cells of which a viewport shows a couple of thousand. Restricted
+  // to what is visible it is a few milliseconds, and the cache means panning
+  // back over ground already covered costs nothing at all.
+  const donorCache = useRef(new Map());
+  useEffect(() => { donorCache.current = new Map(); }, [scoredH3]);
+
+  const donors = donorCache.current;
+  if (windowed) {
+    const missing = visible.bare.filter((h3) => !donors.has(h3));
+    if (missing.length > 0) {
+      for (const [h3, found] of donorsFor(missing, scoredH3)) donors.set(h3, found);
+      // Remember the misses too, or every pan re-searches the cells that have
+      // no forest anywhere near them -- which is most of Kansas.
+      for (const h3 of missing) if (!donors.has(h3)) donors.set(h3, []);
+    }
+  }
 
   const layers = useMemo(
     () => [
@@ -639,10 +697,10 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
       // contains, so a 22 km hexagon over farmland already exists wherever any
       // of its children is forest, and the holes this fills are a res 6
       // phenomenon.
-      bareCells.length > 0 && resolution === 6
+      visible.bare.length > 0 && resolution === 6
         ? new H3HexagonLayer({
           id: 'no-forest',
-          data: bareCells,
+          data: visible.bare,
           beforeId: BEFORE_LAYER,
           getHexagon: (d) => d,
           // Coloured from the country around it rather than left neutral. See
@@ -654,7 +712,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
             if (value == null) return [...NO_FOREST_RGB, NO_FOREST_ALPHA];
             return [...progressionColor(value, stageForProgression(value)), FILLED_ALPHA];
           },
-          updateTriggers: { getFillColor: [cells, donors] },
+          updateTriggers: { getFillColor: [visible, cells] },
           stroked: false,
           filled: true,
           extruded: false,
@@ -663,7 +721,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
         : null,
       new H3HexagonLayer({
         id: 'foliage',
-        data: cells,
+        data: visible.cells,
         // Under the style's label layers rather than over them.
         beforeId: BEFORE_LAYER,
         // Indexes arrive as hex strings: they are 64-bit and would lose
@@ -681,7 +739,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
         onHover: ({ object }) => setHovered(object ?? null),
         onClick: ({ object }) => onSelect?.(object?.h3 ?? null),
         updateTriggers: {
-          getFillColor: [cells],
+          getFillColor: [visible],
           getLineColor: [selected],
           getLineWidth: [selected],
         },
@@ -689,7 +747,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     // The bare layer is conditional, so drop the null when it is off rather
     // than handing deck.gl a hole in the list.
     ].filter(Boolean),
-    [cells, bareCells, resolution, selected, onSelect, donors, scoredByH3],
+    [visible, resolution, selected, onSelect, donors, scoredByH3],
   );
 
   useEffect(() => {
