@@ -144,14 +144,27 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
         {playing ? '❚❚' : finished ? '↻' : '▶'}
       </button>
 
-      <button
-        className="slider__speed"
-        onClick={() => setSpeed(nextSpeed(speed))}
-        aria-label={`Playback speed: ${speed} times. Press to change.`}
-        title="Playback speed"
-      >
-        {speed}&times;
-      </button>
+      {/*
+        All four shown rather than cycled through.
+        A single button that steps 1 -> 2 -> 4 -> 0.5 puts the slowest speed
+        three clicks away, behind the two fast ones, with nothing on screen to
+        say it exists -- so the honest reading of pressing it twice is that the
+        control only speeds up. Four buttons cost about eighty pixels and make
+        every speed one press away and visible without pressing anything.
+      */}
+      <div className="slider__speeds" role="group" aria-label="Playback speed">
+        {SPEEDS.map((s) => (
+          <button
+            key={s}
+            className={s === speed ? 'slider__speed slider__speed--on' : 'slider__speed'}
+            onClick={() => setSpeed(s)}
+            aria-pressed={s === speed}
+            aria-label={`Play at ${s} times speed`}
+          >
+            {s}&times;
+          </button>
+        ))}
+      </div>
 
       <div className="slider__track">
         <input

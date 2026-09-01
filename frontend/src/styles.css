@@ -159,21 +159,34 @@ footer a { color: var(--accent); }
    play is the thing people came to do, changing the rate is an adjustment to
    it. Pill rather than circle so the two do not read as a pair of equals, and
    tabular figures so the label does not jump width between 0.5 and 4. */
-.slider__speed {
+.slider__speeds {
   flex: none;
-  height: 30px;
-  min-width: 38px;
-  padding: 0 8px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
   border-radius: 15px;
   border: 1px solid var(--border);
+}
+.slider__speed {
+  height: 24px;
+  min-width: 27px;
+  padding: 0 5px;
+  border-radius: 12px;
+  border: none;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .slider__speed:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+/* The chosen one, filled rather than outlined, so which speed is active reads
+   at a glance without comparing four labels. */
+.slider__speed--on {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+}
 
 .slider__track { flex: 1; position: relative; }
 
