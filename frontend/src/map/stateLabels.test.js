@@ -1,91 +1,125 @@
 import { describe, it, expect } from 'vitest';
-import { stateLabelField, labelAt, FULL_NAME_ZOOM, STATE_ABBR } from './stateLabels';
+import {
+  stateLabelField,
+  labelAt,
+  fullNameZoom,
+  stateWidthPx,
+  nameWidthPx,
+  FULL_NAME_ZOOM,
+  STATE_ABBR,
+  STATE_SPAN_DEG,
+  NATIONAL_CODE_ZOOM,
+} from './stateLabels';
 
 /**
  * State labels have to sit inside the state they name. At the national view
- * they did not: the anchors were correct all along, but "CONNECTICUT" is six
- * times wider than Connecticut, so a correctly centred label still spilled
- * into New York and the sea.
+ * they did not: the anchors were correct all along, but "CONNECTICUT" is far
+ * wider than Connecticut, so a correctly centred label still spilled into New
+ * York and the sea.
  */
 describe('state labels', () => {
-  it('abbreviates the crowded states at the default national view', () => {
-    // Zoom 3.5 is roughly what the map opens at. Every one of these is
-    // narrower than its own name here.
-    for (const state of Object.keys(FULL_NAME_ZOOM)) {
-      expect(labelAt(state, 3.5)).toBe(STATE_ABBR[state]);
-    }
-  });
+  const CONUS = Object.keys(STATE_ABBR);
 
-  it('leaves states that already fit completely alone', () => {
-    // The change must not touch the rest of the map. Most states have room
-    // for their name at every zoom the label is drawn at, and abbreviating
-    // them would make the map worse to read, not better.
-    expect(labelAt('Texas', 3.5)).toBe('Texas');
-    expect(labelAt('California', 3.5)).toBe('California');
-    expect(labelAt('Minnesota', 3.5)).toBe('Minnesota');
-    expect(labelAt('Pennsylvania', 3.5)).toBe('Pennsylvania');
-  });
-
-  it('gives each state its full name once there is room', () => {
-    expect(labelAt('Vermont', 6)).toBe('Vermont');
-    expect(labelAt('Vermont', 5.9)).toBe('VT');
-    expect(labelAt('Rhode Island', 8)).toBe('Rhode Island');
-    expect(labelAt('Rhode Island', 7.9)).toBe('RI');
-  });
-
-  it('makes smaller states wait longer than larger ones', () => {
-    // The thresholds are per state because "too small" is a property of the
-    // state, not of the map. A single global cutoff would spill Rhode Island
-    // or needlessly abbreviate Maryland.
-    expect(FULL_NAME_ZOOM['Rhode Island']).toBeGreaterThan(FULL_NAME_ZOOM.Connecticut);
-    expect(FULL_NAME_ZOOM.Connecticut).toBeGreaterThan(FULL_NAME_ZOOM.Maryland);
-  });
-
-  it('has an abbreviation for every state it abbreviates', () => {
-    // A missing entry would render the literal word "undefined" on the map.
-    for (const state of Object.keys(FULL_NAME_ZOOM)) {
+  it('covers every contiguous state', () => {
+    // 48 states. A missing entry renders the literal word "undefined" on the
+    // map, and a missing span silently defaults the state to the national
+    // threshold rather than failing.
+    expect(CONUS).toHaveLength(48);
+    for (const state of CONUS) {
       expect(STATE_ABBR[state]).toMatch(/^[A-Z]{2}$/);
+      expect(STATE_SPAN_DEG[state]).toBeGreaterThan(0);
     }
+  });
+
+  it('shows a code for every state at the national view', () => {
+    // The point of the design. A national view that spells out Texas while
+    // Rhode Island cannot fit any name at all reads as broken rather than as
+    // adaptive, so below the floor nothing is spelled out.
+    for (const state of CONUS) {
+      expect(labelAt(state, 3.7)).toBe(STATE_ABBR[state]);
+    }
+  });
+
+  it('spells every state out once it is wide enough', () => {
+    // The other half of the claim: codes are a small-scale accommodation, not
+    // the permanent labelling.
+    for (const state of CONUS) {
+      expect(labelAt(state, FULL_NAME_ZOOM[state])).toBe(state);
+    }
+  });
+
+  it('never spells a name out before it fits', () => {
+    // The regression that started all this. At its own threshold the name
+    // must actually fit inside the state's usable width.
+    for (const state of CONUS) {
+      const zoom = FULL_NAME_ZOOM[state];
+      const usable = stateWidthPx(state, zoom) * 0.55;
+      expect(usable).toBeGreaterThanOrEqual(nameWidthPx(state) - 0.5);
+    }
+  });
+
+  it('makes narrower states wait longer than wider ones', () => {
+    // Derived from each state's own width rather than picked by eye, so this
+    // ordering should fall out rather than need maintaining.
+    expect(fullNameZoom('Rhode Island')).toBeGreaterThan(fullNameZoom('Connecticut'));
+    expect(fullNameZoom('Connecticut')).toBeGreaterThan(fullNameZoom('Pennsylvania'));
+    expect(fullNameZoom('Texas')).toBe(NATIONAL_CODE_ZOOM);
+  });
+
+  it('holds the smallest states to the largest thresholds', () => {
+    // Rhode Island and Delaware are about 7 px wide nationally. Nothing can
+    // put their names inside them there, and the threshold has to say so.
+    expect(stateWidthPx('Rhode Island', 3.7)).toBeLessThan(10);
+    expect(stateWidthPx('Delaware', 3.7)).toBeLessThan(10);
+    expect(fullNameZoom('Rhode Island')).toBeGreaterThan(8);
   });
 
   describe('the MapLibre expression', () => {
-    // Evaluating the real expression, rather than trusting labelAt to be a
-    // faithful mirror of it. The expression is what the map draws; the mirror
-    // is only a convenience for reasoning.
+    // Evaluating the real expression rather than trusting labelAt to mirror
+    // it. The expression is what the map draws; the mirror is a convenience.
     const evaluate = (expr, name, zoom) => {
       if (!Array.isArray(expr)) return expr;
       const [op] = expr;
-      if (op === 'coalesce') return name;
-      if (op === 'get') return name;
+      if (op === 'coalesce' || op === 'get') return name;
       if (op === 'zoom') return zoom;
       if (op === 'step') {
         const [, , fallback, ...rest] = expr;
         let chosen = fallback;
-        for (let i = 0; i < rest.length; i += 2) {
-          if (zoom >= rest[i]) chosen = rest[i + 1];
-        }
+        for (let i = 0; i < rest.length; i += 2) if (zoom >= rest[i]) chosen = rest[i + 1];
         return evaluate(chosen, name, zoom);
       }
       if (op === 'match') {
         const [, , ...rest] = expr;
-        const otherwise = rest[rest.length - 1];
         for (let i = 0; i < rest.length - 1; i += 2) {
           if (rest[i] === name) return evaluate(rest[i + 1], name, zoom);
         }
-        return evaluate(otherwise, name, zoom);
+        return evaluate(rest[rest.length - 1], name, zoom);
       }
       throw new Error(`unhandled op ${op}`);
     };
 
-    it('agrees with labelAt at every threshold boundary', () => {
+    it('agrees with labelAt for every state at every threshold boundary', () => {
       const expr = stateLabelField();
-      const zooms = [3, 3.5, 4, 5, 5.9, 6, 6.5, 7, 7.5, 8, 10];
-      const states = [...Object.keys(FULL_NAME_ZOOM), 'Texas', 'Ohio'];
-      for (const state of states) {
+      const boundaries = [...new Set(Object.values(FULL_NAME_ZOOM))].flatMap((z) => [z - 0.01, z]);
+      const zooms = [3, 3.7, 4.49, ...boundaries, 12];
+      for (const state of CONUS) {
         for (const zoom of zooms) {
           expect(evaluate(expr, state, zoom)).toBe(labelAt(state, zoom));
         }
       }
+    });
+
+    it('uses a single zoom-based subexpression', () => {
+      // MapLibre rejects more than one, and the rejection takes the whole map
+      // down rather than degrading. Nesting steps is the obvious way to write
+      // this and does exactly that.
+      const expr = stateLabelField();
+      const countZoomSteps = (node) => {
+        if (!Array.isArray(node)) return 0;
+        const isZoomStep = node[0] === 'step' && Array.isArray(node[1]) && node[1][0] === 'zoom';
+        return (isZoomStep ? 1 : 0) + node.slice(1).reduce((a, c) => a + countZoomSteps(c), 0);
+      };
+      expect(countZoomSteps(expr)).toBe(1);
     });
   });
 });

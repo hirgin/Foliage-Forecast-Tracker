@@ -46,7 +46,7 @@ const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
  * United States does not change often enough to be worth a build step.
  */
 import US_MASK from './us-mask.json';
-import { stateLabelField, stateLabelSortKey } from './stateLabels';
+import { stateLabelField, stateLabelSortKey, stateLabelOffset } from './stateLabels';
 
 /** Matches --bg in styles.css, so masked ground reads as page, not as sea. */
 const MASK_FILL = '#0f0d0a';
@@ -281,6 +281,7 @@ async function prepareStyle() {
         'text-allow-overlap': false,
         'text-padding': STATE_LABEL_PADDING,
         'symbol-sort-key': stateLabelSortKey(),
+        'text-offset': stateLabelOffset(),
       };
       // Deleted rather than set to undefined. A layout property set to
       // undefined fails MapLibre's style validation outright -- "array
