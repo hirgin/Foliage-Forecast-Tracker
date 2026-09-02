@@ -36,6 +36,7 @@ class AdminController(
     private val placeIngest: PlaceIngest,
     private val weatherBackfill: WeatherBackfill,
     private val forestTypeIngest: com.foliage.ingest.ForestTypeIngest,
+    private val cells: com.foliage.persistence.CellRepository,
     private val normals: com.foliage.persistence.NormalRepository,
     private val modelValidation: com.foliage.validate.ModelValidation,
     private val forecasts: com.foliage.persistence.ForecastRepository,
@@ -132,6 +133,31 @@ class AdminController(
      * raster: a national pass is roughly a million point lookups and belongs
      * in several runs rather than one long-held request.
      */
+    /** How a state's cells break down by forest type, for checking a survey. */
+    @org.springframework.web.bind.annotation.GetMapping("/forest-type")
+    fun forestType(@RequestParam stateFips: String): Map<String, Any> {
+        val raw = cells.forestTypeBreakdown(stateFips)
+        val total = raw.values.sum()
+        return mapOf(
+            "stateFips" to stateFips,
+            "total" to total,
+            "groups" to raw.entries.sortedByDescending { it.value }.map { (code, n) ->
+                mapOf(
+                    "code" to code,
+                    "label" to when (code) {
+                        -1 -> "not sampled"
+                        0 -> "no forest"
+                        else -> com.foliage.forecast.ForestTypeGroup.forCode(code)?.label ?: "unmapped"
+                    },
+                    "cells" to n,
+                    "multiplier" to com.foliage.forecast.ForestTypeGroup.multiplierFor(
+                        code.takeIf { it > 0 },
+                    ),
+                )
+            },
+        )
+    }
+
     @PostMapping("/sample-forest-type")
     fun sampleForestType(
         @RequestParam stateFips: String,

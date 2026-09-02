@@ -111,5 +111,14 @@ class SpeciesTimingTest {
             .factors.first { it.name == "Forest type" }
         assertEquals("not surveyed", unsampled.effect)
         assertTrue(unsampled.detail.contains("not been surveyed"), "was: ${unsampled.detail}")
+
+        // Surveyed and found empty is a different claim from never surveyed.
+        // Both score at the baseline, but only one is a gap in the data, and
+        // telling someone in a Minneapolis suburb that nobody has looked --
+        // when somebody looked and found parkland -- is simply false.
+        val noForest = CoolingDegreeDayModel.score(CellInput(lat, 300, 0), days, target)
+            .factors.first { it.name == "Forest type" }
+        assertEquals("little forest", noForest.effect)
+        assertTrue(!noForest.detail.contains("not been surveyed"), "was: ${noForest.detail}")
     }
 }

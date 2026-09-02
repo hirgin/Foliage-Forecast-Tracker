@@ -262,7 +262,8 @@ object CoolingDegreeDayModel {
                     "Forest type",
                     speciesMultiplier,
                     when {
-                        species == null -> "not surveyed"
+                        cell.forestTypeGroup == null -> "not surveyed"
+                        cell.forestTypeGroup == 0 -> "little forest"
                         speciesMultiplier < 1.0 -> "turns early"
                         speciesMultiplier > 1.0 -> "turns late"
                         else -> "the usual timing"
@@ -271,11 +272,27 @@ object CoolingDegreeDayModel {
                         // Said plainly, and said at all -- this was the
                         // model's largest known error for most of its life and
                         // the map gave no hint of it.
-                        species == null ->
+                        // Surveyed-and-empty is a different statement from
+                        // not-surveyed, and conflating them tells someone
+                        // standing in a Minneapolis suburb that nobody has
+                        // looked, when in fact somebody looked and found
+                        // parkland. Both score at the baseline; only one of
+                        // them is a gap in the data.
+                        cell.forestTypeGroup == null ->
                             "The trees here have not been surveyed, so this assumes a maple and beech " +
                                 "wood, which is the commonest kind in the Northeast."
+                        cell.forestTypeGroup == 0 ->
+                            "Not much continuous forest here -- open ground, farmland, water or town. " +
+                                "Any colour will come from scattered trees rather than a hillside."
                         species == ForestTypeGroup.CONIFER ->
                             "Mostly evergreens, which do not put on an autumn display."
+                        // A surveyed code this project has no group for -- the
+                        // western and tropical hardwoods. Real forest, no
+                        // measured multiplier, so it scores at the baseline and
+                        // says so rather than claiming to know.
+                        species == null ->
+                            "The trees here were surveyed but are not a kind this forecast has " +
+                                "measured, so it assumes the usual maple and beech timing."
                         speciesMultiplier < 1.0 ->
                             "Mostly ${species.label}. These turn earlier than maples and drop their " +
                                 "leaves quickly once they do."

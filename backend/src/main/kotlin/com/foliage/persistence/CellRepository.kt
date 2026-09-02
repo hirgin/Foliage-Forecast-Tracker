@@ -163,6 +163,25 @@ class CellRepository(private val jdbc: JdbcTemplate) {
         cellMapper, stateFips, limit,
     )
 
+    /**
+     * How a state's sampled cells break down by forest type.
+     *
+     * Operational rather than decorative: the species term only does anything
+     * for cells it actually classified, so "how much of this state is surveyed
+     * as what" is the difference between a term that works and one that is
+     * quietly inert over most of the map.
+     */
+    fun forestTypeBreakdown(stateFips: String): Map<Int, Int> = jdbc.query(
+        """
+        SELECT COALESCE(forest_type_group, -1) AS grp, COUNT(*) AS n
+        FROM cell WHERE state_fips = ?
+        GROUP BY COALESCE(forest_type_group, -1)
+        ORDER BY n DESC
+        """.trimIndent(),
+        { rs, _ -> rs.getInt("grp") to rs.getInt("n") },
+        stateFips,
+    ).toMap()
+
     /** How many of a state's cells still need sampling. */
     fun forestTypeRemaining(stateFips: String): Int = jdbc.queryForObject(
         "SELECT COUNT(*) FROM cell WHERE state_fips = ? AND forest_type_group IS NULL",
