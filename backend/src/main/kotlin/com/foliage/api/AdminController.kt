@@ -163,8 +163,12 @@ class AdminController(
      * megabytes a look, and repeating it helped exhaust a metered allowance.
      */
     @org.springframework.web.bind.annotation.GetMapping("/coverage")
-    fun coverage(): List<com.foliage.persistence.StateCoverage> =
-        forecasts.coverageByState(minCanopyPct, metroPopulation)
+    fun coverage(
+        /** peaked=true asks how much of each state has finished turning instead. */
+        @RequestParam(required = false) peaked: Boolean?,
+    ): List<com.foliage.persistence.StateCoverage> =
+        if (peaked == true) forecasts.peakCoverageByState(minCanopyPct)
+        else forecasts.coverageByState(minCanopyPct, metroPopulation)
 
     /** Writes the season out as static JSON for CDN publishing. */
     @PostMapping("/export")

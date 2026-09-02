@@ -42,6 +42,7 @@ class WeatherBackfill(
     private val forecastService: ForecastService,
     private val audit: com.foliage.ingest.audit.IngestRunRecorder,
     private val season: com.foliage.ingest.weather.Season,
+    private val forecasts: com.foliage.persistence.ForecastRepository,
     @org.springframework.beans.factory.annotation.Value("\${foliage.grid.min-canopy-pct}")
     private val minCanopyPct: Int,
     @org.springframework.beans.factory.annotation.Value("\${foliage.grid.metro-population}")
@@ -61,6 +62,9 @@ class WeatherBackfill(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /** Share of a state's cells that must have peaked before December is skipped. */
+    private val PEAKED_SHARE = 0.95
+
     /**
      * How many days a parent must hold before it counts as loaded.
      *
@@ -69,6 +73,35 @@ class WeatherBackfill(
      * through autumn without saying so.
      */
     private fun seasonDays(): Int = season.days(java.time.LocalDate.now().year).size
+
+    /**
+     * The season as it was before December was added, in days.
+     *
+     * What a state that has already turned is held to. Derived from the season
+     * rather than hardcoded at 76, so shifting the start moves both together.
+     */
+    private fun daysThroughNovember(): Int {
+        val year = java.time.LocalDate.now().year
+        val cutoff = java.time.LocalDate.of(year, 11, 15)
+        return season.days(year).count { !it.isAfter(cutoff) }
+    }
+
+    /**
+     * States whose forest has effectively finished turning.
+     *
+     * The threshold is deliberately high. Getting this wrong in the generous
+     * direction means a state that still has colour coming is written off and
+     * frozen partway through its autumn, which is the exact failure the
+     * December extension existed to fix. Getting it wrong the other way just
+     * fetches a month of weather nobody needed.
+     */
+    private fun statesThatHavePeaked(): Set<String> =
+        runCatching {
+            forecasts.peakCoverageByState(minCanopyPct)
+                .filter { it.cells > 0 && it.withForecast.toDouble() / it.cells >= PEAKED_SHARE }
+                .map { it.state }
+                .toSet()
+        }.getOrDefault(emptySet())
 
     /**
      * Brings every already-complete state up to date.
@@ -157,7 +190,24 @@ class WeatherBackfill(
         var quotaSpent = false
         var stoppedForTime = false
 
-        val covered = runCatching { normals.cellsWithNormals(seasonDays()) }.getOrDefault(emptySet())
+        // Two coverage sets, because states do not all need the same season.
+        //
+        // A state whose forest has already turned by mid-November cannot use
+        // another month of cooling: its cells are saturated, and December
+        // weather would change nothing about what the map shows. Asking for it
+        // anyway spends a metered API and a metered database to arrive at the
+        // same answer, and on this project both of those ran out in one day.
+        //
+        // So states that have peaked are considered complete at the old
+        // mid-November end, and only the ones still turning are held to the
+        // full season. Measured before writing this: Louisiana sat at 41%
+        // progression on 15 November having never peaked, while Vermont was at
+        // 100% and had been for weeks. One of those needs December.
+        val coveredFull = runCatching { normals.cellsWithNormals(seasonDays()) }
+            .getOrDefault(emptySet())
+        val coveredThroughNovember = runCatching { normals.cellsWithNormals(daysThroughNovember()) }
+            .getOrDefault(emptySet())
+        val finished = statesThatHavePeaked()
 
         // Emptiest first, not foliage-first.
         //
@@ -184,6 +234,7 @@ class WeatherBackfill(
                     ?: return@mapNotNull null
                 val parents = runCatching { scoreableParents(fips) }.getOrDefault(emptyList())
                 if (parents.isEmpty()) return@mapNotNull null
+                val covered = if (state in finished) coveredThroughNovember else coveredFull
                 val missing = parents.count { it !in covered }
                 Triple(state, missing.toDouble() / parents.size, missing)
             }
@@ -206,6 +257,7 @@ class WeatherBackfill(
             }
 
             val parents = scoreableParents(fips)
+            val covered = if (state in finished) coveredThroughNovember else coveredFull
             if (parents.isNotEmpty() && covered.containsAll(parents)) {
                 skipped += state
                 continue

@@ -74,6 +74,39 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
     }
 
     /**
+     * How much of each state has reached peak, as counts.
+     *
+     * Used to decide which states need December weather at all. A state whose
+     * forest has already turned by mid-November has no use for another month of
+     * cooling: its cells are saturated, more weather changes nothing, and
+     * fetching it spends a metered API and a metered database on a result that
+     * is identical either way.
+     *
+     * Counts, not rows, for the reason coverageByState exists.
+     */
+    fun peakCoverageByState(minCanopyPct: Int): List<StateCoverage> = jdbc.query(
+        """
+        SELECT c.state_name AS state,
+               COUNT(*) AS total,
+               COUNT(p.h3) AS with_forecast
+        FROM cell c
+        LEFT JOIN (SELECT DISTINCT h3 FROM foliage_forecast
+                   WHERE stage IN ('PEAK', 'PAST_PEAK')) p ON p.h3 = c.h3
+        WHERE c.state_name IS NOT NULL
+          AND (c.canopy_pct IS NULL OR c.canopy_pct >= ?)
+        GROUP BY c.state_name
+        """.trimIndent(),
+        { rs, _ ->
+            StateCoverage(
+                state = rs.getString("state"),
+                cells = rs.getInt("total"),
+                withForecast = rs.getInt("with_forecast"),
+            )
+        },
+        minCanopyPct,
+    )
+
+    /**
      * How much of each state carries a forecast, as counts.
      *
      * Added after finding out what the lazy version costs. Checking coverage by
