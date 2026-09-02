@@ -37,6 +37,40 @@ data class WindowAccuracy(
     val meanSignedError: Double,
 )
 
+/**
+ * Whether the model orders the season correctly, independent of scale.
+ *
+ * The metric that had to exist. Comparing modelled progression against NPN's
+ * "percent of canopy coloured" point-for-point compares two different
+ * quantities. Progression describes a 3 km stand; an NPN record describes one
+ * plant. Individual plants do reach the top bucket, but a stand's plants are
+ * never all there at once, so the *mean* of observations flattens around 75
+ * late in the season while modelled progression carries on to 100. Measured in
+ * Vermont, observations sat at 72.2 in late September against a modelled 73.3
+ * -- agreement -- and then the observed mean flattened while the modelled one
+ * did not, which reads as a growing error and is not one.
+ *
+ * A first attempt to quantify that gap reported the mean of the top decile of
+ * observations, which is just the top bucket's midpoint (97.5) and says
+ * nothing about a plateau. The honest version of that evidence is [byWindow],
+ * which shows both means side by side over the season.
+ *
+ * The signed mean is still worth reporting, but it cannot be optimised
+ * against: three separate least-squares fits against it all "improved" by
+ * pushing peak into late October, which is flatly wrong for New England and
+ * was caught only by checking peak dates against published windows.
+ *
+ * Rank correlation asks the question that survives the mismatch: when the
+ * model says one observation is further along than another, is it? A model
+ * with a constant offset scores perfectly here, and a model whose timing is
+ * genuinely wrong does not.
+ */
+data class RankAgreement(
+    val pairs: Int,
+    /** Spearman correlation over matched observations, -1 to 1. */
+    val spearman: Double,
+)
+
 data class ValidationResult(
     val season: Int,
     val statesRequested: List<String>,
@@ -48,6 +82,8 @@ data class ValidationResult(
     val bySpecies: List<SpeciesAccuracy>,
     /** Chronological, so the shape of the error over the season is readable. */
     val byWindow: List<WindowAccuracy>,
+    /** Scale-invariant timing agreement; read this before the signed error. */
+    val rank: RankAgreement?,
     val note: String,
 )
 
@@ -88,6 +124,9 @@ class ModelValidation(
     /** Cells per timeline query. Bounded so no single statement is refused. */
     private val TIMELINE_BATCH = 200
 
+    /** Below this, a rank correlation is not measuring anything. */
+    private val MIN_PAIRS_FOR_RANK = 30
+
     /** Below this, a per-species figure is noise dressed as a measurement. */
     private val minObservationsPerSpecies = 8
 
@@ -110,13 +149,30 @@ class ModelValidation(
      * forecast rather than a typical year. That window needs this year's
      * observations and will not exist until the season runs.
      */
-    fun run(states: List<String>, year: Int, pastSeasons: Int = 3): ValidationResult {
+    /**
+     * @param species when given, only observations of these plants are compared,
+     *   matched loosely on the common name. The point of it: this model
+     *   represents a maple-beech stand, and the raw NPN aggregate is 120
+     *   species including shrubs, ornamentals and early-turning invasives.
+     *   Measuring a maple model against that mixture asks it to be right about
+     *   plants it never claimed to describe, and the answer would be a number
+     *   nobody could act on.
+     */
+    fun run(
+        states: List<String>,
+        year: Int,
+        pastSeasons: Int = 3,
+        species: List<String> = emptyList(),
+    ): ValidationResult {
         val from = season.start(year)
         val to = season.end(year)
 
+        val wanted = species.map { it.trim().lowercase() }.filter { it.isNotBlank() }
         val observations = (1..pastSeasons).flatMap { back ->
             val y = year - back
             states.flatMap { npn.forState(it, season.start(y), season.end(y)) }
+        }.filter { o ->
+            wanted.isEmpty() || wanted.any { o.label.lowercase().contains(it) }
         }
         log.info("validation: {} leaf-colour observations across {} states", observations.size, states.size)
 
@@ -199,6 +255,8 @@ class ModelValidation(
                 month * 2 + if (w.window.endsWith("1-15")) 0 else 1
             }
 
+        val rank = rankAgreement(errors)
+
         val signed = errors.map { it.second }
         val bySpecies = errors
             .groupBy { it.first.label.ifBlank { "unnamed" } }
@@ -222,11 +280,71 @@ class ModelValidation(
             meanAbsoluteError = signed.takeIf { it.isNotEmpty() }?.map { abs(it) }?.average(),
             bySpecies = bySpecies,
             byWindow = byWindow,
+            rank = rank,
             note = "Progression points against USA-NPN 'Colored leaves' intensity, " +
                 "from the $pastSeasons seasons before $year, matched by calendar date. " +
                 "Positive means the model shows more colour than was observed. " +
                 "Each observation is one plant; each cell is 3 km of landscape. " +
                 "Tests the climatological season, not the 16-day forecast window.",
         )
+    }
+
+    /** Delegates to [RankCorrelation]; see the note on [RankAgreement]. */
+    private fun rankAgreement(errors: List<Pair<LeafColourObservation, Double>>): RankAgreement? {
+        if (errors.size < MIN_PAIRS_FOR_RANK) return null
+        val observed = errors.map { it.first.percentColored }
+        val modelled = errors.map { it.first.percentColored + it.second }
+        val rho = RankCorrelation.spearman(observed, modelled) ?: return null
+        return RankAgreement(pairs = observed.size, spearman = rho)
+    }
+}
+
+/**
+ * Spearman rank correlation, with tied values sharing their average rank.
+ *
+ * Separated from the service so it can be tested without a database, a
+ * network, or a Spring context. Ties are not incidental here -- NPN intensity
+ * is bucketed, so hundreds of observations share each of six values, and
+ * breaking those ties by input order would inject noise proportional to how
+ * coarse the source is.
+ */
+internal object RankCorrelation {
+
+    /** Null when the inputs cannot support a correlation at all. */
+    fun spearman(a: List<Double>, b: List<Double>): Double? {
+        if (a.size != b.size || a.size < 2) return null
+        val ra = averagedRanks(a)
+        val rb = averagedRanks(b)
+        val meanA = ra.average()
+        val meanB = rb.average()
+        var num = 0.0
+        var sa = 0.0
+        var sb = 0.0
+        for (i in ra.indices) {
+            val x = ra[i] - meanA
+            val y = rb[i] - meanB
+            num += x * y
+            sa += x * x
+            sb += y * y
+        }
+        val denom = Math.sqrt(sa * sb)
+        // Zero variance on either side: every value tied, so there is no
+        // ordering to agree or disagree about.
+        return if (denom == 0.0) null else num / denom
+    }
+
+    /** Ranks with tied values sharing their average rank. */
+    fun averagedRanks(values: List<Double>): DoubleArray {
+        val order = values.indices.sortedBy { values[it] }
+        val ranks = DoubleArray(values.size)
+        var i = 0
+        while (i < order.size) {
+            var j = i
+            while (j + 1 < order.size && values[order[j + 1]] == values[order[i]]) j++
+            val shared = (i + j) / 2.0 + 1.0
+            for (k in i..j) ranks[order[k]] = shared
+            i = j + 1
+        }
+        return ranks
     }
 }

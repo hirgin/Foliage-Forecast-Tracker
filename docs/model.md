@@ -347,6 +347,73 @@ progression showed the difference plainly.
   Before `0.2.0-cdd` the gradient was −1.40 and the season 21 days wide. See
   [ADR-0008](adr/0008-cooling-degree-day-senescence.md).
 
+## Measured against real leaves
+
+Until now every check in this project was the model marking its own homework:
+bounded outputs, monotonic response to each driver, peak landing where the
+fitted constant said it should. All of that can be true of a model that is
+confidently wrong.
+
+46,424 USA-NPN "Colored leaves" observations across VT, NH, ME, MA and NY are
+the first outside check. The headline signed error is **+31.4 points**, and
+8,820 sugar and red maple observations — the stand this model actually claims
+to represent — give **+27.2**. Restricting to the right species barely moved
+it, which rules out the comfortable explanation.
+
+**But that number must not be optimised against, and this is the main finding.**
+Modelled progression describes a 3 km stand; an NPN record describes one plant.
+Individual plants reach the top intensity bucket, but a stand's plants are never
+all there at once, so the *mean* observation flattens near 75 late in the season
+while progression climbs to 100 by construction. In Vermont, observations sat at
+72.2 in late September against a modelled 73.3 — agreement — and the apparent
+error grew afterwards purely because one curve saturates and the other plateaus.
+
+Three separate least-squares fits against that error were run, and all three
+"improved" the model the same way: by pushing peak into late October.
+
+| Fit | rms | Mean peak, NH + ME |
+|---|---|---|
+| Current (100 / shape 1.0) | 23.6 | 3 Oct |
+| Best unconstrained, pooled | 5.8 | **10 Nov** |
+| Best unconstrained, NH + ME | 7.0 | **28 Oct** |
+| Best with peak held to published windows | 9.1 | 14 Oct — *on the constraint boundary* |
+
+New England does not peak on 10 November. Each fit was caught only by checking
+peak dates against published windows, which the error metric cannot see. A fit
+that sits on its constraint boundary is one that would keep going.
+
+**Shape cannot rescue it either.** Because `SCALE` is derived, shape moves the
+curve without moving peak, so it was swept alone. It fixes late September —
+60.6 modelled against 29.1 observed at shape 1.0, versus 31.2 at shape 2.9 —
+but October gets worse, the residual floors at rms 17.2, and the peak band
+collapses from 53% of `S_PEAK` to 18%, which is peak lasting two days.
+
+**So no constant changed.** The evidence does not support one, and every
+apparent improvement was the fit absorbing a scale mismatch by breaking timing.
+
+What replaced it is a metric the mismatch cannot fool. Spearman rank
+correlation asks only whether the model *orders* the season correctly, so a
+constant offset or a compressed top scores perfectly:
+
+| | Spearman |
+|---|---|
+| Sugar + red maple | **0.55** |
+| All species | 0.45 |
+
+Moderate, positive, and higher for the species the model represents — which is
+the expected direction. Against individual plants, where a maple in a front
+garden genuinely turns ahead of the woods behind it, perfect correlation is not
+achievable; the gap between 0.55 and 0.45 is the species term, unmeasured
+before and now worth about 0.1 of rank agreement.
+
+**What this changed about the September curve.** The one real defect the
+observations exposed is that `SHAPE = 1.0` climbs too early: it says 61% of the
+canopy has turned in late September when maples are at 29%. That is a genuine
+error, it is mine, and it is recorded here rather than patched, because every
+available patch costs either peak timing or peak duration. Fixing it properly
+needs the curve to stop being a single global shape — which is the species
+work, not another constant.
+
 - **Species composition is the largest identifiable residual**, and after the
   `0.2.1` recalibration it is essentially the *only* structured one left. The
   remaining errors line up by forest type rather than by geography or weather,

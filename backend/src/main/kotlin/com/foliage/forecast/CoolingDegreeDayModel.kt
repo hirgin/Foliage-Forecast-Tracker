@@ -23,7 +23,13 @@ import java.time.LocalDate
  * published windows, which is a change of stance from the rest of the model
  * and is recorded as such in docs/model.md. Measured against ten reference
  * places from Maine to Virginia to Minnesota it gives a mean absolute error
- * of 6.0 days, four of them exact.
+ * of 7.1 days measured end to end.
+ *
+ * Against 46,424 USA-NPN leaf-colour observations -- the first check that is
+ * not this model marking its own homework -- rank agreement is 0.55 for the
+ * maples it represents. The raw signed error of +27 points is dominated by a
+ * scale mismatch rather than by timing, and must not be fitted against;
+ * docs/model.md records the three fits that tried and what each broke.
  *
  * What it still cannot do is unchanged and stated there too: 84% of a season
  * is climatology, so this describes a typical year rather than this one, and
@@ -99,15 +105,28 @@ object CoolingDegreeDayModel {
      * timing should not have been bought with it. Shape 1.0 widens the band
      * back to 0.53 of [S_PEAK] and restores peak to 7.1 days with the season
      * slightly longer at 27, while mean absolute error stays at 6.0 days
-     * against 5.9 for the nominally best fit. Free, in other words.
+     * against 5.9 for the nominally best fit.
      *
-     * What is given up is the slow start that shape above 1 provided. Nothing
-     * is actually lost: the photoperiod gate already says nothing happens
-     * before the trigger, and after it the *weather* supplies the gradual
-     * onset, because mid-September days sit near [T_BASE_C] and accumulate
-     * almost nothing. Onset is gradual because early autumn is warm, which is
-     * the real reason, rather than because the curve was shaped to look that
-     * way.
+     * **That "free" was wrong, and 46,424 leaf observations say so.** The
+     * argument was that the slow start shape above 1 provided is not needed,
+     * because the photoperiod gate already suppresses early progress and
+     * mid-September weather sits near [T_BASE_C] and accumulates almost
+     * nothing. It was checked only against peak *dates* at ten reference
+     * towns, a metric structurally blind to the shape of the curve between
+     * them. Measured against USA-NPN records, this curve says 61% of the
+     * canopy has turned in late September when sugar and red maples are
+     * observed at 29%. Early September is near-exact; the error appears
+     * entirely in the climb.
+     *
+     * It is left at 1.0 anyway, deliberately. Raising it fixes late September
+     * and makes October worse, the residual floors well short of the
+     * observations at any shape, and the peak band -- 53% of [S_PEAK] here --
+     * collapses to 18% by shape 2.9, which is peak lasting two days. A single
+     * global shape cannot be right for maple, aspen and oak at once, and the
+     * fix is the species term rather than a better compromise constant.
+     *
+     * See the validation section of docs/model.md for the fits that were run
+     * and why each was rejected.
      *
      * It does not move peak: [SCALE] is derived so [PEAK_PROGRESSION] lands
      * exactly at [S_PEAK] whatever the shape.

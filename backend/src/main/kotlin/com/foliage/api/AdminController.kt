@@ -149,10 +149,13 @@ class AdminController(
     fun validate(
         @RequestParam(required = false) states: String?,
         @RequestParam(required = false) year: Int?,
+        /** Comma-separated common names, e.g. "sugar maple,red maple". */
+        @RequestParam(required = false) species: String?,
     ): com.foliage.validate.ValidationResult = modelValidation.run(
         states = states?.split(",")?.map { it.trim().uppercase() }?.filter { it.isNotBlank() }
             ?: com.foliage.grid.ConusStates.POSTAL,
         year = year ?: java.time.LocalDate.now().year,
+        species = species?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
     )
 
     /**
