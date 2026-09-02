@@ -78,6 +78,50 @@ class ForestTypeGroupTest {
     }
 
     @Test
+    fun `individual forest types resolve to their group`() {
+        // The raster returns forest *types*, not only groups. A national
+        // survey came back holding 841, 402, 128 and some two hundred others,
+        // and matching group codes alone left 8.5% of the grid reading as
+        // "not a kind this forecast has measured".
+        assertEquals(ForestTypeGroup.MAPLE_BEECH_BIRCH, ForestTypeGroup.forCode(841))
+        assertEquals(ForestTypeGroup.OAK, ForestTypeGroup.forCode(402))
+        assertEquals(ForestTypeGroup.OAK, ForestTypeGroup.forCode(510))
+        assertEquals(ForestTypeGroup.ASPEN_BIRCH, ForestTypeGroup.forCode(904))
+        assertEquals(ForestTypeGroup.CONIFER, ForestTypeGroup.forCode(128))
+        assertEquals(ForestTypeGroup.ELM_ASH_COTTONWOOD, ForestTypeGroup.forCode(703))
+    }
+
+    @Test
+    fun `pinyon and juniper are conifers`() {
+        // 14,471 cells -- 6.7% of the surveyed grid, and the single largest
+        // gap in the first mapping. A group code, not an exotic type code,
+        // that was simply left out of the list.
+        assertEquals(ForestTypeGroup.CONIFER, ForestTypeGroup.forCode(180))
+        assertEquals(ForestTypeGroup.CONIFER, ForestTypeGroup.forCode(184))
+        assertEquals(ForestTypeGroup.CONIFER, ForestTypeGroup.forCode(170))
+    }
+
+    @Test
+    fun `a type code never resolves to a group above it`() {
+        // FIA nests types inside the group whose code is at or below them.
+        // Resolving upward would put an oak type in an aspen group and shift
+        // its timing by weeks in the wrong direction.
+        for (code in 100..998) {
+            val group = ForestTypeGroup.groupCodeFor(code) ?: continue
+            assertTrue(group <= code, "code $code resolved up to group $group")
+        }
+    }
+
+    @Test
+    fun `western hardwoods are recognised rather than treated as unsurveyed`() {
+        // Real forest with no measured multiplier. It scores at the baseline
+        // either way, but the map should say it was surveyed.
+        assertEquals(ForestTypeGroup.OTHER_HARDWOOD, ForestTypeGroup.forCode(970))
+        assertEquals(ForestTypeGroup.OTHER_HARDWOOD, ForestTypeGroup.forCode(940))
+        assertEquals(1.0, ForestTypeGroup.multiplierFor(970))
+    }
+
+    @Test
     fun `no code is claimed by two groups`() {
         // A code matching two entries would make forCode order-dependent, and
         // the ordering that decided it would be the declaration order of an

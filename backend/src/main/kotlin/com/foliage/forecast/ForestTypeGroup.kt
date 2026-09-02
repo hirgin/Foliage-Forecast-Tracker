@@ -1,5 +1,7 @@
 package com.foliage.forecast
 
+import com.foliage.ingest.terrain.CellSampling
+
 /**
  * FIA forest type groups, and how much earlier or later each one turns.
  *
@@ -70,15 +72,64 @@ enum class ForestTypeGroup(
      * produce any. Whether to grey them out is a rendering decision, not a
      * phenology one.
      */
-    CONIFER(setOf(100, 120, 140, 160, 200, 220, 240, 260, 280, 300, 320, 340, 360, 370, 380), 1.0, "conifer"),
+    CONIFER(
+        setOf(100, 120, 140, 160, 170, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 370, 380, 390),
+        1.0,
+        "conifer",
+    ),
+
+    /**
+     * Western and exotic hardwoods, at the baseline for want of a measurement.
+     *
+     * Real forest that this project has no figure for. Kept as a group rather
+     * than left unrecognised so the map can say "surveyed, but not a kind this
+     * forecast has measured" instead of implying nobody looked.
+     */
+    OTHER_HARDWOOD(setOf(940, 950, 960, 970, 980, 990), 1.0, "other hardwood"),
     ;
 
     companion object {
 
+        /**
+         * Every FIA forest type group code, ascending.
+         *
+         * The raster does not return only group codes. A national survey came
+         * back holding 841, 402, 128, 257 and some two hundred others: these
+         * are individual forest *types*, and FIA nests them inside groups --
+         * 841 is a maple-beech-birch type, 402 an oak-pine one. Matching group
+         * codes alone left 8.5% of the surveyed grid reading as "not a kind
+         * this forecast has measured", including 14,471 cells of pinyon and
+         * juniper whose group code this simply did not list.
+         */
+        private val GROUP_CODES = intArrayOf(
+            100, 120, 140, 160, 170, 180, 200, 220, 240, 260, 280, 300, 320, 340,
+            360, 370, 380, 390, 400, 500, 600, 700, 800, 900, 910, 920, 940, 950,
+            960, 970, 980, 990,
+        )
+
+        /**
+         * The group a raw raster value belongs to.
+         *
+         * A type code belongs to the highest group code at or below it, which
+         * is how FIA numbers them. Where that guess goes wrong it goes wrong
+         * within the softwoods -- 257 is not a documented type, and lands on
+         * western white pine rather than fir-spruce -- and both are conifers
+         * carrying the same multiplier, so the timing is unaffected either way.
+         */
+        fun groupCodeFor(code: Int?): Int? {
+            if (code == null || code < GROUP_CODES.first()) return null
+            if (code == CellSampling.NON_STOCKED) return null
+            var group: Int? = null
+            for (g in GROUP_CODES) {
+                if (g <= code) group = g else break
+            }
+            return group
+        }
+
         /** Group for an FIA code, or null when it is unknown or non-forest. */
         fun forCode(code: Int?): ForestTypeGroup? {
-            if (code == null) return null
-            return entries.firstOrNull { code in it.codes }
+            val group = groupCodeFor(code) ?: return null
+            return entries.firstOrNull { group in it.codes }
         }
 
         /**

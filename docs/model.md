@@ -414,6 +414,42 @@ available patch costs either peak timing or peak duration. Fixing it properly
 needs the curve to stop being a single global shape — which is the species
 work, not another constant.
 
+## What the forest actually is
+
+The grid is now surveyed. All 217,412 cells carry an FIA forest type read from
+the USFS BIGMAP 30 m raster, and the result reframes the model's central
+assumption:
+
+| Forest | Cells | Share | Multiplier |
+|---|---|---|---|
+| No continuous forest | 86,583 | 39.8% | — |
+| Conifer | 66,128 | 30.4% | 1.0 |
+| **Oak** | **48,658** | **22.4%** | **1.6** |
+| Maple–beech–birch | 6,524 | 3.0% | 1.0 |
+| Other hardwood | 3,849 | 1.8% | 1.0 |
+| Aspen–birch | 3,554 | 1.6% | 0.61 |
+| Elm–ash–cottonwood | 2,116 | 1.0% | 1.0 |
+
+**The model was built for 3% of the map.** Maple–beech–birch is the stand every
+constant here was fitted against, and it is the fourth most common cover in the
+country. Oak is seven times more widespread. That was invisible while the only
+evidence was ten reference towns, six of them in New England.
+
+It raises the stakes on the one constant knowingly left wrong. Oak's multiplier
+is **1.6 against 2.61 measured**, damped because 2.61 came from a single town
+and one town should not re-time a nation. That was a cheap call when oak was a
+footnote; it is the single largest known error in the model now that oak is a
+fifth of the grid. Measuring it across many places — the NPN validation can,
+oaks being well represented there — is the highest-value work outstanding.
+
+**Reading the raster taught one lesson worth keeping.** It returns individual
+forest *types*, not only type groups: the survey came back holding 841, 402,
+128 and some two hundred others. Matching group codes alone left 8.5% of the
+grid reading as "not a kind this forecast has measured", including 14,471 cells
+of pinyon and juniper whose group code was simply missing from the list. A
+national count found it; the two states surveyed first did not, because neither
+has any.
+
 - **Species composition is the largest identifiable residual**, and after the
   `0.2.1` recalibration it is essentially the *only* structured one left. The
   remaining errors line up by forest type rather than by geography or weather,
