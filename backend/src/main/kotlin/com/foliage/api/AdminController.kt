@@ -37,6 +37,11 @@ class AdminController(
     private val weatherBackfill: WeatherBackfill,
     private val normals: com.foliage.persistence.NormalRepository,
     private val modelValidation: com.foliage.validate.ModelValidation,
+    private val forecasts: com.foliage.persistence.ForecastRepository,
+    @org.springframework.beans.factory.annotation.Value("\${foliage.grid.min-canopy-pct}")
+    private val minCanopyPct: Int,
+    @org.springframework.beans.factory.annotation.Value("\${foliage.grid.metro-population}")
+    private val metroPopulation: Int,
 ) {
 
     @PostMapping("/bootstrap-grid")
@@ -149,6 +154,17 @@ class AdminController(
             ?: com.foliage.grid.ConusStates.POSTAL,
         year = year ?: java.time.LocalDate.now().year,
     )
+
+    /**
+     * How much of each state carries a forecast, as counts rather than rows.
+     *
+     * The cheap way to ask "what is still missing". The expensive way -- pull
+     * a whole daily forecast and count the cells in it -- costs twelve
+     * megabytes a look, and repeating it helped exhaust a metered allowance.
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/coverage")
+    fun coverage(): List<com.foliage.persistence.StateCoverage> =
+        forecasts.coverageByState(minCanopyPct, metroPopulation)
 
     /** Writes the season out as static JSON for CDN publishing. */
     @PostMapping("/export")

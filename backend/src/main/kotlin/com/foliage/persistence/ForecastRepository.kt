@@ -8,6 +8,16 @@ import java.sql.PreparedStatement
 import java.time.LocalDate
 
 /** A stored score for one cell on one day. */
+/** One state's forecast coverage, for the cheap coverage check. */
+data class StateCoverage(
+    val state: String,
+    val cells: Int,
+    val withForecast: Int,
+) {
+    val missing: Int get() = cells - withForecast
+    val missingPct: Double get() = if (cells == 0) 0.0 else 100.0 * missing / cells
+}
+
 data class StoredForecast(
     val h3: Long,
     val day: LocalDate,
@@ -62,6 +72,44 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
         }
         return counts.sumOf { it.size }
     }
+
+    /**
+     * How much of each state carries a forecast, as counts.
+     *
+     * Added after finding out what the lazy version costs. Checking coverage by
+     * downloading `/forecast?date=...` and counting the cells it contains means
+     * pulling twelve megabytes and every row behind it, and doing that half a
+     * dozen times in an evening -- once per "is it fixed yet" -- is a
+     * meaningful share of a month's compute allowance on a metered tier. It
+     * contributed to exhausting one.
+     *
+     * This answers the same question in a single grouped count: one small
+     * result, no rows crossing the network. The lesson is not subtle -- a check
+     * you run repeatedly should cost less than the work it is checking.
+     */
+    fun coverageByState(minCanopyPct: Int, metroPopulation: Int): List<StateCoverage> = jdbc.query(
+        """
+        SELECT c.state_name AS state,
+               COUNT(*) AS total,
+               COUNT(f.h3) AS with_forecast
+        FROM cell c
+        LEFT JOIN (SELECT DISTINCT h3 FROM foliage_forecast) f ON f.h3 = c.h3
+        WHERE c.state_name IS NOT NULL
+          AND (c.canopy_pct IS NULL OR c.canopy_pct >= ?
+               OR c.parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p
+                                    JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?))
+        GROUP BY c.state_name
+        ORDER BY (COUNT(*) - COUNT(f.h3)) DESC
+        """.trimIndent(),
+        { rs, _ ->
+            StateCoverage(
+                state = rs.getString("state"),
+                cells = rs.getInt("total"),
+                withForecast = rs.getInt("with_forecast"),
+            )
+        },
+        minCanopyPct, metroPopulation,
+    )
 
     /**
      * How many cells hold a score on one day.

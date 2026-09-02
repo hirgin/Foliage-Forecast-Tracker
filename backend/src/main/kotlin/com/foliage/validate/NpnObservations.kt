@@ -60,8 +60,19 @@ class NpnObservations(
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun forState(state: String, from: LocalDate, to: LocalDate): List<LeafColourObservation> {
-        val url = "$baseUrl/observations/getObservations.json" +
-            "?request_src=$requestSrc&start_date=$from&end_date=$to&state%5B0%5D=$state"
+        // Built as a URI, not handed over as a string.
+        //
+        // RestClient treats a String uri as a template and encodes it again, so
+        // the `state[0]` parameter arrives as `state%255B0%255D` -- a name the
+        // portal does not recognise. It does not reject the request for that;
+        // it ignores the filter and returns the whole country. The first run
+        // reported 144,862 leaf-colour observations "for Vermont", which is
+        // roughly seven hundred times what Vermont has, and the only thing that
+        // gave it away was the size of the number.
+        val url = java.net.URI(
+            "$baseUrl/observations/getObservations.json" +
+                "?request_src=$requestSrc&start_date=$from&end_date=$to&state[0]=$state",
+        )
 
         val raw = try {
             restClient.get().uri(url).retrieve().body(Array<NpnRecord>::class.java)

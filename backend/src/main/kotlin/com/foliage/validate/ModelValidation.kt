@@ -65,6 +65,9 @@ class ModelValidation(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /** Cells per timeline query. Bounded so no single statement is refused. */
+    private val TIMELINE_BATCH = 200
+
     /** Below this, a per-species figure is noise dressed as a measurement. */
     private val minObservationsPerSpecies = 8
 
@@ -103,17 +106,55 @@ class ModelValidation(
         val byCell = observations.groupBy { grid.cellAt(LonLat(lon = it.longitude, lat = it.latitude), resolution) }
 
         val errors = mutableListOf<Pair<LeafColourObservation, Double>>()
-        for ((h3, group) in byCell) {
-            val series = runCatching { forecasts.timeline(h3) }.getOrDefault(emptyList())
-            if (series.isEmpty()) continue
-            val byDay: Map<LocalDate, Double> = series.associate { it.day to it.progression }
-            for (o in group) {
+
+        // Read in batches, not one cell at a time.
+        //
+        // A query per cell is a round trip per cell to a hosted database, and
+        // observations spread across thousands of them. The first run sat for
+        // half an hour on exactly this while it worked through the cells one by
+        // one. Batching is the same fix the export needed, for the same reason.
+        var batchesRead = 0
+        var batchesFailed = 0
+        for (batch in byCell.keys.chunked(TIMELINE_BATCH)) {
+            val series = runCatching { forecasts.timelinesFor(batch) }
+                .onSuccess { batchesRead++ }
+                .onFailure { batchesFailed++; log.warn("timeline batch failed: {}", it.message) }
+                .getOrDefault(emptyMap())
+            for (h3 in batch) {
+                val rows = series[h3].orEmpty()
+                if (rows.isEmpty()) continue
+                val byDay: Map<LocalDate, Double> = rows.associate { it.day to it.progression }
+                val group = byCell[h3].orEmpty()
+                for (o in group) {
                 // Matched on month and day. The year the volunteer looked is
                 // deliberately discarded; see the note on run().
-                val sameDay = runCatching { o.date.withYear(year) }.getOrNull() ?: continue
-                val modelled = byDay[sameDay] ?: continue
-                errors += o to (modelled - o.percentColored)
+                    val sameDay = runCatching { o.date.withYear(year) }.getOrNull() ?: continue
+                    val modelled = byDay[sameDay] ?: continue
+                    errors += o to (modelled - o.percentColored)
+                }
             }
+        }
+
+        // A validation that cannot read the forecasts has not validated
+        // anything, and must not report that as a clean zero.
+        //
+        // This is exactly what happened the first time it ran for real: the
+        // database's usage quota was exhausted, every batch threw, and the
+        // result came back "179 observations fetched, 0 matched" -- which reads
+        // as a finding about the data rather than a total outage. The
+        // getOrDefault that produced it was written as resilience. Resilience
+        // that turns an outage into a plausible answer is worse than a crash.
+        if (batchesFailed > 0 && batchesRead == 0) {
+            error(
+                "could not read any forecasts: all $batchesFailed timeline reads failed. " +
+                    "Nothing was compared, so there is no accuracy figure to report.",
+            )
+        }
+        if (batchesFailed > 0) {
+            log.warn(
+                "{} of {} timeline reads failed; the figures below cover only what was readable",
+                batchesFailed, batchesFailed + batchesRead,
+            )
         }
 
         val signed = errors.map { it.second }
