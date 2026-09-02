@@ -46,6 +46,7 @@ const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
  * United States does not change often enough to be worth a build step.
  */
 import US_MASK from './us-mask.json';
+import { stateLabelField, stateLabelSortKey } from './stateLabels';
 
 /** Matches --bg in styles.css, so masked ground reads as page, not as sea. */
 const MASK_FILL = '#0f0d0a';
@@ -114,6 +115,16 @@ const BEFORE_LAYER = 'water_name';
  * means Chicago still reads as bigger than Peoria without either competing
  * with the state it sits in.
  */
+/**
+ * Breathing room around a state label, in pixels.
+ *
+ * Deliberately small. Padding is collision area, so raising it does not
+ * separate labels -- it deletes them, and the ones it deletes are the small
+ * eastern states this change exists to rescue. Two pixels is enough to keep
+ * abbreviations off each other without costing Maryland its name.
+ */
+const STATE_LABEL_PADDING = 1;
+
 const STATE_LABEL_SIZE = ['interpolate', ['linear'], ['zoom'], 3, 13, 5, 16, 8, 20, 12, 24];
 
 /** Falls back to a middling rank, since not every place carries one. */
@@ -254,7 +265,32 @@ async function prepareStyle() {
     // Put the hierarchy the right way up: states largest, then cities ordered
     // among themselves by importance, then everything below them.
     if (layer.id === 'place_state') {
-      layer.layout = { ...layer.layout, 'text-size': STATE_LABEL_SIZE };
+      // Abbreviate the states whose names are wider than they are. The label
+      // anchors were correct all along -- Connecticut's is the middle of
+      // Connecticut -- but a centred word six times the width of the state
+      // still lands in New York and the Atlantic. See stateLabels.js.
+      layer.layout = {
+        ...layer.layout,
+        'text-size': STATE_LABEL_SIZE,
+        'text-field': stateLabelField(),
+        'text-justify': 'center',
+        // A state name that collides is better hidden than drawn over its
+        // neighbour's: at national zoom the Northeast has more names than
+        // space, and the abbreviations exist so that the survivors are the
+        // ones that fit.
+        'text-allow-overlap': false,
+        'text-padding': STATE_LABEL_PADDING,
+        'symbol-sort-key': stateLabelSortKey(),
+      };
+      // Deleted rather than set to undefined. A layout property set to
+      // undefined fails MapLibre's style validation outright -- "array
+      // expected, undefined found" -- and takes the whole map down with it,
+      // which is how this was found. Removing the key is what "leave it at
+      // the default" actually means. They keep a label anchored to its own
+      // state instead of letting the renderer slide it somewhere roomier,
+      // which is exactly how a name ends up over a neighbour.
+      delete layer.layout['text-variable-anchor'];
+      delete layer.layout['text-radial-offset'];
     } else if (layer.id === 'place_city' || layer.id === 'place_city_large') {
       layer.layout = { ...layer.layout, 'text-size': CITY_LABEL_SIZE };
     } else if (SMALLER_PLACES[layer.id]) {
@@ -631,6 +667,10 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     map.on('load', report);
 
     mapRef.current = map;
+    // A handle on the map in dev only, for inspecting label placement from
+    // the console. Reading positions off a screenshot is how the state labels
+    // were first misdiagnosed as badly anchored when the anchors were right.
+    if (import.meta.env.DEV) window.__map = map;
     overlayRef.current = overlay;
     return () => panelWatcher?.disconnect();
     };
