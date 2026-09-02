@@ -1,0 +1,16 @@
+-- Forest type group per cell, as an FIA code.
+--
+-- The model has assumed maple-beech everywhere since it was written, and the
+-- residuals say so plainly: measured against reference places the aspen-birch
+-- north runs 7 to 12 days late and oak-hickory Litchfield 19 days early. Both
+-- errors track species and nothing else -- the Upper Midwest normals were
+-- checked for a Great Lakes warm bias first and are sound.
+--
+-- Nullable, and stays nullable. A cell whose type has not been sampled yet
+-- must score exactly as it did before this column existed, so the model reads
+-- a missing value as the maple-beech baseline rather than refusing to score.
+-- The grid is 141,274 cells and sampling them is a separate offline job.
+--
+-- SMALLINT because FIA group codes run 100..999 and are categorical: this is
+-- an identifier, not a quantity, and nothing should ever average it.
+ALTER TABLE cell ADD COLUMN IF NOT EXISTS forest_type_group SMALLINT NULL;
