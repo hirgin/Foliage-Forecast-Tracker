@@ -19,6 +19,24 @@ data class SpeciesAccuracy(
     val meanAbsoluteError: Double,
 )
 
+/**
+ * The model against the observations over one stretch of the season.
+ *
+ * Carries both means, not just their difference, because the difference alone
+ * cannot tell two very different faults apart. A constant gap across the whole
+ * season is a scale mismatch -- progression and "percent of canopy coloured"
+ * are related but not the same quantity. A gap that is wide in September and
+ * closes by November is a curve that climbs too early, which is a real defect
+ * and a fixable one.
+ */
+data class WindowAccuracy(
+    val window: String,
+    val observations: Int,
+    val meanObserved: Double,
+    val meanModelled: Double,
+    val meanSignedError: Double,
+)
+
 data class ValidationResult(
     val season: Int,
     val statesRequested: List<String>,
@@ -28,6 +46,8 @@ data class ValidationResult(
     val meanAbsoluteError: Double?,
     /** Ordered by how far the model is out, worst first. */
     val bySpecies: List<SpeciesAccuracy>,
+    /** Chronological, so the shape of the error over the season is readable. */
+    val byWindow: List<WindowAccuracy>,
     val note: String,
 )
 
@@ -157,6 +177,28 @@ class ModelValidation(
             )
         }
 
+        // Half-month windows: coarse enough that each holds a usable count,
+        // fine enough to show a curve rising too early rather than averaging
+        // that away into one number.
+        val byWindow = errors
+            .groupBy { (o, _) ->
+                val half = if (o.date.dayOfMonth <= 15) "1-15" else "16-end"
+                "%s %s".format(o.date.month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3), half)
+            }
+            .map { (label, rows) ->
+                WindowAccuracy(
+                    window = label,
+                    observations = rows.size,
+                    meanObserved = rows.sumOf { it.first.percentColored } / rows.size,
+                    meanModelled = rows.sumOf { it.first.percentColored + it.second } / rows.size,
+                    meanSignedError = rows.sumOf { it.second } / rows.size,
+                )
+            }
+            .sortedBy { w ->
+                val month = listOf("Sep", "Oct", "Nov", "Dec").indexOf(w.window.take(3))
+                month * 2 + if (w.window.endsWith("1-15")) 0 else 1
+            }
+
         val signed = errors.map { it.second }
         val bySpecies = errors
             .groupBy { it.first.label.ifBlank { "unnamed" } }
@@ -179,6 +221,7 @@ class ModelValidation(
             meanSignedError = signed.takeIf { it.isNotEmpty() }?.average(),
             meanAbsoluteError = signed.takeIf { it.isNotEmpty() }?.map { abs(it) }?.average(),
             bySpecies = bySpecies,
+            byWindow = byWindow,
             note = "Progression points against USA-NPN 'Colored leaves' intensity, " +
                 "from the $pastSeasons seasons before $year, matched by calendar date. " +
                 "Positive means the model shows more colour than was observed. " +
