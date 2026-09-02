@@ -13,4 +13,6 @@ data class Cell(
     val canopyPct: Int?,
     val stateFips: String,
     val stateName: String?,
+    /** FIA forest type group code; null until the cell has been sampled. */
+    val forestTypeGroup: Int? = null,
 )

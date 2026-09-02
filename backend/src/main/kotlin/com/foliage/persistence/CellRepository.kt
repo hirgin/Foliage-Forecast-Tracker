@@ -130,7 +130,7 @@ class CellRepository(private val jdbc: JdbcTemplate) {
     private val selectCell = """
         SELECT h3, resolution, parent_res5, parent_res4, parent_res3,
                centroid_lat, centroid_lon, elevation_m, canopy_pct,
-               state_fips, state_name
+               state_fips, state_name, forest_type_group
         FROM cell
     """.trimIndent()
 
@@ -147,7 +147,48 @@ class CellRepository(private val jdbc: JdbcTemplate) {
             canopyPct = rs.getInt("canopy_pct").takeUnless { rs.wasNull() },
             stateFips = rs.getString("state_fips"),
             stateName = rs.getString("state_name"),
+            forestTypeGroup = rs.getInt("forest_type_group").takeUnless { rs.wasNull() },
         )
+    }
+
+    /**
+     * Cells in a state that still have no forest type, centroid-first.
+     *
+     * Ordered by h3 so a run that stops partway and a run that resumes cover
+     * the grid in the same sequence, which is what makes the job resumable in
+     * the same sense every other ingest here is.
+     */
+    fun withoutForestType(stateFips: String, limit: Int): List<Cell> = jdbc.query(
+        "$selectCell WHERE state_fips = ? AND forest_type_group IS NULL ORDER BY h3 LIMIT ?",
+        cellMapper, stateFips, limit,
+    )
+
+    /** How many of a state's cells still need sampling. */
+    fun forestTypeRemaining(stateFips: String): Int = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM cell WHERE state_fips = ? AND forest_type_group IS NULL",
+        Int::class.java, stateFips,
+    ) ?: 0
+
+    /**
+     * Stores sampled forest types, in one batched statement.
+     *
+     * Writes 0 rather than NULL for a cell with no forest to classify. The
+     * distinction matters operationally: NULL means "not yet sampled" and the
+     * job would pick it up again on every run forever, so a cell that genuinely
+     * has no forest has to be able to say so. Both read as the maple-beech
+     * baseline at scoring time.
+     */
+    fun saveForestTypes(types: Map<Long, Int?>) {
+        if (types.isEmpty()) return
+        val rows = types.entries.toList()
+        jdbc.batchUpdate(
+            "UPDATE cell SET forest_type_group = ? WHERE h3 = ?",
+            rows,
+            rows.size,
+        ) { ps, entry ->
+            ps.setInt(1, entry.value ?: 0)
+            ps.setLong(2, entry.key)
+        }
     }
 
     /** Full cell rows for a state, optionally masked to forest. */

@@ -190,10 +190,29 @@ object CoolingDegreeDayModel {
             ?: 0.0
 
         val effective = cooling * (1 + DROUGHT_ACCELERATION * droughtStress)
+
+        // Species. Aspen and birch turn on less cooling than maple, oak on
+        // more, and until now this model said all three were maple.
+        //
+        // Applied to the threshold rather than as a shift in days, because a
+        // day is worth a different amount of cooling in Minnesota than in
+        // Georgia; scaling the threshold keeps timing a function of
+        // accumulation, which is the point of a degree-day model. An
+        // unsampled cell gets 1.0 and is untouched.
+        val species = ForestTypeGroup.forCode(cell.forestTypeGroup)
+        val speciesMultiplier = ForestTypeGroup.multiplierFor(cell.forestTypeGroup)
+        val speciesScale = SCALE * speciesMultiplier
+
+        // What this cell's forest actually needs, so the explanation below
+        // reports progress toward *its* peak rather than a maple's. Without
+        // this an aspen stand is told it is 61% of the way to full colour on
+        // the day it peaks.
+        val peakThreshold = S_PEAK * speciesMultiplier
+
         // Saturating, so peak colour holds for about a week instead of a
         // couple of days. Approaches 100 without reaching it, which is the
         // honest shape: a stand is never more than fully turned.
-        val progression = (100.0 * (1 - Math.exp(-Math.pow(effective / SCALE, SHAPE))))
+        val progression = (100.0 * (1 - Math.exp(-Math.pow(effective / speciesScale, SHAPE))))
             .coerceIn(0.0, 100.0)
 
         // Intensity is unchanged: a wide day-night spread makes vivid colour,
@@ -226,7 +245,7 @@ object CoolingDegreeDayModel {
                 Factor(
                     "Cool weather", cooling, "sets the pace",
                     buildString {
-                        val pct = (100.0 * cooling / S_PEAK).coerceAtMost(999.0)
+                        val pct = (100.0 * cooling / peakThreshold).coerceAtMost(999.0)
                         if (cooling <= 0.0) {
                             append("Still too warm for the leaves to turn")
                         } else {
@@ -237,6 +256,34 @@ object CoolingDegreeDayModel {
                             append(", though most of that is a typical year rather than measured weather")
                         }
                         append(".")
+                    },
+                ),
+                Factor(
+                    "Forest type",
+                    speciesMultiplier,
+                    when {
+                        species == null -> "not surveyed"
+                        speciesMultiplier < 1.0 -> "turns early"
+                        speciesMultiplier > 1.0 -> "turns late"
+                        else -> "the usual timing"
+                    },
+                    when {
+                        // Said plainly, and said at all -- this was the
+                        // model's largest known error for most of its life and
+                        // the map gave no hint of it.
+                        species == null ->
+                            "The trees here have not been surveyed, so this assumes a maple and beech " +
+                                "wood, which is the commonest kind in the Northeast."
+                        species == ForestTypeGroup.CONIFER ->
+                            "Mostly evergreens, which do not put on an autumn display."
+                        speciesMultiplier < 1.0 ->
+                            "Mostly ${species.label}. These turn earlier than maples and drop their " +
+                                "leaves quickly once they do."
+                        speciesMultiplier > 1.0 ->
+                            "Mostly ${species.label}. These hold their leaves later than maples, " +
+                                "often well into the autumn."
+                        else ->
+                            "Mostly ${species.label}, which is the timing this forecast is built around."
                     },
                 ),
                 Factor(

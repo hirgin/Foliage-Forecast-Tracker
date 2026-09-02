@@ -35,6 +35,7 @@ class AdminController(
     private val staticExporter: StaticExporter,
     private val placeIngest: PlaceIngest,
     private val weatherBackfill: WeatherBackfill,
+    private val forestTypeIngest: com.foliage.ingest.ForestTypeIngest,
     private val normals: com.foliage.persistence.NormalRepository,
     private val modelValidation: com.foliage.validate.ModelValidation,
     private val forecasts: com.foliage.persistence.ForecastRepository,
@@ -124,6 +125,21 @@ class AdminController(
      * cells would otherwise disagree about how many years they average and how
      * coarse a reading they came from.
      */
+    /**
+     * Samples forest type for a state's unsampled cells.
+     *
+     * Bounded by both a cell count and a time budget because it reads a hosted
+     * raster: a national pass is roughly a million point lookups and belongs
+     * in several runs rather than one long-held request.
+     */
+    @PostMapping("/sample-forest-type")
+    fun sampleForestType(
+        @RequestParam stateFips: String,
+        @RequestParam(defaultValue = "5000") maxCells: Int,
+        @RequestParam(defaultValue = "30") maxMinutes: Long,
+    ): com.foliage.ingest.ForestTypeResult =
+        forestTypeIngest.run(stateFips, maxCells, java.time.Duration.ofMinutes(maxMinutes))
+
     @PostMapping("/reload-climatology")
     fun reloadClimatology(@RequestParam stateFips: String): Map<String, Any> {
         val before = normals.yearsAveragedByState(stateFips)

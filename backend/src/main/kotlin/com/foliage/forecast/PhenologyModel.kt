@@ -24,7 +24,19 @@ data class DayInput(
     val chillUnits: Double? = null,
 )
 
-data class CellInput(val latitude: Double, val elevationM: Int?)
+data class CellInput(
+    val latitude: Double,
+    val elevationM: Int?,
+    /**
+     * FIA forest type group code, or null where the cell has not been sampled.
+     *
+     * Defaulted so that every existing caller and test scores exactly as it
+     * did before the species term existed. A grid of 141,274 cells cannot be
+     * sampled in one job, so "not sampled yet" has to be an ordinary state
+     * rather than a failure -- see [com.foliage.forecast.ForestTypeGroup].
+     */
+    val forestTypeGroup: Int? = null,
+)
 
 /** A single named term, so the UI can explain *why* a cell scores as it does. */
 data class Factor(val name: String, val value: Double, val effect: String, val detail: String)

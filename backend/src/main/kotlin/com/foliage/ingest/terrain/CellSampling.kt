@@ -73,6 +73,68 @@ object CellSampling {
     }
 
     /**
+     * The forest type group a cell is mostly made of.
+     *
+     * **A mode, not a mean, and the distinction is the whole point.** FIA group
+     * codes are identifiers: 800 is maple-beech and 900 is aspen-birch, and
+     * their average of 850 is not a forest at all. Averaging categorical codes
+     * is the kind of mistake that produces plausible numbers and silent
+     * nonsense, so this counts votes instead.
+     *
+     * Only real FIA group codes are counted; see [isForestCode]. 0 is the
+     * raster's no-data -- water, cloud, or off-raster -- and every probe of
+     * this dataset returned some, because a 30 m pixel in Minnesota lake
+     * country is quite often a lake. 999 is non-stocked ground, a statement
+     * that there is no forest rather than a kind of forest. Counting either
+     * would let a cell's lakes outvote its trees.
+     *
+     * Null when nothing is left, meaning the cell has no forest to classify.
+     * The model reads that as the maple-beech baseline, so such a cell scores
+     * exactly as it did before this term existed.
+     */
+    fun dominantType(samples: List<Int?>): Int? {
+        val votes = samples.filterNotNull().filter { isForestCode(it) }
+        if (votes.isEmpty()) return null
+
+        // Ties are ordinary at seven samples -- a cell split evenly between two
+        // forests is a real thing, not an error -- so the tie-break has to be
+        // deterministic or the same cell would classify differently on
+        // successive runs and nobody could reproduce a reading. The lowest code
+        // wins. That is arbitrary phenologically, and is documented as
+        // arbitrary rather than dressed up as a preference.
+        return votes.groupingBy { it }.eachCount().entries
+            .sortedWith(compareByDescending<Map.Entry<Int, Int>> { it.value }.thenBy { it.key })
+            .first().key
+    }
+
+    /** The forest type raster's no-data value: water, cloud, or off-raster. */
+    const val NO_DATA = 0
+
+    /** FIA's code for ground carrying no forest, which is not a forest type. */
+    const val NON_STOCKED = 999
+
+    /** Lowest and highest real FIA forest type group codes. */
+    private val FOREST_CODES = 100..990
+
+    /**
+     * Whether a raster value is a forest type group at all.
+     *
+     * Checked against the code domain rather than trusted, because this raster
+     * returns values that are not codes. Tiles overlapping Canada and the
+     * Great Lakes come back containing 63693 -- not a forest, not FIA's
+     * no-data, and larger than the column that stores it. It surfaced as a
+     * database truncation error rather than a wrong forest, which was luck: a
+     * value inside the column's range would have been stored as a plausible
+     * forest type and been much harder to notice.
+     *
+     * So the domain is stated here explicitly. Codes this project does not map
+     * to a group -- the western and tropical hardwoods, for instance -- are
+     * still valid and still stored; they simply score at the baseline until
+     * someone measures them.
+     */
+    fun isForestCode(value: Int): Boolean = value in FOREST_CODES && value != NON_STOCKED
+
+    /**
      * Mean of the samples that came back, ignoring gaps. Null only when every
      * sample for the cell was missing, which means the cell is genuinely off
      * the raster rather than merely unforested.
