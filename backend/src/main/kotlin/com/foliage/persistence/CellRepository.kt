@@ -101,10 +101,47 @@ class CellRepository(private val jdbc: JdbcTemplate) {
      * city's centre point, so a metro arrives as a patch roughly 11 km across
      * instead of one lonely cell in a hole.
      */
-    fun findAll(minCanopyPct: Int, metroPopulation: Int = Int.MAX_VALUE): List<Cell> = jdbc.query(
-        "$selectCell WHERE canopy_pct IS NULL OR canopy_pct >= ? " +
+    /**
+     * Forests that can show autumn colour, as a SQL predicate.
+     *
+     * FIA numbers softwood groups 100-399 and hardwoods 400 and above, so this
+     * is a range rather than a list -- which matters because the stored values
+     * are individual forest *types*, not only group codes, and no list of
+     * groups would catch 128 or 257.
+     *
+     * Two exceptions. Western larch (320-329) is a conifer that drops its
+     * needles and goes bright gold, and western Montana's larch season is one
+     * people travel for. And NULL means "not surveyed", which must behave
+     * exactly as it did before any of this existed.
+     */
+    private val displaysColour =
+        "(forest_type_group IS NULL OR forest_type_group >= 400 " +
+            "OR forest_type_group BETWEEN 320 AND 329)"
+
+    /**
+     * @param foliageOnly drops forests that never change colour.
+     *
+     * Off for scoring and on for the map, and the difference is not an
+     * inconsistency. Scoring an evergreen is cheap and harmless -- it comes out
+     * NO_CHANGE, which is true. Drawing one is not, because the map aggregates:
+     * at national zoom a ~22 km hexagon averages its children, and averaging a
+     * spruce that never turns with a maple that has finished turning produces a
+     * hexagon that is permanently half-way through autumn. That is how a
+     * December map came to show Maine and Montana at "partial" -- not a scoring
+     * error at all, but an average over cells that had no business being in it.
+     *
+     * Excluded cells still render, as the faded ground the legend already
+     * describes. An evergreen forest is forest; it simply is not foliage.
+     */
+    fun findAll(
+        minCanopyPct: Int,
+        metroPopulation: Int = Int.MAX_VALUE,
+        foliageOnly: Boolean = false,
+    ): List<Cell> = jdbc.query(
+        "$selectCell WHERE " + (if (foliageOnly) "$displaysColour AND " else "") +
+            "(canopy_pct IS NULL OR canopy_pct >= ? " +
             "OR parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p " +
-            "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?) ORDER BY h3",
+            "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?)) ORDER BY h3",
         cellMapper, minCanopyPct, metroPopulation,
     )
 
@@ -221,8 +258,11 @@ class CellRepository(private val jdbc: JdbcTemplate) {
         stateFips: String,
         minCanopyPct: Int,
         metroPopulation: Int = Int.MAX_VALUE,
+        foliageOnly: Boolean = false,
     ): List<Cell> = jdbc.query(
-        "$selectCell WHERE state_fips = ? AND (canopy_pct IS NULL OR canopy_pct >= ? " +
+        "$selectCell WHERE state_fips = ? AND " +
+            (if (foliageOnly) "$displaysColour AND " else "") +
+            "(canopy_pct IS NULL OR canopy_pct >= ? " +
             "OR parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p " +
             "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?)) ORDER BY h3",
         cellMapper, stateFips, minCanopyPct, metroPopulation,

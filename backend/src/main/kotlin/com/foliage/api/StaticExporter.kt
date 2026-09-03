@@ -154,8 +154,11 @@ class StaticExporter(
         // day in each daily file, so shipping the unforested two thirds would
         // roughly double the payload to draw hexagons that can never carry a
         // colour.
-        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation)
-                     else cells.findByState(stateFips, minCanopyPct, metroPopulation))
+        // foliageOnly: an evergreen forest is forest, but it is not foliage, and
+        // including it drags every aggregate hexagon it shares toward a middle
+        // that never happens. See CellRepository.findAll.
+        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation, foliageOnly = true)
+                     else cells.findByState(stateFips, minCanopyPct, metroPopulation, foliageOnly = true))
             .sortedBy { it.h3 }
         require(grid6.isNotEmpty()) { "no cells for ${stateFips ?: "the grid"}" }
 
