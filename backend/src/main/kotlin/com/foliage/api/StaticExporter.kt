@@ -257,9 +257,20 @@ class StaticExporter(
             // Three separate runs rather than interleaved triples: each
             // channel then compresses against itself, and neighbouring cells
             // hold similar values, so gzip does considerably better.
-            for (h3 in order) buf.put(PackedFormat.quantise(byCell[h3]?.progression).toByte())
-            for (h3 in order) buf.put(PackedFormat.quantise(byCell[h3]?.intensity).toByte())
-            for (h3 in order) buf.put(PackedFormat.quantiseUnit(byCell[h3]?.confidence).toByte())
+            // An evergreen hexagon is written as "no reading" rather than as a
+            // score, which the client draws faded: present on the map, plainly
+            // not part of the autumn.
+            //
+            // Scoring them NO_CHANGE was worse than it sounds. NO_CHANGE is the
+            // green of a forest that has not turned *yet*, so a December map
+            // grew pockets of green implying colour still to come from stands
+            // that were never going to produce any.
+            fun reading(h3: Long, pick: (com.foliage.persistence.StoredForecast) -> Double?): Double? =
+                if (showsColour[h3] == false) null else byCell[h3]?.let(pick)
+
+            for (h3 in order) buf.put(PackedFormat.quantise(reading(h3) { it.progression }).toByte())
+            for (h3 in order) buf.put(PackedFormat.quantise(reading(h3) { it.intensity }).toByte())
+            for (h3 in order) buf.put(PackedFormat.quantiseUnit(reading(h3) { it.confidence }).toByte())
 
             write(target.resolve("forecast/$day.bin"), buf.array())
 
@@ -277,15 +288,15 @@ class StaticExporter(
                 // showing the maple's autumn; including the spruces at zero
                 // would report it as permanently a quarter turned.
                 //
-                // A parent with no colouring children at all falls back to its
-                // own -- an entirely evergreen region reads as no change,
-                // which is exactly what it is, rather than as a hole.
+                // A parent with no colouring children at all reports nothing
+                // and is drawn faded. Averaging its evergreens to zero instead
+                // would paint it the green of a forest yet to turn, which is
+                // how a December map grew pockets of green over country that
+                // was never going to change colour.
                 fun meanOver(pick: (com.foliage.persistence.StoredForecast) -> Double): List<Double?> =
                     cellOrder.map { parent ->
-                        val kids = children[parent].orEmpty()
-                        val colouring = kids.filter { showsColour[it] != false }
-                        val pool = if (colouring.isEmpty()) kids else colouring
-                        val values = pool.mapNotNull { byCell[it]?.let(pick) }
+                        val colouring = children[parent].orEmpty().filter { showsColour[it] != false }
+                        val values = colouring.mapNotNull { byCell[it]?.let(pick) }
                         if (values.isEmpty()) null else values.average()
                     }
                 for (v in meanOver { it.progression }) coarse.put(PackedFormat.quantise(v).toByte())
@@ -319,9 +330,13 @@ class StaticExporter(
             members.forEach { buf.putInt(indexOf.getValue(it.h3)) }
 
             for (cell in members) {
+                // An evergreen writes no series at all, for the same reason it
+                // writes no daily reading: a flat zero curve in the detail
+                // panel is a claim that the stand is yet to turn.
+                val colours = com.foliage.forecast.ForestTypeGroup.showsColour(cell.forestTypeGroup)
                 val series = timelines[cell.h3].orEmpty().associateBy { it.day }
                 for (day in days) {
-                    val row = series[day]
+                    val row = if (colours) series[day] else null
                     buf.put(PackedFormat.quantise(row?.progression).toByte())
                     buf.put(PackedFormat.quantise(row?.intensity).toByte())
                     buf.put(PackedFormat.quantiseUnit(row?.confidence).toByte())

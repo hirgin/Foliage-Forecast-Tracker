@@ -187,9 +187,10 @@ export default function MapView({ nav }) {
               so it was the one people asked about.
             */}
             <p className="legend__note">
-              Faded tiles are ground with too few trees to forecast — fields,
-              towns and water — coloured from the forest nearest them. Read
-              them as the season around there, not as a forecast for that spot.
+              Faded tiles have no autumn to forecast — fields, towns and water,
+              or evergreen forest, which stays green all year. They are
+              coloured from the nearest forest that does turn, so read them as
+              the season around there rather than a forecast for that spot.
             </p>
           </section>
         )}
