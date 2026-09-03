@@ -435,12 +435,29 @@ constant here was fitted against, and it is the fourth most common cover in the
 country. Oak is seven times more widespread. That was invisible while the only
 evidence was ten reference towns, six of them in New England.
 
-It raises the stakes on the one constant knowingly left wrong. Oak's multiplier
-is **1.6 against 2.61 measured**, damped because 2.61 came from a single town
-and one town should not re-time a nation. That was a cheap call when oak was a
-footnote; it is the single largest known error in the model now that oak is a
-fifth of the grid. Measuring it across many places — the NPN validation can,
-oaks being well represented there — is the highest-value work outstanding.
+**Oak's multiplier looked like the obvious next thing to fix, and measuring it
+showed otherwise.** It ships at 1.6 against 2.61 measured at Litchfield, damped
+because one town should not re-time a nation. With oak at a fifth of the grid
+that damping looked like the model's largest remaining error. Checking what the
+two values do across oak country says it is not:
+
+| Place | No species term | 1.6, shipped | 2.61, Litchfield |
+|---|---|---|---|
+| Litchfield, CT | 9 Oct | 15 Oct | 27 Oct |
+| Shenandoah, VA | 30 Sep | 9 Oct | 19 Oct |
+| Hocking, OH | 21 Oct | 29 Oct | 10 Nov |
+| Great Smokies, TN | 23 Oct | 1 Nov | 16 Nov |
+| Ozarks, MO | 31 Oct | 8 Nov | never peaks |
+
+At 1.6 the northern oak sites run slightly early and the southern ones already
+run late — the Ozarks at 8 November is past when they turn. Raising the constant
+would fix Virginia and break Missouri and Tennessee outright.
+
+So the residual is not a mismeasured species constant. It is the north–south
+compression recorded below: cooling accumulates far more slowly in the South, so
+one threshold lands weeks apart across oak's range, and no single value can be
+right at both ends. 1.6 is a defensible middle and stays. Fixing this properly
+means a latitude interaction, not a better number.
 
 **Reading the raster taught one lesson worth keeping.** It returns individual
 forest *types*, not only type groups: the survey came back holding 841, 402,
