@@ -8,6 +8,17 @@ import java.sql.PreparedStatement
 import java.time.LocalDate
 
 /** A stored score for one cell on one day. */
+/** How late a state's cells peak, against how complete their weather is. */
+data class StatePeakSpread(
+    val state: String,
+    val cells: Int,
+    val neverPeaks: Int,
+    val peaksLate: Int,
+    val thinWeather: Int,
+    val earliest: String?,
+    val latest: String?,
+)
+
 /** One state's forecast coverage, for the cheap coverage check. */
 data class StateCoverage(
     val state: String,
@@ -283,6 +294,51 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
      * model with no latitude gradient when the model is fine and the query was
      * simply unscoped.
      */
+    /**
+     * When each state's cells peak, and how complete the weather behind them is.
+     *
+     * Built to chase scattered hexagons that peak long after everything around
+     * them. The suspicion was that a cell whose res 5 parent holds only part of
+     * the season accumulates less cooling than its neighbours and therefore
+     * peaks late or never -- a data gap wearing the costume of a forecast. This
+     * puts the two side by side so the question can be answered rather than
+     * argued about.
+     */
+    fun peakSpreadByState(minCanopyPct: Int, seasonDays: Int): List<StatePeakSpread> = jdbc.query(
+        """
+        SELECT c.state_name AS state,
+               COUNT(*) AS cells,
+               SUM(CASE WHEN p.peak IS NULL THEN 1 ELSE 0 END) AS never_peaks,
+               SUM(CASE WHEN p.peak >= ? THEN 1 ELSE 0 END) AS peaks_late,
+               SUM(CASE WHEN n.days < ? THEN 1 ELSE 0 END) AS thin_weather,
+               MIN(p.peak) AS earliest,
+               MAX(p.peak) AS latest
+        FROM cell c
+        LEFT JOIN (SELECT h3, MIN(day) peak FROM foliage_forecast
+                   WHERE stage = 'PEAK' GROUP BY h3) p ON p.h3 = c.h3
+        LEFT JOIN (SELECT h3, COUNT(DISTINCT month_day) days FROM weather_normal
+                   GROUP BY h3) n ON n.h3 = c.parent_res5
+        WHERE c.state_name IS NOT NULL
+          AND (c.canopy_pct IS NULL OR c.canopy_pct >= ?)
+        GROUP BY c.state_name
+        ORDER BY never_peaks + peaks_late DESC
+        """.trimIndent(),
+        { rs, _ ->
+            StatePeakSpread(
+                state = rs.getString("state"),
+                cells = rs.getInt("cells"),
+                neverPeaks = rs.getInt("never_peaks"),
+                peaksLate = rs.getInt("peaks_late"),
+                thinWeather = rs.getInt("thin_weather"),
+                earliest = rs.getDate("earliest")?.toLocalDate()?.toString(),
+                latest = rs.getDate("latest")?.toLocalDate()?.toString(),
+            )
+        },
+        java.sql.Date.valueOf(LocalDate.of(LocalDate.now().year, 11, 25)),
+        seasonDays,
+        minCanopyPct,
+    )
+
     fun peakDayByCell(stateFips: String? = null): Map<Long, LocalDate> {
         val mapper = { rs: java.sql.ResultSet, _: Int ->
             rs.getLong("h3") to rs.getDate("peak").toLocalDate()

@@ -212,8 +212,30 @@ object CoolingDegreeDayModel {
         // Saturating, so peak colour holds for about a week instead of a
         // couple of days. Approaches 100 without reaching it, which is the
         // honest shape: a stand is never more than fully turned.
-        val progression = (100.0 * (1 - Math.exp(-Math.pow(effective / speciesScale, SHAPE))))
+        val turning = (100.0 * (1 - Math.exp(-Math.pow(effective / speciesScale, SHAPE))))
             .coerceIn(0.0, 100.0)
+
+        // An evergreen forest stays green, so it is scored as staying green.
+        //
+        // Not a special case so much as the plain fact the model was missing.
+        // Cooling accumulates over a spruce stand exactly as it does over a
+        // maple, and with nothing to stop it the map gave Prescott, Arizona a
+        // peak on 8 November while the cell's own explanation read "mostly
+        // evergreens, which do not put on an autumn display". Those were the
+        // scattered hexagons turning at odd times in places nobody visits for
+        // the leaves.
+        //
+        // Zeroed rather than dropped from the grid. A conifer hexagon is still
+        // forest and still belongs on a forest map; what it is not is a
+        // hexagon that ever changes colour. Dropping it would also have thrown
+        // away every mixed stand the per-cell mode happens to call conifer --
+        // 45% spruce and 40% aspen classifies as spruce, and that aspen is
+        // real.
+        //
+        // Western larch is deliberately not included: it is a conifer that
+        // drops its needles and goes gold, and western Montana's larch season
+        // is one people travel for.
+        val progression = if (species == ForestTypeGroup.CONIFER) 0.0 else turning
 
         // Intensity is unchanged: a wide day-night spread makes vivid colour,
         // drought dulls it, a hard freeze ends it. This is about how good the
@@ -229,6 +251,8 @@ object CoolingDegreeDayModel {
         val intensity = (50.0 + 4.0 * (effectiveDiurnal - 8.0))
             .let { it * (1 - 0.4 * droughtStress) }
             .let { if (hardFreeze) it * PhenologyModel.HARD_FREEZE_INTENSITY_FACTOR else it }
+            // A display that never happens cannot be a vivid one.
+            .let { if (species == ForestTypeGroup.CONIFER) 0.0 else it }
             .coerceIn(0.0, 100.0)
 
         return FoliageScore(

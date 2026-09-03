@@ -37,6 +37,7 @@ class AdminController(
     private val weatherBackfill: WeatherBackfill,
     private val forestTypeIngest: com.foliage.ingest.ForestTypeIngest,
     private val cells: com.foliage.persistence.CellRepository,
+    private val season: com.foliage.ingest.weather.Season,
     private val normals: com.foliage.persistence.NormalRepository,
     private val modelValidation: com.foliage.validate.ModelValidation,
     private val forecasts: com.foliage.persistence.ForecastRepository,
@@ -157,6 +158,11 @@ class AdminController(
             },
         )
     }
+
+    /** Where cells peak late or never, against how complete their weather is. */
+    @org.springframework.web.bind.annotation.GetMapping("/peak-spread")
+    fun peakSpread(): List<com.foliage.persistence.StatePeakSpread> =
+        forecasts.peakSpreadByState(minCanopyPct, season.days(java.time.LocalDate.now().year).size)
 
     @PostMapping("/sample-forest-type")
     fun sampleForestType(

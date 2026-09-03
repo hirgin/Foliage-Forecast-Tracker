@@ -73,10 +73,21 @@ enum class ForestTypeGroup(
      * phenology one.
      */
     CONIFER(
-        setOf(100, 120, 140, 160, 170, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 370, 380, 390),
+        setOf(100, 120, 140, 160, 170, 180, 200, 220, 240, 260, 280, 300, 340, 360, 370, 380, 390),
         1.0,
         "conifer",
     ),
+
+    /**
+     * Western larch, which is a conifer that does turn.
+     *
+     * Carved out of [CONIFER] deliberately. Larch drops its needles every
+     * autumn and goes bright gold doing it, and in western Montana and northern
+     * Idaho that is the display people actually travel for. Lumping it with the
+     * evergreens would have suppressed a real season on the strength of a
+     * taxonomic label.
+     */
+    LARCH(setOf(320), 1.0, "western larch"),
 
     /**
      * Western and exotic hardwoods, at the baseline for want of a measurement.
