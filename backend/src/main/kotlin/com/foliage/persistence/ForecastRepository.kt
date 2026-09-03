@@ -107,6 +107,38 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
     )
 
     /**
+     * How much of each state carries a forecast **on one particular day**.
+     *
+     * Distinct from [coverageByState], which asks whether a cell has any
+     * forecast at all, and misses the failure that matters at the end of a
+     * season: a state whose weather is complete but whose forecast was scored
+     * before the season was extended. Louisiana had every day of December
+     * weather loaded and a forecast that stopped on 15 November, and no
+     * whole-season count could see it.
+     */
+    fun coverageByStateOnDay(day: LocalDate, minCanopyPct: Int): List<StateCoverage> = jdbc.query(
+        """
+        SELECT c.state_name AS state,
+               COUNT(*) AS total,
+               COUNT(f.h3) AS with_forecast
+        FROM cell c
+        LEFT JOIN foliage_forecast f ON f.h3 = c.h3 AND f.day = ?
+        WHERE c.state_name IS NOT NULL
+          AND (c.canopy_pct IS NULL OR c.canopy_pct >= ?)
+        GROUP BY c.state_name
+        ORDER BY (COUNT(*) - COUNT(f.h3)) DESC
+        """.trimIndent(),
+        { rs, _ ->
+            StateCoverage(
+                state = rs.getString("state"),
+                cells = rs.getInt("total"),
+                withForecast = rs.getInt("with_forecast"),
+            )
+        },
+        day, minCanopyPct,
+    )
+
+    /**
      * How much of each state carries a forecast, as counts.
      *
      * Added after finding out what the lazy version costs. Checking coverage by

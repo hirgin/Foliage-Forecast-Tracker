@@ -211,8 +211,11 @@ class AdminController(
     fun coverage(
         /** peaked=true asks how much of each state has finished turning instead. */
         @RequestParam(required = false) peaked: Boolean?,
+        /** day=YYYY-MM-DD asks how much of each state is scored on that day. */
+        @RequestParam(required = false) day: String?,
     ): List<com.foliage.persistence.StateCoverage> =
-        if (peaked == true) forecasts.peakCoverageByState(minCanopyPct)
+        if (day != null) forecasts.coverageByStateOnDay(java.time.LocalDate.parse(day), minCanopyPct)
+        else if (peaked == true) forecasts.peakCoverageByState(minCanopyPct)
         else forecasts.coverageByState(minCanopyPct, metroPopulation)
 
     /** Writes the season out as static JSON for CDN publishing. */
