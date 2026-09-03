@@ -134,6 +134,15 @@ class AdminController(
      * raster: a national pass is roughly a million point lookups and belongs
      * in several runs rather than one long-held request.
      */
+    /** How many cells the map draws, with and without the foliage filter. */
+    @org.springframework.web.bind.annotation.GetMapping("/grid-size")
+    fun gridSize(): Map<String, Int> = mapOf(
+        "scored" to cells.findAll(minCanopyPct, metroPopulation).size,
+        "drawn" to cells.findAll(minCanopyPct, metroPopulation, foliageOnly = true).size,
+        "conifer" to cells.countExcludedBy("forest_type_group BETWEEN 100 AND 319 OR forest_type_group BETWEEN 330 AND 399", minCanopyPct, metroPopulation),
+        "noTypeFound" to cells.countExcludedBy("forest_type_group = 0", minCanopyPct, metroPopulation),
+    )
+
     /** How a state's cells break down by forest type, for checking a survey. */
     @org.springframework.web.bind.annotation.GetMapping("/forest-type")
     fun forestType(@RequestParam stateFips: String): Map<String, Any> {

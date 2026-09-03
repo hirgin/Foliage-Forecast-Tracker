@@ -67,6 +67,34 @@ class AutumnColourTest {
         assertTrue(scoreAt(800, LocalDate.of(2026, 10, 20)).intensity > 0.0)
     }
 
+    /** Mirrors the repository predicate for which cells the map draws. */
+    private fun drawnOnMap(code: Int?): Boolean =
+        code == null || code == 0 || code >= 400 || code in 320..329
+
+    @Test
+    fun `a cell with trees but no surveyed type still appears`() {
+        // The correction that matters. Excluding code 0 emptied 26,310
+        // hexagons that have trees: every one passed the canopy floor, so
+        // NLCD measured tree cover over it, and then failed a survey that
+        // reads seven 30 m points in a 3 km cell. Scattered woodland loses
+        // that lottery routinely, and the canopy raster is the better witness.
+        assertTrue(drawnOnMap(0))
+        assertTrue(drawnOnMap(null))
+    }
+
+    @Test
+    fun `evergreen forests are not drawn on a foliage map`() {
+        // Not because they are missing, but because averaging a spruce that
+        // never turns into a 22 km hexagon alongside a maple that has finished
+        // gives a hexagon permanently half-way through autumn.
+        for (code in listOf(100, 120, 128, 160, 180, 200, 220, 257, 260, 300)) {
+            assertTrue(!drawnOnMap(code), "conifer $code should not be drawn")
+        }
+        assertTrue(drawnOnMap(320), "larch turns and is drawn")
+        assertTrue(drawnOnMap(800))
+        assertTrue(drawnOnMap(841))
+    }
+
     @Test
     fun `an unsurveyed cell is never suppressed`() {
         // The rollout guarantee. A cell with no type behaves exactly as it did

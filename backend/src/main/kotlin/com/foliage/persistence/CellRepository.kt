@@ -109,14 +109,23 @@ class CellRepository(private val jdbc: JdbcTemplate) {
      * are individual forest *types*, not only group codes, and no list of
      * groups would catch 128 or 257.
      *
-     * Two exceptions. Western larch (320-329) is a conifer that drops its
+     * Three exceptions. Western larch (320-329) is a conifer that drops its
      * needles and goes bright gold, and western Montana's larch season is one
-     * people travel for. And NULL means "not surveyed", which must behave
-     * exactly as it did before any of this existed.
+     * people travel for. NULL means "not surveyed", which must behave exactly
+     * as it did before any of this existed.
+     *
+     * And 0 -- "surveyed, no forest type found" -- is kept, which is the
+     * correction that matters. Excluding it emptied 26,310 hexagons that have
+     * trees: every one passed the canopy floor, meaning NLCD measured tree
+     * cover over it, and then failed a survey that reads seven 30 m points in
+     * a 3 km cell. Scattered woodland loses that lottery routinely. The canopy
+     * raster averages the same ground properly and is the better witness, so a
+     * cell it says has trees keeps its place on the map and scores at the
+     * baseline, exactly like one nobody has surveyed.
      */
     private val displaysColour =
-        "(forest_type_group IS NULL OR forest_type_group >= 400 " +
-            "OR forest_type_group BETWEEN 320 AND 329)"
+        "(forest_type_group IS NULL OR forest_type_group = 0 " +
+            "OR forest_type_group >= 400 OR forest_type_group BETWEEN 320 AND 329)"
 
     /**
      * @param foliageOnly drops forests that never change colour.
@@ -144,6 +153,15 @@ class CellRepository(private val jdbc: JdbcTemplate) {
             "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?)) ORDER BY h3",
         cellMapper, minCanopyPct, metroPopulation,
     )
+
+    /** Diagnostic: how many drawable cells a given predicate would remove. */
+    fun countExcludedBy(predicate: String, minCanopyPct: Int, metroPopulation: Int): Int =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM cell WHERE ($predicate) AND (canopy_pct IS NULL OR canopy_pct >= ? " +
+                "OR parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p " +
+                "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?))",
+            Int::class.java, minCanopyPct, metroPopulation,
+        ) ?: 0
 
     fun countAll(): Long =
         jdbc.queryForObject("SELECT COUNT(*) FROM cell", Long::class.java) ?: 0
