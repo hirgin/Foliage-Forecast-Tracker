@@ -199,16 +199,16 @@ export default function MapView({ nav }) {
         {beyondHorizon && (
           <p className="note note--warn">
             Beyond the 16-day weather forecast. This date is estimated from a
-            five-year average, not forecast — treat it as a typical year rather
+            three-year average, not forecast — treat it as a typical year rather
             than a prediction about this one.
           </p>
         )}
 
         <footer>
           <p>
-            A model, not an official forecast. There is no ground-truth record of
-            when foliage actually peaks, so this has not been validated against
-            reality. <a href="#/how-it-works">How it works</a>.
+            A model, not an official forecast. No official record of peak dates
+            exists, so it is checked against volunteer observations of real
+            leaves instead. <a href="#/how-it-works">How it works</a>.
           </p>
           {/* How far the load has got. Most of the map is grey while the
               nightly backfill works through the country against a metered

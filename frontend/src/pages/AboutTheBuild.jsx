@@ -100,9 +100,10 @@ export default function AboutTheBuild({ nav }) {
           <article>
             <h3>An explainable model</h3>
             <p>
-              A fitted model could not be validated either — there is no ground truth — and it
-              could not tell you why a hexagon is the colour it is. Every constant here is a
-              stated assumption rather than a fitted parameter.
+              A fitted model would have been far harder to check — the only ground truth is
+              volunteer records of individual plants, which measure something subtly different
+              from a 3 km stand — and it could not tell you why a hexagon is the colour it is.
+              Every constant here is a stated assumption rather than a fitted parameter.
             </p>
           </article>
         </div>
@@ -130,7 +131,7 @@ export default function AboutTheBuild({ nav }) {
           published norms put it — and the documentation states plainly what the model cannot do.
         </p>
         <p>
-          Saying so is not a hedge. A map that looks authoritative while resting on a five-year
+          Saying so is not a hedge. A map that looks authoritative while resting on a three-year
           average would be the wrong kind of impressive.
         </p>
 

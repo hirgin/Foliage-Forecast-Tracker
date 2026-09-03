@@ -22,6 +22,16 @@ const DRIVERS = [
       'longer to get there.',
   },
   {
+    name: 'What kind of trees',
+    role: 'Some turn weeks earlier',
+    body:
+      'Aspen and birch turn well before maples and drop their leaves quickly once they do. ' +
+      'Oaks hold on far longer, often deep into autumn. The map reads the forest type of every ' +
+      'hexagon from a national survey of American forests, so a stand of aspen in northern ' +
+      'Minnesota is not given a maple’s timing. Roughly two fifths of the country carries no ' +
+      'continuous forest at all, and those hexagons are left uncoloured rather than guessed at.',
+  },
+  {
     name: 'Height above sea level',
     role: 'Why hexagons, not counties',
     body:
@@ -65,10 +75,13 @@ export default function HowItWorks({ nav }) {
         <section className="callout callout--warn">
           <h2>This is a model, not an official forecast</h2>
           <p>
-            Nobody keeps an official record of when each place actually peaked, so there is
-            nothing to check this against. What we can say is that it is tuned to land inside
-            the peak windows published for well-known places, and that it lands within about
-            four days of them on average. Treat it as a considered estimate, not a measurement.
+            Nobody keeps an official record of when each place actually peaked, so there is no
+            scorecard for peak dates. It is checked instead against 46,424 volunteer observations
+            of real leaves, gathered by the USA National Phenology Network. Those show it putting
+            the season in the right order, and doing so best for the maples it was built around.
+            It is also tuned to land inside the peak windows published for well-known places,
+            within about four days of them on average. Treat it as a considered estimate, not a
+            measurement.
           </p>
         </section>
 
@@ -97,7 +110,7 @@ export default function HowItWorks({ nav }) {
           <div>
             <strong>Typical year</strong>
             <span>+16 days → season end</span>
-            <em>A five-year average: a typical year, not this one</em>
+            <em>A three-year average: a typical year, not this one</em>
           </div>
         </div>
 

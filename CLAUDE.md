@@ -37,7 +37,15 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 - Every ingest job writes an `ingest_run` row. Jobs must be idempotent and
   resumable — the historical backfill is too large to restart from zero.
 - New weather sources implement `WeatherSource` and nothing downstream changes.
-  That seam is deliberate; do not leak source-specific types past it. The same
+  That seam is deliberate; do not leak source-specific types past it.
+- **Terrain rasters are read as tiles, never point by point.** Elevation,
+  canopy and forest type all group cells by the degree tile they fall in and
+  fetch each tile once. Point sampling works at state scale and cannot finish
+  nationally. See ADR-0007.
+- **A cell with no forest type scores at the maple-beech baseline**, exactly as
+  the whole map did before the species term existed. That fallback is what lets
+  the term ship against a partly surveyed grid; do not turn a missing type into
+  an error. See ADR-0009. The same
   applies to `CanopySource` and `ElevationSource` — both were swapped from
   point sampling to bulk rasters with no change downstream. See ADR-0007.
 - **Terrain is read as tiles, not points.** Group cells by the raster tile they
@@ -102,6 +110,26 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 - MySQL specifics: timestamps are `DATETIME(6)` (TIMESTAMP dies in 2038),
   indexed strings must be `VARCHAR` not `TEXT`, and all stored times are UTC.
 - Java 23 is the toolchain. Node is 18.16, so Vite stays on 5.x.
+- **The forest type raster returns individual FIA *types*, not only groups.**
+  841, 402 and ~200 others are types nested inside groups; resolve a code to
+  the highest group at or below it. It also returns 63693 over Canada and the
+  Great Lakes, which is not a code at all -- `CellSampling.isForestCode` states
+  the valid domain rather than trusting the raster.
+- **Forest type is categorical, so it takes a mode, never a mean.** 800 is
+  maple-beech, 900 is aspen-birch, and their average of 850 is not a forest.
+- **Open-Meteo's daily quota resets at UTC midnight, not local.** That is 17:00
+  Pacific, so an evening run already spends tomorrow's allowance. The log says
+  which window was hit -- hourly and daily are different waits.
+- **MapLibre allows one zoom-based subexpression per expression.** Nesting
+  `step` inside `step` is rejected and blanks the whole map. Clearing a layout
+  property with `undefined` fails validation the same way; delete the key.
+- **MapLibre label collisions favour later layers**, and colliding labels are
+  dropped rather than moved. `symbol-sort-key` decides which survives; without
+  it the winner is whatever order the tile happened to supply.
+- **Check coverage with a grouped count, not by sampling cells.** Spot checks
+  have given a wrong answer about this project's own state three times --
+  including "the species term is barely reaching anything" when it was reaching
+  a quarter of Minnesota.
 
 ## Phases
 
@@ -111,4 +139,6 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 3. Forecast model — phenology scoring, lapse-rate downscale to res 6.
 4. Map experience — hexagon choropleth, time slider, detail panel.
 5. Polish — caching, "How It Works", deploy.
+5b. ✅ Species — FIA forest type per cell from USFS BIGMAP, scaling `S_PEAK`.
+   CONUS surveyed. Validated against 46,424 USA-NPN observations. See ADR-0009.
 6. NOAA GRIB2 — HRRR at native res 6, swapped in behind `WeatherSource`.
