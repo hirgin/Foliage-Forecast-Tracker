@@ -154,11 +154,12 @@ class StaticExporter(
         // day in each daily file, so shipping the unforested two thirds would
         // roughly double the payload to draw hexagons that can never carry a
         // colour.
-        // foliageOnly: an evergreen forest is forest, but it is not foliage, and
-        // including it drags every aggregate hexagon it shares toward a middle
-        // that never happens. See CellRepository.findAll.
-        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation, foliageOnly = true)
-                     else cells.findByState(stateFips, minCanopyPct, metroPopulation, foliageOnly = true))
+        // Every cell is drawn, evergreens included. They are forest, they
+        // belong on a forest map, and an evergreen hexagon drawn green in
+        // November is telling the truth. What they are kept out of is the
+        // *average* below.
+        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation)
+                     else cells.findByState(stateFips, minCanopyPct, metroPopulation))
             .sortedBy { it.h3 }
         require(grid6.isNotEmpty()) { "no cells for ${stateFips ?: "the grid"}" }
 
@@ -173,6 +174,11 @@ class StaticExporter(
 
         // Position in this list is the cell's identity everywhere else.
         val order = grid6.map { it.h3 }
+
+        // Which cells belong in a foliage average. Built once here rather than
+        // looked up per day per resolution.
+        val showsColour: Map<Long, Boolean> =
+            grid6.associate { it.h3 to com.foliage.forecast.ForestTypeGroup.showsColour(it.forestTypeGroup) }
         val indexOf = order.withIndex().associate { (i, h3) -> h3 to i }
 
         val peakDays = forecasts.peakDayByCell()
@@ -266,9 +272,20 @@ class StaticExporter(
                     PackedFormat.HEADER_BYTES + PackedFormat.CHANNELS * cellOrder.size,
                 )
                 coarse.putMagic(PackedFormat.MAGIC_DAY).putInt(cellOrder.size)
+                // Averaged over the children that can change colour, not all
+                // of them. A parent holding one maple and three spruces is
+                // showing the maple's autumn; including the spruces at zero
+                // would report it as permanently a quarter turned.
+                //
+                // A parent with no colouring children at all falls back to its
+                // own -- an entirely evergreen region reads as no change,
+                // which is exactly what it is, rather than as a hole.
                 fun meanOver(pick: (com.foliage.persistence.StoredForecast) -> Double): List<Double?> =
                     cellOrder.map { parent ->
-                        val values = children[parent].orEmpty().mapNotNull { byCell[it]?.let(pick) }
+                        val kids = children[parent].orEmpty()
+                        val colouring = kids.filter { showsColour[it] != false }
+                        val pool = if (colouring.isEmpty()) kids else colouring
+                        val values = pool.mapNotNull { byCell[it]?.let(pick) }
                         if (values.isEmpty()) null else values.average()
                     }
                 for (v in meanOver { it.progression }) coarse.put(PackedFormat.quantise(v).toByte())

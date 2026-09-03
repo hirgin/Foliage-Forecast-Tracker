@@ -153,5 +153,22 @@ enum class ForestTypeGroup(
          * out cannot silently change forests nobody has measured yet.
          */
         fun multiplierFor(code: Int?): Double = forCode(code)?.sPeakMultiplier ?: 1.0
+
+        /**
+         * Whether this forest ever changes colour.
+         *
+         * Used to decide what belongs in an *average*, not what belongs on the
+         * map. Every hexagon is drawn; an evergreen one is drawn green, which
+         * is what an evergreen forest looks like in November. But averaging it
+         * into a coarser hexagon alongside a maple that has finished turning
+         * gives a value halfway through an autumn that never happened, and at
+         * national zoom that put Maine and Montana at "partial" in December.
+         *
+         * Unsurveyed cells and cells the survey found no type for both count as
+         * colouring: the canopy raster says they have trees, and it measures
+         * the whole hexagon rather than seven points inside it.
+         */
+        fun showsColour(code: Int?): Boolean =
+            code == null || code == 0 || forCode(code) != ForestTypeGroup.CONIFER
     }
 }

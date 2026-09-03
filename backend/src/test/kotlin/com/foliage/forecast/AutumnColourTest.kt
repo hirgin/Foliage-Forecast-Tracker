@@ -67,9 +67,29 @@ class AutumnColourTest {
         assertTrue(scoreAt(800, LocalDate.of(2026, 10, 20)).intensity > 0.0)
     }
 
-    /** Mirrors the repository predicate for which cells the map draws. */
-    private fun drawnOnMap(code: Int?): Boolean =
-        code == null || code == 0 || code >= 400 || code in 320..329
+    @Test
+    fun `evergreens count for drawing but not for averaging`() {
+        // Every hexagon is drawn -- an evergreen one drawn green in November
+        // is telling the truth, and the map should have no holes in it. What
+        // an evergreen is kept out of is the coarse average, where pairing a
+        // spruce that never turns with a maple that has finished gives a
+        // hexagon halfway through an autumn that never happened.
+        for (code in listOf(100, 120, 128, 160, 180, 200, 220, 257, 260, 300)) {
+            assertTrue(!ForestTypeGroup.showsColour(code), "conifer $code must not be averaged in")
+        }
+        assertTrue(ForestTypeGroup.showsColour(320), "larch turns, so it counts")
+        assertTrue(ForestTypeGroup.showsColour(800))
+        assertTrue(ForestTypeGroup.showsColour(841))
+    }
+
+    @Test
+    fun `a cell with trees but no surveyed type still counts`() {
+        // The canopy raster measured tree cover over the whole hexagon; the
+        // forest survey reads seven 30 m points inside it and scattered
+        // woodland loses that lottery routinely. Canopy is the better witness.
+        assertTrue(ForestTypeGroup.showsColour(0))
+        assertTrue(ForestTypeGroup.showsColour(null))
+    }
 
     @Test
     fun `a cell with trees but no surveyed type still appears`() {
@@ -78,21 +98,8 @@ class AutumnColourTest {
         // NLCD measured tree cover over it, and then failed a survey that
         // reads seven 30 m points in a 3 km cell. Scattered woodland loses
         // that lottery routinely, and the canopy raster is the better witness.
-        assertTrue(drawnOnMap(0))
-        assertTrue(drawnOnMap(null))
-    }
-
-    @Test
-    fun `evergreen forests are not drawn on a foliage map`() {
-        // Not because they are missing, but because averaging a spruce that
-        // never turns into a 22 km hexagon alongside a maple that has finished
-        // gives a hexagon permanently half-way through autumn.
-        for (code in listOf(100, 120, 128, 160, 180, 200, 220, 257, 260, 300)) {
-            assertTrue(!drawnOnMap(code), "conifer $code should not be drawn")
-        }
-        assertTrue(drawnOnMap(320), "larch turns and is drawn")
-        assertTrue(drawnOnMap(800))
-        assertTrue(drawnOnMap(841))
+        assertTrue(ForestTypeGroup.showsColour(0))
+        assertTrue(ForestTypeGroup.showsColour(null))
     }
 
     @Test

@@ -138,9 +138,11 @@ class AdminController(
     @org.springframework.web.bind.annotation.GetMapping("/grid-size")
     fun gridSize(): Map<String, Int> = mapOf(
         "scored" to cells.findAll(minCanopyPct, metroPopulation).size,
-        "drawn" to cells.findAll(minCanopyPct, metroPopulation, foliageOnly = true).size,
-        "conifer" to cells.countExcludedBy("forest_type_group BETWEEN 100 AND 319 OR forest_type_group BETWEEN 330 AND 399", minCanopyPct, metroPopulation),
-        "noTypeFound" to cells.countExcludedBy("forest_type_group = 0", minCanopyPct, metroPopulation),
+        "drawn" to cells.findAll(minCanopyPct, metroPopulation).size,
+        "evergreenNotAveraged" to cells.countExcludedBy(
+            "forest_type_group BETWEEN 100 AND 319 OR forest_type_group BETWEEN 330 AND 399",
+            minCanopyPct, metroPopulation,
+        ),
     )
 
     /** How a state's cells break down by forest type, for checking a survey. */
