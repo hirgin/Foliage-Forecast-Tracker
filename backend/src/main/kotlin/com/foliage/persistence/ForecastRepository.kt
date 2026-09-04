@@ -382,6 +382,24 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
      * Deleting is better than publishing that: an absent cell draws grey and
      * reads as "not computed yet", which is the truth.
      */
+    /**
+     * Removes the forecast for cells that should no longer carry one.
+     *
+     * Needed because scoring writes by upsert: a cell that stops qualifying is
+     * simply not written, and its previous rows survive to be exported. Cells
+     * east of Lexington that had almost no weather kept a December peak that
+     * way, long after the scoring run had decided not to score them.
+     */
+    fun deleteCells(h3s: Collection<Long>): Int {
+        if (h3s.isEmpty()) return 0
+        var removed = 0
+        for (batch in h3s.chunked(500)) {
+            val marks = batch.joinToString(",") { "?" }
+            removed += jdbc.update("DELETE FROM foliage_forecast WHERE h3 IN ($marks)", *batch.toTypedArray())
+        }
+        return removed
+    }
+
     fun deleteByState(stateFips: String): Int = jdbc.update(
         """
         DELETE f FROM foliage_forecast f

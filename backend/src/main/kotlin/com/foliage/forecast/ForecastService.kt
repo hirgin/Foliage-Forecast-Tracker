@@ -47,6 +47,16 @@ class ForecastService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /** [stateFips] null scores the whole loaded grid rather than one state. */
+    /**
+     * Share of the season a cell needs real weather for before it is scored.
+     *
+     * Half is deliberately forgiving: the model is built to run on partial
+     * coverage, filling the rest from climatology, and a stricter floor would
+     * throw away cells it can legitimately forecast. What it excludes is the
+     * cell whose weather essentially never arrived.
+     */
+    private val MIN_SEASON_COVERAGE = 0.5
+
     fun computeState(stateFips: String?, year: Int = LocalDate.now().year): ForecastRunResult {
         val scope = stateFips ?: "all"
         val runId = audit.start("model", "forecast:$scope")
@@ -86,6 +96,7 @@ class ForecastService(
             val days = season.days(year)
             val seasonStart = season.start(year)
             val rows = ArrayList<StoredForecast>(grid.size * days.size)
+            val unscored = mutableListOf<Long>()
 
             val elapsed = measureTimeMillis {
                 for (cell in grid) {
@@ -100,6 +111,33 @@ class ForecastService(
                         chillNormals = chill,
                     )
                     val cumulativeNormal = cumulativePrecip(precipNormals[cell.parentRes5], days)
+
+                    // A cell with almost no weather is left unscored, rather
+                    // than given a season made up out of daylight.
+                    //
+                    // The photoperiod floor accumulates on days with no reading
+                    // -- deliberately, because daylight is known whether or not
+                    // a forecast run covered a date, and that is what stops a
+                    // finished stand freezing mid-peak in December. The cost is
+                    // that a cell whose weather never arrived accumulates the
+                    // floor and nothing else, which manufactures a slow, late
+                    // autumn out of a data gap. Five hexagons east of Lexington
+                    // held 15 days of in-season weather against their
+                    // neighbours' 106 and peaked on 13 December, sitting in
+                    // colour while the country around them had finished.
+                    //
+                    // A hexagon with no data to go on should say so. Unscored,
+                    // it draws faded and takes its colour from the forest
+                    // nearest it, which is an honest answer and already what
+                    // the map does for ground with too few trees.
+                    val covered = inputs.count { it.day >= seasonStart && it.tmaxC != null && it.tminC != null }
+                    if (covered < days.size * MIN_SEASON_COVERAGE) {
+                        // Recorded, not merely skipped. Scoring writes by
+                        // upsert, so a cell that stops qualifying keeps
+                        // whatever it was last given unless it is cleared.
+                        unscored += cell.h3
+                        continue
+                    }
 
                     for (day in days) {
                         val score = scoreDay(cell, inputs, day, cumulativeNormal[day], seasonStart, seasonStart)
@@ -117,6 +155,10 @@ class ForecastService(
             log.info("scored {} cell-days in {} ms", rows.size, elapsed)
 
             written = forecasts.upsertAll(rows, modelVersion).toLong()
+            if (unscored.isNotEmpty()) {
+                val cleared = forecasts.deleteCells(unscored)
+                log.info("{} cells had too little weather to score; cleared {} stale rows", unscored.size, cleared)
+            }
             audit.succeed(runId, written)
 
             // Scoped to the state that was just scored. Unscoped, every run
