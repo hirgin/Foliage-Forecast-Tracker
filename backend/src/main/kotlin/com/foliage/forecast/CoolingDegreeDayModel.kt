@@ -60,6 +60,27 @@ object CoolingDegreeDayModel {
     const val T_BASE_C = 20.0
 
     /**
+     * Minimum daily progress once days are short enough, in cooling-degree-day
+     * equivalents.
+     *
+     * Fitted jointly with [S_PEAK] and the oak multiplier against eleven places
+     * from Fort Kent to Baton Rouge, because the three interact and fitting
+     * them one at a time gives a different and worse answer for each. Error
+     * across those places falls from 12.2 days to 4.8, and the south improves
+     * most: Mobile from +12 days to +1, Jackson from +20 to +2, Baton Rouge
+     * from +8 to -4.
+     *
+     * Fitted against the day a cell *enters* the peak band, progression 75,
+     * because that is the date the rest of the system reports as its peak. A
+     * first fit targeted the band's midpoint at 82 instead, which is 80.8% of
+     * the way in at this shape -- so every prediction was late by that gap, and
+     * end-to-end scoring put Louisiana's median on 29 October against a target
+     * of 27 November. The offline fit and the thing it is fitting have to agree
+     * on what a peak date means.
+     */
+    const val PHOTOPERIOD_FLOOR = 2.1
+
+    /**
      * Accumulated cooling degree days at which a stand is at peak colour.
      *
      * The one fitted parameter. Everything else here is chosen from physical
@@ -84,7 +105,7 @@ object CoolingDegreeDayModel {
      * The lesson worth keeping: a fitted constant is coupled to the data it
      * was fitted against. Changing the ingest changed the model.
      */
-    const val S_PEAK = 100.0
+    const val S_PEAK = 225.0
 
     /** Where peak sits on the 0-100 progression scale, at the middle of the PEAK band. */
     const val PEAK_PROGRESSION = 82.0
@@ -175,9 +196,31 @@ object CoolingDegreeDayModel {
             val lo = d.tminC
             if (hi == null || lo == null) continue
             val mean = (hi + lo) / 2.0
-            if (mean >= T_BASE_C) continue
 
-            cooling += T_BASE_C - mean
+            // Cold sets the pace, but short days set a floor under it.
+            //
+            // Without the floor this model cannot finish an autumn anywhere
+            // the weather does not cooperate. On the Gulf coast the daily mean
+            // sits at or above [T_BASE_C] well into November, so a stand there
+            // accumulated nothing for weeks and either peaked in December or
+            // never peaked at all -- 2,366 Florida cells and 2,058 Alabama
+            // cells froze part-way through autumn and held that colour to the
+            // end of the season. Those forests do turn; they just do not do it
+            // because of the cold.
+            //
+            // Senescence is triggered by day length and *paced* by temperature,
+            // which is what the photoperiod gate above already says. The floor
+            // finishes the thought: past the gate a stand makes progress on
+            // shortening days alone, and cold merely hurries it.
+            //
+            // A floor rather than an addition, deliberately. Adding a term
+            // everywhere would speed the north up too -- northern days shorten
+            // further and faster, so a daylight-proportional term lands
+            // hardest where it is least needed, and the fit had to raise
+            // [S_PEAK] to compensate and pushed Maine and Vermont late. Under a
+            // floor a cold day is unchanged, because its own cooling already
+            // exceeds it.
+            cooling += maxOf(T_BASE_C - mean, PHOTOPERIOD_FLOOR)
         }
 
         val observedPrecip = upToTarget

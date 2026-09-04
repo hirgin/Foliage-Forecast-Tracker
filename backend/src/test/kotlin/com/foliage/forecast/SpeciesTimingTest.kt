@@ -60,16 +60,15 @@ class SpeciesTimingTest {
     }
 
     @Test
-    fun `aspen peaks before maple, and oak after`() {
+    fun `aspen peaks before maple`() {
         val aspen = peakDay(900)
         val maple = peakDay(800)
-        val oak = peakDay(500)
         assertTrue(aspen != null && maple != null, "both should reach peak in a full autumn")
         assertTrue(aspen!! < maple!!, "aspen-birch turns first")
-        // Oak may not reach peak inside the fixture at all, which is itself
-        // correct behaviour -- it turns late enough that a 100-day season can
-        // end first.
-        if (oak != null) assertTrue(oak > maple, "oak turns last")
+        // Oak no longer carries a multiplier: refitting it alongside the
+        // photoperiod floor put it at the baseline, because what it had been
+        // standing in for was latitude. See ForestTypeGroupTest.
+        assertEquals(maple, peakDay(500))
     }
 
     @Test

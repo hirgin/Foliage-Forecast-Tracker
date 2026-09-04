@@ -45,7 +45,7 @@ foliage:
     kind: cooling
   # Bumped for the cooling-degree-day model (ADR-0008). Forecast rows carry
   # this, so a mixed table can be told apart after a partial rescore.
-  model-version: "0.2.1-cdd"
+  model-version: "0.3.0-photoperiod"
   grid:
     # H3 resolution the forecast is computed at (~3 km edge). See ADR-0002.
     resolution: 6

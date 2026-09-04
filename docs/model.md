@@ -414,6 +414,44 @@ available patch costs either peak timing or peak duration. Fixing it properly
 needs the curve to stop being a single global shape — which is the species
 work, not another constant.
 
+## Shortening days set a floor under progress
+
+The model paced senescence entirely by cooling below 20 °C, and on the Gulf
+coast the daily mean stays at or above that well into November. Southern stands
+therefore accumulated nothing for weeks, and the map said so: 2,366 Florida
+cells and 2,058 in Alabama never reached peak at all, froze part-way through
+autumn, and held that colour to the end of the season. Louisiana's peak ran to
+15 December.
+
+Those forests do turn. They turn on shortening days, which the model used only
+as an on/off gate before handing everything to temperature.
+
+Past the gate, a stand now makes minimum daily progress on daylight alone, and
+cold merely hurries it. Floor, `S_PEAK` and the oak multiplier were fitted
+together against eleven places from Fort Kent to Baton Rouge, because they
+interact:
+
+| | Before | After |
+|---|---|---|
+| Photoperiod floor | — | 2.1 |
+| `S_PEAK` | 100 | 225 |
+| Oak multiplier | 1.6 | 1.0 |
+| Error over eleven places | 12.2 days | **4.8 days** |
+| Cells peaking after 25 November | 11,372 | **1,069** |
+| Latest peak anywhere | 15 December | **26 November** |
+
+**Oak turned out to be standing in for latitude.** The joint fit puts it at
+exactly 1.0. Litchfield is oak country and also three degrees south of Stowe,
+and a model that could not say "further south turns later" had only the species
+term to explain the gap with — which is why 1.6 was somehow both too early in
+New England and too late in the Ozarks. Aspen–birch at 0.61 is unaffected,
+having been measured against places at the same latitude.
+
+What remains is the opposite sign and smaller: the deep south now runs early,
+Louisiana's median at 12 November against a window nearer 27 November. See
+[ADR-0010](adr/0010-photoperiod-floor.md), including the fitting mistake that
+cost a full round trip.
+
 ## What the forest actually is
 
 The grid is now surveyed. All 217,412 cells carry an FIA forest type read from

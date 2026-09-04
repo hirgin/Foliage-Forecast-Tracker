@@ -26,15 +26,13 @@ class ForestTypeGroupTest {
     }
 
     @Test
-    fun `aspen turns earlier than maple, and oak later`() {
-        // The direction is the whole claim. Getting a magnitude slightly wrong
-        // costs days; getting the sign wrong would make the map worse than the
-        // maple-everywhere assumption it replaces.
+    fun `aspen turns earlier than maple`() {
+        // The direction is the whole claim for aspen. Getting a magnitude
+        // slightly wrong costs days; getting the sign wrong would make the map
+        // worse than the maple-everywhere assumption it replaces.
         val aspen = ForestTypeGroup.ASPEN_BIRCH.sPeakMultiplier
         val maple = ForestTypeGroup.MAPLE_BEECH_BIRCH.sPeakMultiplier
-        val oak = ForestTypeGroup.OAK.sPeakMultiplier
         assertTrue(aspen < maple, "aspen-birch needs less cooling to turn")
-        assertTrue(oak > maple, "oak needs more")
     }
 
     @Test
@@ -68,13 +66,17 @@ class ForestTypeGroupTest {
     }
 
     @Test
-    fun `the oak multiplier stays damped below what one town measured`() {
-        // Litchfield measured 2.61. Applying that whole would send every oak
-        // forest in the country into November on the authority of one place.
-        // Deliberately under-corrected until it is measured across several.
-        val oak = ForestTypeGroup.OAK.sPeakMultiplier
-        assertTrue(oak < 2.61, "a single site must not set the national constant")
-        assertTrue(oak > 1.0, "but oaks do turn later than maples")
+    fun `oak sits at the baseline once latitude is modelled`() {
+        // It shipped at 1.6, damped from 2.61 measured at Litchfield, because
+        // oak really does hold its leaves later than maple. Refitting it
+        // jointly with the photoperiod floor puts it at exactly 1.0.
+        //
+        // The multiplier had been standing in for something else. Litchfield
+        // is oak country and also three degrees south of Stowe, and a model
+        // with no way to say "further south turns later" had only the species
+        // term to explain the gap. Holding oak above 1.0 now just makes oak
+        // country late again.
+        assertEquals(1.0, ForestTypeGroup.OAK.sPeakMultiplier)
     }
 
     @Test

@@ -53,7 +53,26 @@ enum class ForestTypeGroup(
     MAPLE_BEECH_BIRCH(setOf(800), 1.0, "maple-beech-birch"),
 
     /** Oak and hickory, the latest-turning broadleaf forests here. */
-    OAK(setOf(400, 500, 600, 920), 1.6, "oak"),
+    /**
+     * Oak and hickory, at the baseline -- which is not what it looks like.
+     *
+     * This shipped at 1.6, damped from 2.61 measured at Litchfield, on the
+     * reasoning that oak holds its leaves later than maple. It does. But
+     * refitting it jointly with [CoolingDegreeDayModel.PHOTOPERIOD_FLOOR] puts
+     * it at exactly 1.0, and holding it above that only makes oak country late
+     * again.
+     *
+     * The multiplier was standing in for something else. Litchfield is oak
+     * country and it is also 3 degrees south of Stowe, and a model with no way
+     * to express "further south turns later" had only the species term to
+     * explain the gap with. Give it a photoperiod floor and the gap closes on
+     * its own.
+     *
+     * Kept as a group rather than deleted: it names the forest in the
+     * explanation, and a later fit against per-species observations may well
+     * find the real oak effect once latitude is no longer confounded with it.
+     */
+    OAK(setOf(400, 500, 600, 920), 1.0, "oak"),
 
     /**
      * Elm, ash and cottonwood. Between maple and oak, and left at the baseline

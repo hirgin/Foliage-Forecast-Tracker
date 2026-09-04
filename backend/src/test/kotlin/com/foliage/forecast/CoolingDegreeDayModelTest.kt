@@ -20,6 +20,33 @@ class CoolingDegreeDayModelTest {
     private val seasonEnd = LocalDate.of(2026, 11, 15)
 
     /** A season at a steady mean temperature, which is what sets the pace. */
+    /**
+     * An autumn that cools over the season, rather than holding one figure.
+     *
+     * A flat fixture accumulates at a constant rate and compresses the season
+     * into a fortnight, which describes the fixture rather than the model --
+     * the lesson recorded in docs/model.md when the structural tests were
+     * moved off one.
+     */
+    private fun declining(
+        from: Double,
+        to: Double,
+        diurnalC: Double = 10.0,
+        kind: WeatherKind = WeatherKind.CLIMATOLOGY,
+        end: LocalDate = seasonEnd,
+    ): List<DayInput> {
+        val days = mutableListOf<DayInput>()
+        val total = java.time.temporal.ChronoUnit.DAYS.between(seasonStart, end).toDouble()
+        var d = seasonStart
+        while (!d.isAfter(end)) {
+            val t = java.time.temporal.ChronoUnit.DAYS.between(seasonStart, d) / total
+            val mean = from + (to - from) * t
+            days += DayInput(d, kind, mean + diurnalC / 2, mean - diurnalC / 2, 3.0)
+            d = d.plusDays(1)
+        }
+        return days
+    }
+
     private fun season(
         meanC: Double,
         diurnalC: Double = 10.0,
@@ -70,9 +97,13 @@ class CoolingDegreeDayModelTest {
         return days
     }
 
-    private fun peakDay(days: List<DayInput>, latitude: Double = 44.0): LocalDate? {
+    private fun peakDay(
+        days: List<DayInput>,
+        latitude: Double = 44.0,
+        end: LocalDate = seasonEnd,
+    ): LocalDate? {
         var d = seasonStart
-        while (!d.isAfter(seasonEnd)) {
+        while (!d.isAfter(end)) {
             val s = CoolingDegreeDayModel.score(CellInput(latitude, 200), days, d)
             if (s.stage == FoliageStage.PEAK) return d
             d = d.plusDays(1)
@@ -105,10 +136,35 @@ class CoolingDegreeDayModelTest {
     }
 
     @Test
-    fun `a place too warm to cool never reaches peak`() {
-        // Above the base temperature nothing accumulates, which is what stops
-        // the model claiming a foliage season in a subtropical autumn.
-        assertEquals(null, peakDay(season(meanC = 21.0)))
+    fun `a warm autumn still finishes, just later`() {
+        // This test used to assert the opposite -- that a place above the base
+        // temperature never peaks -- and called it protection against claiming
+        // a season in a subtropical autumn. It was wrong, and the map showed
+        // it: 2,366 Florida cells and 2,058 in Alabama froze part-way through
+        // autumn and held that colour to the end of the season, because their
+        // daily mean never fell below 20 C for long enough.
+        //
+        // Those forests do turn. They turn on shortening days, which is what
+        // PHOTOPERIOD_FLOOR now supplies, and cold merely hurries it.
+        // A mild autumn, not a flat one: real Gulf weather cools a little even
+        // when it never gets cold, and the floor carries the rest.
+        //
+        // Run to the real season end rather than this class's 15 November,
+        // because a southern autumn is not finished by mid-November and a
+        // fixture that stops there cannot show one completing at all.
+        val realEnd = LocalDate.of(2026, 12, 15)
+        val warm = peakDay(declining(from = 26.0, to = 15.0, end = realEnd), latitude = 30.5, end = realEnd)
+        val cool = peakDay(declining(from = 20.0, to = 2.0, end = realEnd), end = realEnd)
+        assertTrue(warm != null, "a warm autumn is still an autumn")
+        assertTrue(cool != null)
+        assertTrue(warm!! > cool!!, "but it should arrive later: warm $warm, cool $cool")
+
+        // An autumn with no cooling at all is the one case that still does not
+        // finish, and that is the floor behaving as a floor rather than as a
+        // clock: 2.1 a day is a minimum pace, not a guarantee of arrival. A
+        // place genuinely 21 C every day from September to December has no
+        // autumn to forecast.
+        assertEquals(null, peakDay(season(meanC = 21.0), latitude = 30.5, end = realEnd))
     }
 
     // --- the photoperiod gate --------------------------------------------
