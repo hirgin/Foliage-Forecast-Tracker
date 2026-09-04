@@ -102,7 +102,7 @@ class ForecastService(
                     val cumulativeNormal = cumulativePrecip(precipNormals[cell.parentRes5], days)
 
                     for (day in days) {
-                        val score = scoreDay(cell, inputs, day, cumulativeNormal[day], seasonStart)
+                        val score = scoreDay(cell, inputs, day, cumulativeNormal[day], seasonStart, seasonStart)
                         rows += StoredForecast(
                             h3 = cell.h3,
                             day = day,
@@ -147,12 +147,13 @@ class ForecastService(
         target: LocalDate,
         normalPrecipMm: Double?,
         precipFrom: LocalDate?,
+        seasonFirstDay: LocalDate,
     ): FoliageScore {
         val input = CellInput(cell.centroidLat, cell.elevationM, cell.forestTypeGroup)
         return if (modelKind == "photoperiod") {
             PhenologyModel.score(input, inputs, target, normalPrecipMm, precipFrom)
         } else {
-            CoolingDegreeDayModel.score(input, inputs, target, normalPrecipMm, precipFrom)
+            CoolingDegreeDayModel.score(input, inputs, target, normalPrecipMm, precipFrom, seasonFirstDay)
         }
     }
 
@@ -187,7 +188,7 @@ class ForecastService(
         val inputs = inputsFor(h3, year) ?: return null
         val cumulative = cumulativePrecip(normals.precipNormalsByCell()[cell.parentRes5], season.days(year))
 
-        return scoreDay(cell, inputs, day, cumulative[day], season.start(year))
+        return scoreDay(cell, inputs, day, cumulative[day], season.start(year), season.start(year))
     }
 
     /**
@@ -230,7 +231,7 @@ class ForecastService(
                 chillNormals = chillNormals[cell.parentRes5],
             )
             val cumulative = cumulativePrecip(precipNormals[cell.parentRes5], seasonDays)
-            val score = scoreDay(cell, inputs, day, cumulative[day], seasonStart)
+            val score = scoreDay(cell, inputs, day, cumulative[day], seasonStart, seasonStart)
             cell.h3 to score.factors
         }.toMap()
     }

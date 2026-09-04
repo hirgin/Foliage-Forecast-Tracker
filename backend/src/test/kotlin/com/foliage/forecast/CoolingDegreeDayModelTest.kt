@@ -159,12 +159,27 @@ class CoolingDegreeDayModelTest {
         assertTrue(cool != null)
         assertTrue(warm!! > cool!!, "but it should arrive later: warm $warm, cool $cool")
 
-        // An autumn with no cooling at all is the one case that still does not
-        // finish, and that is the floor behaving as a floor rather than as a
-        // clock: 2.1 a day is a minimum pace, not a guarantee of arrival. A
-        // place genuinely 21 C every day from September to December has no
-        // autumn to forecast.
-        assertEquals(null, peakDay(season(meanC = 21.0), latitude = 30.5, end = realEnd))
+        // A full season past the gate completes on daylight alone, at any
+        // latitude, even with no cooling whatsoever. That is a deliberate
+        // property of the floor and worth stating outright: 98 gated days is
+        // the fewest any latitude gets in a 106-day season, and 98 x 2.1
+        // clears the peak band on its own.
+        //
+        // It is the whole point. The previous model left 2,366 Florida cells
+        // and 2,058 in Alabama frozen part-way through autumn because their
+        // weather never obliged, and a test asserted that as correct.
+        for (lat in listOf(30.5, 44.0, 47.0)) {
+            assertTrue(
+                peakDay(season(meanC = 21.0), latitude = lat, end = realEnd) != null,
+                "a season should finish at $lat even with no cooling at all",
+            )
+        }
+
+        // What weather still decides is *when*. Cold arrives at peak far
+        // sooner than the floor alone would carry it.
+        val flat = peakDay(season(meanC = 21.0), latitude = 44.0, end = realEnd)!!
+        val cold = peakDay(season(meanC = 8.0), latitude = 44.0, end = realEnd)!!
+        assertTrue(cold < flat, "cold should still arrive first: cold $cold, flat $flat")
     }
 
     // --- the photoperiod gate --------------------------------------------

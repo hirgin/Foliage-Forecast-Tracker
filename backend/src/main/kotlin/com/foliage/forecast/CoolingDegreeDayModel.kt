@@ -169,6 +169,12 @@ object CoolingDegreeDayModel {
         target: LocalDate,
         normalPrecipMm: Double? = null,
         precipFrom: LocalDate? = null,
+        /**
+         * First day of the season, for walking the calendar rather than the
+         * weather. Defaults to the first day weather exists for, which is the
+         * same thing whenever coverage is complete.
+         */
+        seasonFirstDay: LocalDate? = null,
     ): FoliageScore {
         val upToTarget = days.filter { !it.day.isAfter(target) }.sortedBy { it.day }
 
@@ -178,23 +184,47 @@ object CoolingDegreeDayModel {
         var hardFreeze = false
         var climatologyDays = 0
 
-        for (d in upToTarget) {
-            if (d.kind == WeatherKind.CLIMATOLOGY) climatologyDays++
-            d.tminC?.let {
+        // Walked by calendar day, not by the days weather happens to exist for.
+        //
+        // Daylight is astronomy: it is known for every date whether or not
+        // anybody fetched a forecast. The floor below therefore applies to a
+        // day with no weather too, and that matters because weather coverage is
+        // deliberately uneven -- a state that has already peaked is not sent
+        // another month of it, since more cooling cannot change a stand that is
+        // finished.
+        //
+        // Skipping those days instead froze every cell in such a state on the
+        // last day it had weather for. Cells sitting mid-peak on 15 November
+        // stayed mid-peak through December: 334 hexagons were still showing
+        // peak on 15 December, along the Carolina coast and in Florida, having
+        // entered the band weeks earlier and never been allowed to leave.
+        val byDay = upToTarget.associateBy { it.day }
+        var cursor = seasonFirstDay ?: upToTarget.firstOrNull()?.day
+        while (cursor != null && !cursor.isAfter(target)) {
+            val d = byDay[cursor]
+            val day = cursor
+            cursor = cursor.plusDays(1)
+
+            if (d != null && d.kind == WeatherKind.CLIMATOLOGY) climatologyDays++
+            d?.tminC?.let {
                 if (it <= 0.0) frostDays++
                 if (it <= PhenologyModel.HARD_FREEZE_C) hardFreeze = true
             }
 
             // The gate. Nothing accumulates while days are still long.
-            if (Photoperiod.hours(cell.latitude, d.day) > PHOTOPERIOD_GATE_H) continue
+            if (Photoperiod.hours(cell.latitude, day) > PHOTOPERIOD_GATE_H) continue
             gatedDays++
 
             // Mean of the day's extremes. Null when either is missing, rather
             // than guessing from one -- a day with only a maximum says nothing
-            // useful about how much the night cooled.
-            val hi = d.tmaxC
-            val lo = d.tminC
-            if (hi == null || lo == null) continue
+            // useful about how much the night cooled. A day with no weather at
+            // all still gets the floor, because its daylight is not in doubt.
+            val hi = d?.tmaxC
+            val lo = d?.tminC
+            if (hi == null || lo == null) {
+                cooling += PHOTOPERIOD_FLOOR
+                continue
+            }
             val mean = (hi + lo) / 2.0
 
             // Cold sets the pace, but short days set a floor under it.
