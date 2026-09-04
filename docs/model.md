@@ -433,10 +433,10 @@ interact:
 
 | | Before | After |
 |---|---|---|
-| Photoperiod floor | — | 2.1 |
-| `S_PEAK` | 100 | 225 |
+| Photoperiod floor | — | 2.5, below 12.25 h of daylight |
+| `S_PEAK` | 100 | 200 |
 | Oak multiplier | 1.6 | 1.0 |
-| Error over eleven places | 12.2 days | **4.8 days** |
+| Error over eleven places | 12.2 days | **5.6 days** |
 | Cells peaking after 25 November | 11,372 | **1,069** |
 | Latest peak anywhere | 15 December | **26 November** |
 

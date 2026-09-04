@@ -78,7 +78,26 @@ object CoolingDegreeDayModel {
      * of 27 November. The offline fit and the thing it is fitting have to agree
      * on what a peak date means.
      */
-    const val PHOTOPERIOD_FLOOR = 2.1
+    /**
+     * Day length below which the floor applies, in hours.
+     *
+     * A second, shorter threshold than [PHOTOPERIOD_GATE_H], and the reason is
+     * astronomy running the wrong way. Low latitudes swing less over the year,
+     * so they cross 13 hours *earlier*: 26 August at 30.5 N against 9 September
+     * at 47 N. Hanging the floor on the same gate therefore gave the south a
+     * fortnight's head start, which is backwards, and it showed -- the Gulf
+     * states were tinting by 4 September and by 17 October the whole country
+     * was near peak at once, with no north-to-south march left in it.
+     *
+     * Below about 12.25 hours the order reverses and matches the season: the
+     * north crosses it on 7 October and the Gulf coast not until the 15th. So
+     * cooling still counts from the 13-hour gate, and the floor -- the part
+     * that carries a stand where cold never arrives -- waits for the shorter
+     * day.
+     */
+    const val PHOTOPERIOD_FLOOR_GATE_H = 12.25
+
+    const val PHOTOPERIOD_FLOOR = 2.5
 
     /**
      * Accumulated cooling degree days at which a stand is at peak colour.
@@ -105,7 +124,7 @@ object CoolingDegreeDayModel {
      * The lesson worth keeping: a fitted constant is coupled to the data it
      * was fitted against. Changing the ingest changed the model.
      */
-    const val S_PEAK = 225.0
+    const val S_PEAK = 200.0
 
     /** Where peak sits on the 0-100 progression scale, at the middle of the PEAK band. */
     const val PEAK_PROGRESSION = 82.0
@@ -221,8 +240,12 @@ object CoolingDegreeDayModel {
             // all still gets the floor, because its daylight is not in doubt.
             val hi = d?.tmaxC
             val lo = d?.tminC
+            // The floor only applies once days are genuinely short; see
+            // PHOTOPERIOD_FLOOR_GATE_H.
+            val floorApplies = Photoperiod.hours(cell.latitude, day) <= PHOTOPERIOD_FLOOR_GATE_H
+
             if (hi == null || lo == null) {
-                cooling += PHOTOPERIOD_FLOOR
+                if (floorApplies) cooling += PHOTOPERIOD_FLOOR
                 continue
             }
             val mean = (hi + lo) / 2.0
@@ -250,7 +273,8 @@ object CoolingDegreeDayModel {
             // [S_PEAK] to compensate and pushed Maine and Vermont late. Under a
             // floor a cold day is unchanged, because its own cooling already
             // exceeds it.
-            cooling += maxOf(T_BASE_C - mean, PHOTOPERIOD_FLOOR)
+            cooling += if (floorApplies) maxOf(T_BASE_C - mean, PHOTOPERIOD_FLOOR)
+                      else maxOf(T_BASE_C - mean, 0.0)
         }
 
         val observedPrecip = upToTarget

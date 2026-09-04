@@ -90,6 +90,44 @@ the lateness it replaces, and the southern windows are less firmly sourced than
 the New England ones ADR-0008 fitted against. Texas keeps 1,022 cells peaking
 after 25 November, which is the largest remaining pocket.
 
+## Amendment: the floor needed its own threshold
+
+Shipped as above, the floor was hung on the same 13-hour gate that admits
+cooling, and the map showed within the hour that this was wrong. The Gulf
+states were tinting on 4 September, and by 17 October the whole country was
+near peak at once with no north-to-south march left in it.
+
+**Daylight runs the wrong way for this.** Low latitudes swing less over the
+year, so they cross 13 hours *earlier*, not later:
+
+| Latitude | 13.0 h | 12.25 h | 11.0 h |
+|---|---|---|---|
+| 30.5 N | 26 Aug | 15 Oct | 1 Nov |
+| 40 N | 4 Sep | 9 Oct | 21 Oct |
+| 47 N | 9 Sep | 6 Oct | 15 Oct |
+
+Hanging the floor on the 13-hour gate therefore gave the south a fortnight's
+head start over the north, which is backwards. Below roughly 12.25 hours the
+ordering reverses and matches the season.
+
+So cooling still counts from the 13-hour gate, and the floor waits for
+`PHOTOPERIOD_FLOOR_GATE_H = 12.25`. Refitted with it: floor 2.5, `S_PEAK` 200,
+rms 5.6 days against 4.8 for the unconstrained fit. That is a real accuracy
+cost, paid for a curve that has the right shape between its endpoints:
+
+| | 15 Sep | 1 Oct | 17 Oct |
+|---|---|---|---|
+| Stowe, VT | 19% | 54% | 86% |
+| Newport, RI | 8% | 33% | 68% |
+| Atlanta, GA | 0% | 21% | 48% |
+| Baton Rouge, LA | 0% | 23% | 45% |
+
+**The fit could not have caught this, because it only looked at peak dates.**
+Every place peaked within a few days of its published window while the season
+in between was nonsense. The fit now carries shape constraints as well --
+southern cells below 30% on 1 October -- and those are what make the ordering
+above a requirement rather than a hope.
+
 ## The mistake worth recording
 
 The first fit targeted **progression 82**, the middle of the peak band. The rest
