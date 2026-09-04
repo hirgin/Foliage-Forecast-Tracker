@@ -126,6 +126,18 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 - **MapLibre label collisions favour later layers**, and colliding labels are
   dropped rather than moved. `symbol-sort-key` decides which survives; without
   it the winner is whatever order the tile happened to supply.
+- **Validate a model change on five states before touching the country.**
+  Vermont, Michigan, Georgia, Louisiana, Colorado -- one per region, roughly
+  500k rows against 15M for a national pass. Check peak *dates* and the local
+  *spread* of peak dates among neighbouring cells; a change can hold every
+  published window and still flatten the map, and fitting for date accuracy
+  alone is what did exactly that. A national rescore is the most expensive
+  thing this project can do and three were spent in one evening on model
+  versions that a five-state check would have rejected.
+- **Peak timing is read against `S_PEAK`, so raising it flattens the map.**
+  Local differences between hexagons are what elevation and weather produce,
+  and they shrink in proportion to the threshold. Vermont's spread went 14
+  days to 10 to 7 as it was raised from 100 to 200 to 260. See ADR-0010.
 - **Check coverage with a grouped count, not by sampling cells.** Spot checks
   have given a wrong answer about this project's own state three times --
   including "the species term is barely reaching anything" when it was reaching
