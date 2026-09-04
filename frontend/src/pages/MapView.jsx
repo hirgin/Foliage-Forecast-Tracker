@@ -5,7 +5,7 @@ import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
 import PlaceSearch from '../components/PlaceSearch';
-import { STAGES, NO_FORECAST_RGB } from '../map/colors';
+import { STAGES, NO_FORECAST_RGB, EVERGREEN_STAGE } from '../map/colors';
 
 const FORECAST_HORIZON_DAYS = 16;
 
@@ -165,6 +165,22 @@ export default function MapView({ nav }) {
                 </div>
               ))}
             </div>
+            {/* Evergreen sits below the ramp, not in it: it is not a stage of
+                autumn but the absence of one, and it was previously counted
+                under "not forecast yet" -- which read as a hole in the map
+                when these cells are in fact known, and known to stay green. */}
+            {(counts.EVERGREEN ?? 0) > 0 && (
+              <div className="legend__row">
+                <span
+                  className="swatch"
+                  style={{ background: `rgb(${EVERGREEN_STAGE.rgb.join(',')})` }}
+                />
+                <span className="legend__label">{EVERGREEN_STAGE.label}</span>
+                <span className="legend__count">
+                  {(counts.EVERGREEN ?? 0).toLocaleString()}
+                </span>
+              </div>
+            )}
             {notForecast > 0 && (
               <div className="legend__row legend__row--pending">
                 <span

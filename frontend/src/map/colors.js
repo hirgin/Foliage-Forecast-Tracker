@@ -42,6 +42,22 @@ export const STAGES = [
  * Still clearly subordinate to the stage colours: neutral, and no more opaque
  * than it has to be to read as a hexagon.
  */
+/**
+ * Evergreen forest, which is not a stage of autumn but the absence of one.
+ *
+ * Kept out of [STAGES] deliberately: that list is a ramp, and the colour
+ * interpolator walks it in order, so putting evergreen in it made the map
+ * blend evergreen into "no change" as though a spruce were part-way to being
+ * a maple.
+ *
+ * A cool blue-green, chosen to sit apart from both neighbours it could be
+ * confused with. It must not read as [NO_FORECAST_RGB] grey, because these
+ * hexagons are not missing -- they are known, and known to stay green. And it
+ * must not read as NO_CHANGE green, because that is a deciduous wood that has
+ * not turned *yet* and will.
+ */
+export const EVERGREEN_STAGE = { key: 'EVERGREEN', label: 'Evergreen', rgb: [58, 92, 84] };
+
 export const NO_FORECAST_RGB = [92, 90, 86];
 export const NO_FORECAST_ALPHA = 120;
 
@@ -69,7 +85,11 @@ export const NO_FORECAST_ALPHA = 120;
 export const NO_FOREST_RGB = [62, 66, 58];
 export const NO_FOREST_ALPHA = 236;
 
-const BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s]));
+// Evergreen is looked up like a stage even though it is not one, so the
+// legend and the detail panel can name it without special-casing either.
+const BY_KEY = Object.fromEntries(
+  [...STAGES, EVERGREEN_STAGE].map((s) => [s.key, s]),
+);
 
 export function stageColor(stage) {
   return BY_KEY[stage]?.rgb ?? [70, 66, 60];
@@ -126,6 +146,10 @@ export function stageForProgression(progression) {
  * separately by drawing Esri's reference layer above the data.
  */
 export function foliageColor(cell) {
+  // Evergreen is flat: there is no progression through it, so nothing to
+  // interpolate and no confidence worth varying alpha over.
+  if (cell.stage === 'EVERGREEN') return [...EVERGREEN_STAGE.rgb, 190];
+
   // No stage means no forecast for this cell yet, which is not the same as a
   // score of zero and should not be drawn as one.
   if (cell.stage == null) return [...NO_FORECAST_RGB, NO_FORECAST_ALPHA];

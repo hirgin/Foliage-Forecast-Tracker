@@ -12,7 +12,14 @@ on:
     # separately: it pulls weather per res 5 parent from an API metered by
     # request weight, and going national unscoped would be 19,904 cells inside
     # a job with a six hour ceiling. Widen REFRESH_STATE as weather lands.
-    - cron: '0 9 * * *'
+    # Paused. A scheduled run refreshes weather and rescores before exporting,
+    # and rescoring rewrites all 141,274 cells x 106 days -- about 15 million
+    # rows -- against a metered database whose month's allowance is already
+    # spent. Re-enable by uncommenting, ideally after the tier resets.
+    #
+    # A manual run is still available through workflow_dispatch, so this stops
+    # unattended spend without removing the ability to refresh deliberately.
+    # - cron: '0 9 * * *'
   workflow_dispatch:
     inputs:
       refresh:

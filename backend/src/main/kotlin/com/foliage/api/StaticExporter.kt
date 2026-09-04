@@ -265,12 +265,18 @@ class StaticExporter(
             // green of a forest that has not turned *yet*, so a December map
             // grew pockets of green implying colour still to come from stands
             // that were never going to produce any.
-            fun reading(h3: Long, pick: (com.foliage.persistence.StoredForecast) -> Double?): Double? =
-                if (showsColour[h3] == false) null else byCell[h3]?.let(pick)
+            fun channel(h3: Long, pick: (com.foliage.persistence.StoredForecast) -> Double?): Int =
+                if (showsColour[h3] == false) PackedFormat.EVERGREEN
+                else PackedFormat.quantise(byCell[h3]?.let(pick))
 
-            for (h3 in order) buf.put(PackedFormat.quantise(reading(h3) { it.progression }).toByte())
-            for (h3 in order) buf.put(PackedFormat.quantise(reading(h3) { it.intensity }).toByte())
-            for (h3 in order) buf.put(PackedFormat.quantiseUnit(reading(h3) { it.confidence }).toByte())
+            for (h3 in order) buf.put(channel(h3) { it.progression }.toByte())
+            for (h3 in order) buf.put(channel(h3) { it.intensity }.toByte())
+            for (h3 in order) {
+                buf.put(
+                    if (showsColour[h3] == false) PackedFormat.EVERGREEN.toByte()
+                    else PackedFormat.quantiseUnit(byCell[h3]?.confidence).toByte(),
+                )
+            }
 
             write(target.resolve("forecast/$day.bin"), buf.array())
 
@@ -293,15 +299,32 @@ class StaticExporter(
                 // would paint it the green of a forest yet to turn, which is
                 // how a December map grew pockets of green over country that
                 // was never going to change colour.
+                // A parent with no colouring children is evergreen country, not
+                // a gap: it is drawn in its own colour rather than as a hole.
+                val allEvergreen = cellOrder.map { parent ->
+                    val kids = children[parent].orEmpty()
+                    kids.isNotEmpty() && kids.all { showsColour[it] == false }
+                }
                 fun meanOver(pick: (com.foliage.persistence.StoredForecast) -> Double): List<Double?> =
                     cellOrder.map { parent ->
                         val colouring = children[parent].orEmpty().filter { showsColour[it] != false }
                         val values = colouring.mapNotNull { byCell[it]?.let(pick) }
                         if (values.isEmpty()) null else values.average()
                     }
-                for (v in meanOver { it.progression }) coarse.put(PackedFormat.quantise(v).toByte())
-                for (v in meanOver { it.intensity }) coarse.put(PackedFormat.quantise(v).toByte())
-                for (v in meanOver { it.confidence }) coarse.put(PackedFormat.quantiseUnit(v).toByte())
+                fun putChannel(values: List<Double?>, unit: Boolean) {
+                    values.forEachIndexed { i, v ->
+                        coarse.put(
+                            when {
+                                allEvergreen[i] -> PackedFormat.EVERGREEN.toByte()
+                                unit -> PackedFormat.quantiseUnit(v).toByte()
+                                else -> PackedFormat.quantise(v).toByte()
+                            },
+                        )
+                    }
+                }
+                putChannel(meanOver { it.progression }, unit = false)
+                putChannel(meanOver { it.intensity }, unit = false)
+                putChannel(meanOver { it.confidence }, unit = true)
 
                 write(target.resolve("forecast-r$res/$day.bin"), coarse.array())
             }

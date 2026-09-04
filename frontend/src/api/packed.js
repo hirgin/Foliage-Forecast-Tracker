@@ -13,8 +13,18 @@
 
 const NO_DATA = 255;
 
+/**
+ * An evergreen forest: known, scored, and never going to turn.
+ *
+ * Distinct from NO_DATA because they are different claims. Drawn as no-data an
+ * evergreen hexagon reads as a hole in the forecast; scored as zero it reads as
+ * a forest still waiting to turn. It is neither. See PackedFormat.EVERGREEN.
+ */
+export const EVERGREEN = 254;
+
 /** Matches PhenologyModel.stageOf on the backend. */
 export function stageOf(progression) {
+  if (progression === 'EVERGREEN') return 'EVERGREEN';
   if (progression == null) return null;
   if (progression < 10) return 'NO_CHANGE';
   if (progression < 30) return 'PATCHY';
@@ -24,7 +34,7 @@ export function stageOf(progression) {
   return 'PAST_PEAK';
 }
 
-const dequantise = (b) => (b === NO_DATA ? null : b / 2);
+const dequantise = (b) => (b === NO_DATA ? null : b === EVERGREEN ? 'EVERGREEN' : b / 2);
 
 function readMagic(view) {
   return String.fromCharCode(

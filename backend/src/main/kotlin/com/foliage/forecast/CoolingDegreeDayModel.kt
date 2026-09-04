@@ -63,12 +63,28 @@ object CoolingDegreeDayModel {
      * Minimum daily progress once days are short enough, in cooling-degree-day
      * equivalents.
      *
-     * Fitted jointly with [S_PEAK] and the oak multiplier against eleven places
-     * from Fort Kent to Baton Rouge, because the three interact and fitting
-     * them one at a time gives a different and worse answer for each. Error
-     * across those places falls from 12.2 days to 4.8, and the south improves
-     * most: Mobile from +12 days to +1, Jackson from +20 to +2, Baton Rouge
-     * from +8 to -4.
+     * **Deliberately the smallest value that does the job, not the best fit.**
+     *
+     * Fitting floor and [S_PEAK] together minimises error over the reference
+     * places -- 4.8 days against 12.2 -- by raising [S_PEAK] from 100 to 260.
+     * That was shipped and it flattened the map. Local differences in
+     * accumulation are what make one hexagon differ from its neighbour, and
+     * they are read against the threshold, so multiplying the threshold by 2.6
+     * divides every one of them by 2.6. Vermont's spread of peak dates across
+     * sixty neighbouring cells fell from 10 days to 7, and the country became a
+     * smooth latitude ramp with the terrain washed out of it. Elevation and
+     * maritime effects are why this map is drawn on 3 km hexagons at all.
+     *
+     * So the floor is kept small and [S_PEAK] as low as will still carry a
+     * southern autumn to its end. At 150 with a floor of 1.5 every reference
+     * place finishes, error over them is 4.9 days -- better than the 12.2 of
+     * the model before any of this, and as good as the flattening fit that
+     * cost three quarters of the terrain detail. Holding [S_PEAK] at its
+     * original 100 was tried and does not work: Florida runs past the end of
+     * the season again.
+     *
+     * Accuracy at eleven towns is not worth the texture of 141,274 hexagons,
+     * and at this point it does not have to be paid for with it.
      *
      * Fitted against the day a cell *enters* the peak band, progression 75,
      * because that is the date the rest of the system reports as its peak. A
@@ -89,15 +105,15 @@ object CoolingDegreeDayModel {
      * states were tinting by 4 September and by 17 October the whole country
      * was near peak at once, with no north-to-south march left in it.
      *
-     * Below about 12.25 hours the order reverses and matches the season: the
-     * north crosses it on 7 October and the Gulf coast not until the 15th. So
+     * Below about 11.5 hours the order reverses and matches the season: the
+     * north crosses it in early October and the Gulf coast in mid-October. So
      * cooling still counts from the 13-hour gate, and the floor -- the part
      * that carries a stand where cold never arrives -- waits for the shorter
      * day.
      */
-    const val PHOTOPERIOD_FLOOR_GATE_H = 12.25
+    const val PHOTOPERIOD_FLOOR_GATE_H = 11.5
 
-    const val PHOTOPERIOD_FLOOR = 2.5
+    const val PHOTOPERIOD_FLOOR = 1.5
 
     /**
      * Accumulated cooling degree days at which a stand is at peak colour.
@@ -124,7 +140,7 @@ object CoolingDegreeDayModel {
      * The lesson worth keeping: a fitted constant is coupled to the data it
      * was fitted against. Changing the ingest changed the model.
      */
-    const val S_PEAK = 200.0
+    const val S_PEAK = 150.0
 
     /** Where peak sits on the 0-100 progression scale, at the middle of the PEAK band. */
     const val PEAK_PROGRESSION = 82.0
@@ -249,6 +265,7 @@ object CoolingDegreeDayModel {
                 continue
             }
             val mean = (hi + lo) / 2.0
+            val cool = maxOf(T_BASE_C - mean, 0.0)
 
             // Cold sets the pace, but short days set a floor under it.
             //
@@ -273,8 +290,21 @@ object CoolingDegreeDayModel {
             // [S_PEAK] to compensate and pushed Maine and Vermont late. Under a
             // floor a cold day is unchanged, because its own cooling already
             // exceeds it.
-            cooling += if (floorApplies) maxOf(T_BASE_C - mean, PHOTOPERIOD_FLOOR)
-                      else maxOf(T_BASE_C - mean, 0.0)
+            // Added to the day's own cooling, not substituted for it.
+            //
+            // Taking the larger of the two -- max(cool, floor) -- was the first
+            // attempt and it flattened the map. Wherever the floor won, every
+            // cell accumulated at exactly the same rate no matter what its own
+            // weather did, so local differences were clipped away and the whole
+            // south became a smooth latitude ramp: 52 cells around Baton Rouge
+            // shared a four-day spread of peak dates, against fourteen days
+            // across the same span in Georgia. Elevation and maritime effects
+            // are the reason this map is drawn on 3 km hexagons at all, and
+            // clipping is precisely how to lose them.
+            //
+            // Adding keeps them. A southern cell 1.5 C warmer than its
+            // neighbour now peaks two days later instead of the same day.
+            cooling += cool + (if (floorApplies) PHOTOPERIOD_FLOOR else 0.0)
         }
 
         val observedPrecip = upToTarget

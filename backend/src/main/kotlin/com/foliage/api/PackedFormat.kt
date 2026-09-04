@@ -52,6 +52,21 @@ object PackedFormat {
 
     const val NO_DATA = 255
 
+    /**
+     * An evergreen forest: surveyed, scored, and never going to change colour.
+     *
+     * A separate value from [NO_DATA] because they are different claims and
+     * the map has to say so. Drawn as no-data, an evergreen hexagon reads as a
+     * hole in the forecast -- "not forecast yet" in the legend -- when the
+     * truth is the opposite: it is known, and known to stay green. Scored as
+     * zero progression instead, it reads as a forest still waiting to turn,
+     * which is how a December map grew pockets of green.
+     *
+     * Neither is right, so evergreens get their own value and their own colour.
+     * Genuine readings top out at 200, so 254 is free.
+     */
+    const val EVERGREEN = 254
+
     /** Confidence arrives as 0–1 rather than 0–100. */
     fun quantiseUnit(value: Double?): Int = quantise(value?.times(100))
 

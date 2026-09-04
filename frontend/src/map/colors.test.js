@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  EVERGREEN_STAGE,
+  NO_FORECAST_RGB,
   STAGES,
   stageColor,
   stageLabel,
@@ -107,6 +109,26 @@ describe('stage metadata', () => {
     const expected = ['NO_CHANGE', 'PATCHY', 'PARTIAL', 'NEAR_PEAK', 'PEAK', 'PAST_PEAK'];
     expect(STAGES.map((s) => s.key)).toEqual(expected);
     expected.forEach((k) => expect(stageLabel(k)).not.toBe('Unknown'));
+  });
+
+  it('keeps evergreen out of the ramp but still names it', () => {
+    // STAGES is an ordering, and progressionColor interpolates along it. An
+    // evergreen entry inside it made the map blend evergreen into "no change",
+    // as though a spruce were part-way to being a maple.
+    expect(STAGES.map((s) => s.key)).not.toContain('EVERGREEN');
+    expect(stageLabel('EVERGREEN')).toBe('Evergreen');
+    expect(stageColor('EVERGREEN')).toEqual(EVERGREEN_STAGE.rgb);
+  });
+
+  it('evergreen looks like neither a gap nor a wood about to turn', () => {
+    // The two things it could be mistaken for. Grey would say "no forecast
+    // here", which is false -- these cells are known. NO_CHANGE green would
+    // say "not turned yet", which is also false: it never will.
+    const ever = EVERGREEN_STAGE.rgb;
+    const noChange = STAGES[0].rgb;
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    expect(dist(ever, noChange)).toBeGreaterThan(20);
+    expect(dist(ever, NO_FORECAST_RGB)).toBeGreaterThan(20);
   });
 
   it('falls back rather than throwing on an unknown stage', () => {

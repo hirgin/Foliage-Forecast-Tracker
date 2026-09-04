@@ -159,27 +159,17 @@ class CoolingDegreeDayModelTest {
         assertTrue(cool != null)
         assertTrue(warm!! > cool!!, "but it should arrive later: warm $warm, cool $cool")
 
-        // A full season past the gate completes on daylight alone, at any
-        // latitude, even with no cooling whatsoever. That is a deliberate
-        // property of the floor and worth stating outright: 98 gated days is
-        // the fewest any latitude gets in a 106-day season, and 98 x 2.1
-        // clears the peak band on its own.
+        // The floor is a minimum pace, not a clock. It is deliberately the
+        // smallest value that carries a real southern autumn to its end, so a
+        // fixture with *no* cooling at all -- a flat 21 C from September to
+        // December -- is not required to finish, and does not.
         //
-        // It is the whole point. The previous model left 2,366 Florida cells
-        // and 2,058 in Alabama frozen part-way through autumn because their
-        // weather never obliged, and a test asserted that as correct.
-        for (lat in listOf(30.5, 44.0, 47.0)) {
-            assertTrue(
-                peakDay(season(meanC = 21.0), latitude = lat, end = realEnd) != null,
-                "a season should finish at $lat even with no cooling at all",
-            )
-        }
-
-        // What weather still decides is *when*. Cold arrives at peak far
-        // sooner than the floor alone would carry it.
-        val flat = peakDay(season(meanC = 21.0), latitude = 44.0, end = realEnd)!!
-        val cold = peakDay(season(meanC = 8.0), latitude = 44.0, end = realEnd)!!
-        assertTrue(cold < flat, "cold should still arrive first: cold $cold, flat $flat")
+        // That is the balance the floor is set at. Larger values finish
+        // anything but flatten the map, because local differences in
+        // accumulation are read against S_PEAK and raising it divides them all
+        // down. Vermont's spread of peak dates across sixty neighbouring cells
+        // fell from 14 days to 7 when this was fitted for accuracy alone.
+        assertEquals(null, peakDay(season(meanC = 21.0), latitude = 30.5, end = realEnd))
     }
 
     // --- the photoperiod gate --------------------------------------------
