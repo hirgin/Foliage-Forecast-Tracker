@@ -3,23 +3,24 @@ name: Deploy
 on:
   push:
     branches: [main]
-  schedule:
-    # 09:00 UTC daily — after overnight observations have landed upstream.
-    # A scheduled run refreshes the data first; a push run only re-exports
-    # what is already in the database.
-    #
-    # The export covers the whole grid, but the nightly refresh is scoped
-    # separately: it pulls weather per res 5 parent from an API metered by
-    # request weight, and going national unscoped would be 19,904 cells inside
-    # a job with a six hour ceiling. Widen REFRESH_STATE as weather lands.
-    # Paused. A scheduled run refreshes weather and rescores before exporting,
-    # and rescoring rewrites all 141,274 cells x 106 days -- about 15 million
-    # rows -- against a metered database whose month's allowance is already
-    # spent. Re-enable by uncommenting, ideally after the tier resets.
-    #
-    # A manual run is still available through workflow_dispatch, so this stops
-    # unattended spend without removing the ability to refresh deliberately.
-    # - cron: '0 9 * * *'
+  # schedule: PAUSED
+  #
+  # A scheduled run refreshes weather and rescores before exporting, and
+  # rescoring rewrites all 141,274 cells x 106 days -- about 15 million rows --
+  # against a metered database whose month's allowance is already spent.
+  #
+  # The whole block is commented out, key included. Commenting out only the
+  # cron entry leaves `schedule:` with nothing under it, which is not valid
+  # workflow syntax: GitHub rejects the file, the run fails in zero seconds
+  # and is listed under the filename rather than the workflow name, and no
+  # deploy happens at all. That is how this was found.
+  #
+  # To re-enable, uncomment both lines:
+  # schedule:
+  #   - cron: '0 9 * * *'    # 09:00 UTC, after overnight observations land
+  #
+  # Manual runs still work through workflow_dispatch below, so refreshing
+  # deliberately is unaffected.
   workflow_dispatch:
     inputs:
       refresh:
