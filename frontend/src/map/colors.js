@@ -43,25 +43,14 @@ export const STAGES = [
  * than it has to be to read as a hexagon.
  */
 /**
- * Evergreen forest, which is not a stage of autumn but the absence of one.
+ * A forest that never turns: cool slate, not green.
  *
- * Kept out of [STAGES] deliberately: that list is a ramp, and the colour
- * interpolator walks it in order, so putting evergreen in it made the map
- * blend evergreen into "no change" as though a spruce were part-way to being
- * a maple.
+ * Green would be truthful about the trees and wrong about the map -- on a
+ * December view where everything else has gone brown, a green Pacific
+ * Northwest reads as a region yet to turn. Blue carries no such implication.
  *
- * A cool slate blue, and the coolness is the whole point.
- *
- * The first attempt was a blue-green, on the reasoning that an evergreen
- * forest is green and the colour should say so. It is, and it should not: on a
- * December map where everything else has gone brown, a green Pacific Northwest
- * reads as a region that has not turned yet. Truthful about the trees and
- * wrong about the map.
- *
- * Blue carries no such implication, and it still has to sit apart from the two
- * things it could be confused with -- [NO_FORECAST_RGB] grey, because these
- * hexagons are not missing, and NO_CHANGE green, because that is a deciduous
- * wood that has not turned *yet* and will.
+ * Kept out of [STAGES], which is a ramp the colour interpolator walks in
+ * order; an entry inside it made the map blend evergreen into "no change".
  */
 export const EVERGREEN_STAGE = { key: 'EVERGREEN', label: 'Evergreen', rgb: [62, 82, 96] };
 
@@ -94,9 +83,7 @@ export const NO_FOREST_ALPHA = 236;
 
 // Evergreen is looked up like a stage even though it is not one, so the
 // legend and the detail panel can name it without special-casing either.
-const BY_KEY = Object.fromEntries(
-  [...STAGES, EVERGREEN_STAGE].map((s) => [s.key, s]),
-);
+const BY_KEY = Object.fromEntries([...STAGES, EVERGREEN_STAGE].map((s) => [s.key, s]));
 
 export function stageColor(stage) {
   return BY_KEY[stage]?.rgb ?? [70, 66, 60];
@@ -153,17 +140,45 @@ export function stageForProgression(progression) {
  * separately by drawing Esri's reference layer above the data.
  */
 export function foliageColor(cell) {
-  // Evergreen is flat: there is no progression through it, so nothing to
-  // interpolate and no confidence worth varying alpha over.
+  // Flat by definition: nothing to interpolate along, and no confidence worth
+  // varying alpha over.
   if (cell.stage === 'EVERGREEN') return [...EVERGREEN_STAGE.rgb, 190];
 
   // No stage means no forecast for this cell yet, which is not the same as a
   // score of zero and should not be drawn as one.
   if (cell.stage == null) return [...NO_FORECAST_RGB, NO_FORECAST_ALPHA];
 
-  const [r, g, b] = progressionColor(cell.progression, cell.stage);
+  const [r, g, b] = muteByIntensity(
+    progressionColor(cell.progression, cell.stage),
+    cell.intensity,
+  );
   const alpha = Math.round(255 * (0.45 + 0.25 * (cell.confidence ?? 1)));
   return [r, g, b, alpha];
+}
+
+/**
+ * Washes a colour toward neutral as intensity falls.
+ *
+ * Intensity is how *vivid* a display is, as against progression's how far
+ * along, and until now the map drew only the second. Two hexagons equally far
+ * through their autumn looked identical whether one was a maple hillside and
+ * the other a spruce wood with birch through it.
+ *
+ * That is what makes evergreen country readable without a category of its own.
+ * A mostly-conifer stand scores the same curve as its neighbours -- it turns
+ * and it finishes -- and carries about a third their vividness, so it reads as
+ * a muted version of the same season rather than as a hole or a permanent
+ * green. Drought-dulled cells get the same treatment for the same reason, which
+ * is a signal the map has been computing and throwing away all along.
+ *
+ * Capped at half-way to neutral: below that the ramp stops being readable, and
+ * a quiet autumn is still an autumn.
+ */
+export function muteByIntensity(rgb, intensity) {
+  if (intensity == null) return rgb;
+  const wash = Math.min(0.5, Math.max(0, 1 - intensity / 60) * 0.5);
+  const NEUTRAL = [96, 92, 84];
+  return rgb.map((c, i) => Math.round(c + (NEUTRAL[i] - c) * wash));
 }
 
 export function progressionColor(progression, stage) {

@@ -173,10 +173,10 @@ export default function MapView({ nav }) {
                 </div>
               ))}
             </div>
-            {/* Evergreen sits below the ramp, not in it: it is not a stage of
-                autumn but the absence of one, and it was previously counted
-                under "not forecast yet" -- which read as a hole in the map
-                when these cells are in fact known, and known to stay green. */}
+            {/* Evergreen sits below the ramp rather than in it: it is not a
+                stage of autumn but the absence of one. Counting it under "not
+                forecast yet" read as a hole in the map, when these cells are
+                known and known to stay green. */}
             {(counts.EVERGREEN ?? 0) > 0 && (
               <div className="legend__row">
                 <span
@@ -211,10 +211,11 @@ export default function MapView({ nav }) {
               so it was the one people asked about.
             */}
             <p className="legend__note">
-              Faded tiles have no autumn to forecast — fields, towns and water,
-              or evergreen forest, which stays green all year. They are
-              coloured from the nearest forest that does turn, so read them as
-              the season around there rather than a forecast for that spot.
+              Faded tiles have too few trees to forecast — fields, towns and
+              water — and are coloured from the nearest forest that does turn,
+              so read them as the season around there rather than a forecast
+              for that spot. Where a forest is mostly evergreen, its autumn is
+              drawn in muted colour: the same timing, far less of it.
             </p>
           </section>
         )}

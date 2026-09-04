@@ -175,10 +175,15 @@ class StaticExporter(
         // Position in this list is the cell's identity everywhere else.
         val order = grid6.map { it.h3 }
 
-        // Which cells belong in a foliage average. Built once here rather than
-        // looked up per day per resolution.
-        val showsColour: Map<Long, Boolean> =
-            grid6.associate { it.h3 to com.foliage.forecast.ForestTypeGroup.showsColour(it.forestTypeGroup) }
+        // Cells that never turn: evergreen by forest type *and* by behaviour.
+        // Requiring both is what makes a part-rescored country render
+        // correctly -- see the note on the daily channels below.
+        val everPeaks = forecasts.peakDayByCell(stateFips).keys
+        val neverTurns: Set<Long> = grid6
+            .filter { !com.foliage.forecast.ForestTypeGroup.showsColour(it.forestTypeGroup) }
+            .map { it.h3 }
+            .filterNot { everPeaks.contains(it) }
+            .toSet()
         val indexOf = order.withIndex().associate { (i, h3) -> h3 to i }
 
         val peakDays = forecasts.peakDayByCell()
@@ -265,18 +270,27 @@ class StaticExporter(
             // green of a forest that has not turned *yet*, so a December map
             // grew pockets of green implying colour still to come from stands
             // that were never going to produce any.
-            fun channel(h3: Long, pick: (com.foliage.persistence.StoredForecast) -> Double?): Int =
-                if (showsColour[h3] == false) PackedFormat.EVERGREEN
-                else PackedFormat.quantise(byCell[h3]?.let(pick))
-
-            for (h3 in order) buf.put(channel(h3) { it.progression }.toByte())
-            for (h3 in order) buf.put(channel(h3) { it.intensity }.toByte())
-            for (h3 in order) {
-                buf.put(
-                    if (showsColour[h3] == false) PackedFormat.EVERGREEN.toByte()
-                    else PackedFormat.quantiseUnit(byCell[h3]?.confidence).toByte(),
-                )
+            // Evergreen is decided by behaviour, not by a flag: a conifer cell
+            // that never reaches peak all season really does never turn, and is
+            // drawn in its own colour rather than as a green that never moves.
+            //
+            // That rule spans a rollout. Cells scored before conifers were
+            // given a real curve sit at zero progression every day of the
+            // season and never peak, so they are still drawn as evergreen;
+            // cells scored after it turn, peak, and are drawn as the muted
+            // autumn they now have. Both are correct at once, which is what
+            // lets the country be rescored a few states at a time instead of
+            // all in one pass. Once every state is rescored no cell matches
+            // this and the sentinel stops being written at all.
+            fun channel(h3: Long, value: Double?, unit: Boolean): Byte = when {
+                neverTurns.contains(h3) -> PackedFormat.EVERGREEN.toByte()
+                unit -> PackedFormat.quantiseUnit(value).toByte()
+                else -> PackedFormat.quantise(value).toByte()
             }
+
+            for (h3 in order) buf.put(channel(h3, byCell[h3]?.progression, false))
+            for (h3 in order) buf.put(channel(h3, byCell[h3]?.intensity, false))
+            for (h3 in order) buf.put(channel(h3, byCell[h3]?.confidence, true))
 
             write(target.resolve("forecast/$day.bin"), buf.array())
 
@@ -294,21 +308,20 @@ class StaticExporter(
                 // showing the maple's autumn; including the spruces at zero
                 // would report it as permanently a quarter turned.
                 //
-                // A parent with no colouring children at all reports nothing
-                // and is drawn faded. Averaging its evergreens to zero instead
-                // would paint it the green of a forest yet to turn, which is
-                // how a December map grew pockets of green over country that
-                // was never going to change colour.
-                // A parent with no colouring children is evergreen country, not
-                // a gap: it is drawn in its own colour rather than as a hole.
+                // Children that never turn are left out of the average, for the
+                // same reason they get their own colour: mixing a cell that
+                // stays put into a coarse hexagon alongside one that has
+                // finished gives a value half-way through an autumn that never
+                // happened. A parent whose children all stay put is evergreen
+                // country and is drawn as such.
                 val allEvergreen = cellOrder.map { parent ->
                     val kids = children[parent].orEmpty()
-                    kids.isNotEmpty() && kids.all { showsColour[it] == false }
+                    kids.isNotEmpty() && kids.all { neverTurns.contains(it) }
                 }
                 fun meanOver(pick: (com.foliage.persistence.StoredForecast) -> Double): List<Double?> =
                     cellOrder.map { parent ->
-                        val colouring = children[parent].orEmpty().filter { showsColour[it] != false }
-                        val values = colouring.mapNotNull { byCell[it]?.let(pick) }
+                        val kids = children[parent].orEmpty().filterNot { neverTurns.contains(it) }
+                        val values = kids.mapNotNull { byCell[it]?.let(pick) }
                         if (values.isEmpty()) null else values.average()
                     }
                 fun putChannel(values: List<Double?>, unit: Boolean) {
@@ -353,13 +366,9 @@ class StaticExporter(
             members.forEach { buf.putInt(indexOf.getValue(it.h3)) }
 
             for (cell in members) {
-                // An evergreen writes no series at all, for the same reason it
-                // writes no daily reading: a flat zero curve in the detail
-                // panel is a claim that the stand is yet to turn.
-                val colours = com.foliage.forecast.ForestTypeGroup.showsColour(cell.forestTypeGroup)
                 val series = timelines[cell.h3].orEmpty().associateBy { it.day }
                 for (day in days) {
-                    val row = if (colours) series[day] else null
+                    val row = series[day]
                     buf.put(PackedFormat.quantise(row?.progression).toByte())
                     buf.put(PackedFormat.quantise(row?.intensity).toByte())
                     buf.put(PackedFormat.quantiseUnit(row?.confidence).toByte())

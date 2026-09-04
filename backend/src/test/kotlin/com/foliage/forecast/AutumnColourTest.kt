@@ -32,15 +32,20 @@ class AutumnColourTest {
         CoolingDegreeDayModel.score(CellInput(lat, 300, forestTypeGroup), season(), day)
 
     @Test
-    fun `an evergreen forest never turns, however cold it gets`() {
-        // The weather here is more than enough to peak a maple. That is the
-        // point: cooling accumulates over a spruce stand exactly as it does
-        // over a maple, and nothing in the model used to stop it.
+    fun `an evergreen forest turns on the same schedule, less brightly`() {
+        // "Conifer" is the dominant type across seven sample points, not a pure
+        // stand: a spruce wood with birch through it, Rockies pine with aspen
+        // in the draws. Scoring those at zero claimed they do nothing all
+        // autumn, and 39% of the drawn map is classified conifer.
+        //
+        // So the timing is shared and the vividness is not.
         val end = LocalDate.of(2026, 12, 9)
         for (code in listOf(100, 120, 160, 180, 200, 220, 260, 300)) {
-            val score = scoreAt(code, end)
-            assertEquals(0.0, score.progression, "conifer $code should not turn")
-            assertEquals(FoliageStage.NO_CHANGE, score.stage)
+            val conifer = scoreAt(code, end)
+            val maple = scoreAt(800, end)
+            assertEquals(maple.progression, conifer.progression, 1e-9)
+            assertEquals(maple.stage, conifer.stage)
+            assertTrue(conifer.intensity < maple.intensity, "conifer $code should be muted")
         }
     }
 
@@ -62,9 +67,15 @@ class AutumnColourTest {
     }
 
     @Test
-    fun `a display that never happens is not a vivid one`() {
-        assertEquals(0.0, scoreAt(120, LocalDate.of(2026, 10, 20)).intensity)
-        assertTrue(scoreAt(800, LocalDate.of(2026, 10, 20)).intensity > 0.0)
+    fun `a muted display is quieter, not absent`() {
+        // Zero would put evergreen country back to showing nothing at all,
+        // which is what this replaced.
+        val day = LocalDate.of(2026, 10, 20)
+        val conifer = scoreAt(120, day).intensity
+        val maple = scoreAt(800, day).intensity
+        assertTrue(conifer > 0.0, "a mixed stand still shows something")
+        assertTrue(conifer < maple)
+        assertEquals(maple * CoolingDegreeDayModel.CONIFER_VIVIDNESS, conifer, 1e-9)
     }
 
     @Test
@@ -111,10 +122,11 @@ class AutumnColourTest {
     }
 
     @Test
-    fun `suppression reads types, not only group codes`() {
+    fun `muting resolves a type code to its group`() {
         // Stored values are individual FIA types; no list of group codes would
         // catch 128, which is a spruce-fir type and still a conifer.
-        assertEquals(0.0, scoreAt(128, LocalDate.of(2026, 12, 9)).progression)
-        assertTrue(scoreAt(841, LocalDate.of(2026, 12, 9)).progression > 90.0)
+        val day = LocalDate.of(2026, 10, 20)
+        assertTrue(scoreAt(128, day).intensity < scoreAt(841, day).intensity)
+        assertEquals(scoreAt(128, day).progression, scoreAt(841, day).progression, 1e-9)
     }
 }

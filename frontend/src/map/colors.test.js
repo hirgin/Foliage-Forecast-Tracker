@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  EVERGREEN_STAGE,
   NO_FORECAST_RGB,
   STAGES,
+  foliageColor,
+  muteByIntensity,
   stageColor,
   stageLabel,
   progressionColor,
-  foliageColor,
   canopyColor,
 } from './colors';
 
@@ -111,24 +111,29 @@ describe('stage metadata', () => {
     expected.forEach((k) => expect(stageLabel(k)).not.toBe('Unknown'));
   });
 
-  it('keeps evergreen out of the ramp but still names it', () => {
-    // STAGES is an ordering, and progressionColor interpolates along it. An
-    // evergreen entry inside it made the map blend evergreen into "no change",
-    // as though a spruce were part-way to being a maple.
-    expect(STAGES.map((s) => s.key)).not.toContain('EVERGREEN');
-    expect(stageLabel('EVERGREEN')).toBe('Evergreen');
-    expect(stageColor('EVERGREEN')).toEqual(EVERGREEN_STAGE.rgb);
+  it('a muted cell keeps its stage but loses its colour', () => {
+    // Intensity is how vivid a display is, as against progression's how far
+    // along, and the map drew only the second until now. A mostly-evergreen
+    // stand turns on the same curve as its neighbours and carries about a
+    // third their vividness, so it has to read as a quieter version of the
+    // same season -- not as a hole, and not as a permanent green.
+    const vivid = foliageColor({ stage: 'PEAK', progression: 82, intensity: 80, confidence: 1 });
+    const muted = foliageColor({ stage: 'PEAK', progression: 82, intensity: 10, confidence: 1 });
+    const chroma = (c) => Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2]);
+    expect(chroma(muted)).toBeLessThan(chroma(vivid));
+    expect(muted).not.toEqual(vivid);
   });
 
-  it('evergreen looks like neither a gap nor a wood about to turn', () => {
-    // The two things it could be mistaken for. Grey would say "no forecast
-    // here", which is false -- these cells are known. NO_CHANGE green would
-    // say "not turned yet", which is also false: it never will.
-    const ever = EVERGREEN_STAGE.rgb;
-    const noChange = STAGES[0].rgb;
-    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-    expect(dist(ever, noChange)).toBeGreaterThan(20);
-    expect(dist(ever, NO_FORECAST_RGB)).toBeGreaterThan(20);
+  it('never washes a colour all the way out', () => {
+    // Below about half-way to neutral the ramp stops being readable, and a
+    // quiet autumn is still an autumn.
+    const grey = muteByIntensity([204, 62, 44], 0);
+    const chroma = (c) => Math.max(...c) - Math.min(...c);
+    expect(chroma(grey)).toBeGreaterThan(30);
+  });
+
+  it('leaves a cell alone when intensity is unknown', () => {
+    expect(muteByIntensity([204, 62, 44], null)).toEqual([204, 62, 44]);
   });
 
   it('falls back rather than throwing on an unknown stage', () => {

@@ -202,6 +202,22 @@ object CoolingDegreeDayModel {
      */
     val SCALE: Double = S_PEAK / Math.pow(-Math.log(1 - PEAK_PROGRESSION / 100.0), 1.0 / SHAPE)
 
+    /**
+     * How vivid an autumn a mostly-evergreen stand puts on, against a
+     * broadleaf one.
+     *
+     * Not measured, and said plainly rather than dressed up: the survey records
+     * only which forest type won a cell's seven sample points, not what share
+     * the runners-up held, so there is no figure here to fit against. A third
+     * is a stated assumption about how much broadleaf a conifer-dominated stand
+     * typically carries.
+     *
+     * Storing the sample *fractions* rather than only the winner would turn
+     * this into a measurement, and is the obvious next improvement. It needs
+     * the grid re-surveyed.
+     */
+    const val CONIFER_VIVIDNESS = 0.35
+
     /** Drought accelerates senescence, as in the model this replaces. */
     const val DROUGHT_ACCELERATION = 0.15
 
@@ -349,27 +365,19 @@ object CoolingDegreeDayModel {
         val turning = (100.0 * (1 - Math.exp(-Math.pow(effective / speciesScale, SHAPE))))
             .coerceIn(0.0, 100.0)
 
-        // An evergreen forest stays green, so it is scored as staying green.
+        // An evergreen stand still shows some colour, because it is never purely
+        // evergreen.
         //
-        // Not a special case so much as the plain fact the model was missing.
-        // Cooling accumulates over a spruce stand exactly as it does over a
-        // maple, and with nothing to stop it the map gave Prescott, Arizona a
-        // peak on 8 November while the cell's own explanation read "mostly
-        // evergreens, which do not put on an autumn display". Those were the
-        // scattered hexagons turning at odd times in places nobody visits for
-        // the leaves.
+        // The survey takes the dominant type from seven sample points, so
+        // "conifer" means mostly conifer: a spruce wood with birch through it,
+        // Rockies pine with aspen in the draws. Scoring those at zero said they
+        // do nothing all autumn, which is wrong -- 39% of the drawn map is
+        // classified conifer and a good deal of it does turn.
         //
-        // Zeroed rather than dropped from the grid. A conifer hexagon is still
-        // forest and still belongs on a forest map; what it is not is a
-        // hexagon that ever changes colour. Dropping it would also have thrown
-        // away every mixed stand the per-cell mode happens to call conifer --
-        // 45% spruce and 40% aspen classifies as spruce, and that aspen is
-        // real.
-        //
-        // Western larch is deliberately not included: it is a conifer that
-        // drops its needles and goes gold, and western Montana's larch season
-        // is one people travel for.
-        val progression = if (species == ForestTypeGroup.CONIFER) 0.0 else turning
+        // So timing is unchanged -- they follow the same curve as anything else
+        // and go past peak in December rather than holding colour -- and what
+        // differs is how vivid they get. See CONIFER_VIVIDNESS.
+        val progression = turning
 
         // Intensity is unchanged: a wide day-night spread makes vivid colour,
         // drought dulls it, a hard freeze ends it. This is about how good the
@@ -385,8 +393,9 @@ object CoolingDegreeDayModel {
         val intensity = (50.0 + 4.0 * (effectiveDiurnal - 8.0))
             .let { it * (1 - 0.4 * droughtStress) }
             .let { if (hardFreeze) it * PhenologyModel.HARD_FREEZE_INTENSITY_FACTOR else it }
-            // A display that never happens cannot be a vivid one.
-            .let { if (species == ForestTypeGroup.CONIFER) 0.0 else it }
+            // Mostly evergreen means mostly not turning, so the display is
+            // muted rather than absent.
+            .let { if (species == ForestTypeGroup.CONIFER) it * CONIFER_VIVIDNESS else it }
             .coerceIn(0.0, 100.0)
 
         return FoliageScore(

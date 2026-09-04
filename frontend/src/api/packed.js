@@ -14,11 +14,12 @@
 const NO_DATA = 255;
 
 /**
- * An evergreen forest: known, scored, and never going to turn.
+ * A forest that never turns all season.
  *
- * Distinct from NO_DATA because they are different claims. Drawn as no-data an
- * evergreen hexagon reads as a hole in the forecast; scored as zero it reads as
- * a forest still waiting to turn. It is neither. See PackedFormat.EVERGREEN.
+ * Written by the exporter for a cell that is evergreen *and behaved like it* --
+ * see StaticExporter. Distinct from NO_DATA because they are different claims:
+ * no-data is a hole in the forecast, this is a forest that is known and known
+ * to stay green.
  */
 export const EVERGREEN = 254;
 
