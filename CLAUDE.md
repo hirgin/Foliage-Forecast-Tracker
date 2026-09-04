@@ -134,6 +134,14 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
   December; no empty hexes. Constants: `S_PEAK` 100, floor 1.25 below 11.5 h.
   A change that improves peak-date error while dropping Vermont below ~12 days
   is a regression however good the fit looks.
+- **Most fixes are not national, even when the code change is.** Only a
+  constant that moves every cell's timing needs the whole country rescored;
+  a fix aimed at data gaps, one forest type, or one region needs the states
+  that have them. A state is ~400k rows against 15M, so find the affected
+  states first -- `admin/thin-weather` for weather gaps, `admin/forest-type`
+  for composition, `admin/peak-spread` for timing outliers -- and rescore
+  those. Reaching for a national pass by reflex is how an evening's budget
+  went on 80 cells.
 - **Validate a model change on five states before touching the country.**
   Vermont, Michigan, Georgia, Louisiana, Colorado -- one per region, roughly
   500k rows against 15M for a national pass. Check peak *dates* and the local

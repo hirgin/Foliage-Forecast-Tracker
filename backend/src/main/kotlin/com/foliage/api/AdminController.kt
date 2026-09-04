@@ -134,6 +134,13 @@ class AdminController(
      * raster: a national pass is roughly a million point lookups and belongs
      * in several runs rather than one long-held request.
      */
+    /** States holding cells whose weather is too thin to score. */
+    @org.springframework.web.bind.annotation.GetMapping("/thin-weather")
+    fun thinWeather(): List<com.foliage.persistence.StateCoverage> {
+        val seasonDays = season.days(java.time.LocalDate.now().year).size
+        return forecasts.thinWeatherByState(minCanopyPct, seasonDays / 2)
+    }
+
     /** How many cells the map draws, with and without the foliage filter. */
     @org.springframework.web.bind.annotation.GetMapping("/grid-size")
     fun gridSize(): Map<String, Int> = mapOf(

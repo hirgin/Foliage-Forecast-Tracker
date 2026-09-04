@@ -390,6 +390,39 @@ class ForecastRepository(private val jdbc: JdbcTemplate) {
      * east of Lexington that had almost no weather kept a December peak that
      * way, long after the scoring run had decided not to score them.
      */
+    /**
+     * Cells per state whose weather is too thin to score, and their parents.
+     *
+     * Exists so a fix aimed at data gaps can be applied to the states that have
+     * them instead of to the whole country. Rescoring a state is roughly 400k
+     * rows against 15M for all of them, and most fixes are not national even
+     * when the code change is -- only a constant that moves every cell's timing
+     * genuinely is.
+     */
+    fun thinWeatherByState(minCanopyPct: Int, minSeasonDays: Int): List<StateCoverage> = jdbc.query(
+        """
+        SELECT c.state_name AS state,
+               COUNT(*) AS total,
+               SUM(CASE WHEN COALESCE(n.days, 0) < ? THEN 1 ELSE 0 END) AS with_forecast
+        FROM cell c
+        LEFT JOIN (SELECT h3, COUNT(DISTINCT month_day) days FROM weather_normal GROUP BY h3) n
+               ON n.h3 = c.parent_res5
+        WHERE c.state_name IS NOT NULL
+          AND (c.canopy_pct IS NULL OR c.canopy_pct >= ?)
+        GROUP BY c.state_name
+        HAVING with_forecast > 0
+        ORDER BY with_forecast DESC
+        """.trimIndent(),
+        { rs, _ ->
+            StateCoverage(
+                state = rs.getString("state"),
+                cells = rs.getInt("total"),
+                withForecast = rs.getInt("with_forecast"),
+            )
+        },
+        minSeasonDays, minCanopyPct,
+    )
+
     fun deleteCells(h3s: Collection<Long>): Int {
         if (h3s.isEmpty()) return 0
         var removed = 0
