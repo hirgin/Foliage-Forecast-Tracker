@@ -126,6 +126,14 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 - **MapLibre label collisions favour later layers**, and colliding labels are
   dropped rather than moved. `symbol-sort-key` decides which survives; without
   it the winner is whatever order the tile happened to supply.
+- **The benchmark is the map published at `6379bd3`, model `0.3.0-photoperiod`,
+  approved by the user.** Measure changes against it, in numbers rather than
+  impressions: Vermont ~14 days of spread in peak dates across 60 neighbouring
+  cells (N Georgia ~16); peak order Vermont 27 Sep, Michigan 9 Oct, Colorado
+  10 Oct, Georgia 31 Oct, Louisiana 22 Nov; the deep south finishing during
+  December; no empty hexes. Constants: `S_PEAK` 100, floor 1.25 below 11.5 h.
+  A change that improves peak-date error while dropping Vermont below ~12 days
+  is a regression however good the fit looks.
 - **Validate a model change on five states before touching the country.**
   Vermont, Michigan, Georgia, Louisiana, Colorado -- one per region, roughly
   500k rows against 15M for a national pass. Check peak *dates* and the local

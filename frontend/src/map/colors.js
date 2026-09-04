@@ -50,13 +50,20 @@ export const STAGES = [
  * blend evergreen into "no change" as though a spruce were part-way to being
  * a maple.
  *
- * A cool blue-green, chosen to sit apart from both neighbours it could be
- * confused with. It must not read as [NO_FORECAST_RGB] grey, because these
- * hexagons are not missing -- they are known, and known to stay green. And it
- * must not read as NO_CHANGE green, because that is a deciduous wood that has
- * not turned *yet* and will.
+ * A cool slate blue, and the coolness is the whole point.
+ *
+ * The first attempt was a blue-green, on the reasoning that an evergreen
+ * forest is green and the colour should say so. It is, and it should not: on a
+ * December map where everything else has gone brown, a green Pacific Northwest
+ * reads as a region that has not turned yet. Truthful about the trees and
+ * wrong about the map.
+ *
+ * Blue carries no such implication, and it still has to sit apart from the two
+ * things it could be confused with -- [NO_FORECAST_RGB] grey, because these
+ * hexagons are not missing, and NO_CHANGE green, because that is a deciduous
+ * wood that has not turned *yet* and will.
  */
-export const EVERGREEN_STAGE = { key: 'EVERGREEN', label: 'Evergreen', rgb: [58, 92, 84] };
+export const EVERGREEN_STAGE = { key: 'EVERGREEN', label: 'Evergreen', rgb: [62, 82, 96] };
 
 export const NO_FORECAST_RGB = [92, 90, 86];
 export const NO_FORECAST_ALPHA = 120;
