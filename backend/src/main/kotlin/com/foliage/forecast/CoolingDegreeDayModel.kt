@@ -75,16 +75,23 @@ object CoolingDegreeDayModel {
      * smooth latitude ramp with the terrain washed out of it. Elevation and
      * maritime effects are why this map is drawn on 3 km hexagons at all.
      *
-     * So the floor is kept small and [S_PEAK] as low as will still carry a
-     * southern autumn to its end. At 150 with a floor of 1.5 every reference
-     * place finishes, error over them is 4.9 days -- better than the 12.2 of
-     * the model before any of this, and as good as the flattening fit that
-     * cost three quarters of the terrain detail. Holding [S_PEAK] at its
-     * original 100 was tried and does not work: Florida runs past the end of
-     * the season again.
+     * So [S_PEAK] stays at 100, exactly where it was calibrated, and the floor
+     * is the smallest that carries a southern autumn to its end.
      *
-     * Accuracy at eleven towns is not worth the texture of 141,274 hexagons,
-     * and at this point it does not have to be paid for with it.
+     * **This leaves the north bit-for-bit unchanged**, which is the point. The
+     * floor only applies below [PHOTOPERIOD_FLOOR_GATE_H], which Vermont does
+     * not cross until 6 October and which it has usually peaked before. New
+     * England therefore scores exactly as it did before any of this work, with
+     * the same terrain detail -- 14 days of spread across sixty neighbouring
+     * cells, against 10 for the version that raised [S_PEAK] to 200 and 7 for
+     * the one that raised it to 260.
+     *
+     * What the floor changes is the far south, where it is the difference
+     * between an autumn that ends and one that runs off the end of the season.
+     * Fitting floor and [S_PEAK] together minimises error at eleven reference
+     * towns, and it does so by flattening 141,274 hexagons. That is not a
+     * trade worth making: the local variation is the reason this map is drawn
+     * on 3 km hexagons rather than on states.
      *
      * Fitted against the day a cell *enters* the peak band, progression 75,
      * because that is the date the rest of the system reports as its peak. A
@@ -113,7 +120,7 @@ object CoolingDegreeDayModel {
      */
     const val PHOTOPERIOD_FLOOR_GATE_H = 11.5
 
-    const val PHOTOPERIOD_FLOOR = 1.5
+    const val PHOTOPERIOD_FLOOR = 1.25
 
     /**
      * Accumulated cooling degree days at which a stand is at peak colour.
@@ -140,7 +147,7 @@ object CoolingDegreeDayModel {
      * The lesson worth keeping: a fitted constant is coupled to the data it
      * was fitted against. Changing the ingest changed the model.
      */
-    const val S_PEAK = 150.0
+    const val S_PEAK = 100.0
 
     /** Where peak sits on the 0-100 progression scale, at the middle of the PEAK band. */
     const val PEAK_PROGRESSION = 82.0
