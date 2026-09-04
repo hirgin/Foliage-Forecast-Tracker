@@ -56,11 +56,19 @@ export default function MapView({ nav }) {
   const seasonStart = meta.data?.seasonStart;
   const seasonEnd = meta.data?.seasonEnd;
 
+  // Opens at the start of the season, not at today.
+  //
+  // Today is the better answer to "where is colour right now" and the worse
+  // answer to everything else. The map's subject is a progression across three
+  // months, and opening part-way through it hides how much of the season the
+  // slider covers -- in early September the two are days apart and look
+  // identical, so the map appears to open on a blank green country for no
+  // visible reason. Starting at the beginning means pressing play walks the
+  // whole autumn.
   useEffect(() => {
     if (!seasonStart || date) return;
-    const today = isoToday();
-    setDate(today < seasonStart ? seasonStart : today > seasonEnd ? seasonEnd : today);
-  }, [seasonStart, seasonEnd, date]);
+    setDate(seasonStart);
+  }, [seasonStart, date]);
 
   const { data, error, isLoading } = useForecast(date, resolution);
   const cells = data?.cells ?? [];
