@@ -758,7 +758,17 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
 
   const donors = donorCache.current;
   if (windowed) {
-    const missing = visible.bare.filter((h3) => !donors.has(h3));
+    // Both kinds of hole, not just one.
+    //
+    // `bare` is ground with too few trees to forecast. The other kind is a
+    // cell that is in the grid and has no score -- its weather never arrived,
+    // so it is deliberately left unscored rather than given a season invented
+    // out of daylight. Only the first was being filled, so the second showed
+    // as grey "not forecast yet" hexagons scattered through otherwise complete
+    // country. Both are holes and both are better answered by the forest
+    // around them than by a blank.
+    const unscored = visible.cells.filter((c) => c.stage == null).map((c) => c.h3);
+    const missing = [...visible.bare, ...unscored].filter((h3) => !donors.has(h3));
     if (missing.length > 0) {
       for (const [h3, found] of donorsFor(missing, scoredH3)) donors.set(h3, found);
       // Remember the misses too, or every pan re-searches the cells that have
@@ -807,7 +817,14 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
         // Indexes arrive as hex strings: they are 64-bit and would lose
         // precision as JSON numbers.
         getHexagon: (d) => d.h3,
-        getFillColor: foliageColor,
+        // A scored cell draws its own colour; an unscored one borrows from the
+        // nearest forest that has a reading, the same way bare ground does.
+        getFillColor: (d) => {
+          if (d.stage != null) return foliageColor(d);
+          const value = fillValue(donors.get(d.h3) ?? [], scoredByH3);
+          if (value == null) return foliageColor(d);
+          return [...progressionColor(value, stageForProgression(value)), FILLED_ALPHA];
+        },
         getLineColor: (d) => (d.h3 === selected ? [255, 255, 255, 230] : [10, 12, 9, 90]),
         getLineWidth: (d) => (d.h3 === selected ? 3 : 1),
         lineWidthUnits: 'pixels',
@@ -819,7 +836,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
         onHover: ({ object }) => setHovered(object ?? null),
         onClick: ({ object }) => onSelect?.(object?.h3 ?? null),
         updateTriggers: {
-          getFillColor: [visible],
+          getFillColor: [visible, donors, scoredByH3],
           getLineColor: [selected],
           getLineWidth: [selected],
         },

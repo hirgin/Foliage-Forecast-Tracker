@@ -5,7 +5,7 @@ import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
 import PlaceSearch from '../components/PlaceSearch';
-import { STAGES, NO_FORECAST_RGB, EVERGREEN_STAGE } from '../map/colors';
+import { STAGES, EVERGREEN_STAGE } from '../map/colors';
 
 const FORECAST_HORIZON_DAYS = 16;
 
@@ -85,8 +85,6 @@ export default function MapView({ nav }) {
   // Cells that exist but have not been scored yet. While the backfill works
   // through the country this is most of the map, and leaving it out of the
   // legend made a waiting grid look like a broken one.
-  const notForecast = counts[null] ?? counts.undefined ?? 0;
-
   const peakCount = (counts.PEAK ?? 0) + (counts.NEAR_PEAK ?? 0);
   const onSelect = useCallback((h3) => setSelected(h3), []);
 
@@ -189,16 +187,6 @@ export default function MapView({ nav }) {
                 </span>
               </div>
             )}
-            {notForecast > 0 && (
-              <div className="legend__row legend__row--pending">
-                <span
-                  className="swatch"
-                  style={{ background: `rgb(${NO_FORECAST_RGB.join(',')})` }}
-                />
-                <span className="legend__label">Not forecast yet</span>
-                <span className="legend__count">{notForecast.toLocaleString()}</span>
-              </div>
-            )}
             {/*
               The gaps need explaining as much as the colours do.
 
@@ -211,11 +199,12 @@ export default function MapView({ nav }) {
               so it was the one people asked about.
             */}
             <p className="legend__note">
-              Faded tiles have too few trees to forecast — fields, towns and
-              water — and are coloured from the nearest forest that does turn,
-              so read them as the season around there rather than a forecast
-              for that spot. Where a forest is mostly evergreen, its autumn is
-              drawn in muted colour: the same timing, far less of it.
+              Faded tiles are places with no reading of their own — fields,
+              towns and water, or forest whose weather never arrived — and take
+              their colour from the nearest forest that does turn. Read them as
+              the season around there rather than a forecast for that spot.
+              Where a forest is mostly evergreen, its autumn is drawn in muted
+              colour: the same timing, far less of it.
             </p>
           </section>
         )}
