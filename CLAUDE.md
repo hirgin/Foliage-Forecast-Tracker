@@ -133,7 +133,30 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
   10 Oct, Georgia 31 Oct, Louisiana 22 Nov; the deep south finishing during
   December; no empty hexes. Constants: `S_PEAK` 100, floor 1.25 below 11.5 h.
   A change that improves peak-date error while dropping Vermont below ~12 days
-  is a regression however good the fit looks.
+  is a regression however good the fit looks. Those spread figures were
+  measured by hand and no code reproduced them; `admin/local-spread` now does,
+  so compare against a baseline it measured rather than against the numbers
+  here.
+- **Calibrate the day peak *ends*, not only the day it starts.** Entry has
+  landed inside the published windows through every version of this model,
+  including versions that drew New England brown in the first week of October,
+  so a fit that only looks at entry cannot see the fault at all. The map turned
+  a hexagon past peak at progression 90; measured against the published
+  windows the northern towns crossed that a mean of 3 days early and Fort Kent
+  8. Now 94, pinned by `PublishedWindowsTest` against
+  `fixtures/reference-weather.json`.
+- **Stage is a display band, and it is where a scale mismatch belongs.**
+  Progression reads ~27 points high against USA-NPN, which must not be fitted
+  into the timing constants -- three attempts did and flattened the map. Moving
+  a band boundary costs nothing: progression is what gets exported, stage is
+  derived in the browser, so no stored row changes and no rescore is needed.
+  Three copies of those boundaries have to stay in step -- `PhenologyModel`,
+  `api/packed.js`, `map/colors.js`.
+- **The map cannot be viewed locally right now.** In dev the frontend requests
+  `/api/v1/forecast/{date}.bin` and the backend serves no such route -- only
+  `StaticExporter` writes packed files, and the live API returns JSON at
+  `/forecast?date=`. Seeing the real map therefore needs a full export, which
+  is exactly the metered operation that has to be agreed first.
 - **Ask before touching the database. Every time.** Any rescore, export,
   deploy (a push runs the export) or diagnostic over `foliage_forecast` needs
   agreement first, stating what will run, which states it covers, how many
