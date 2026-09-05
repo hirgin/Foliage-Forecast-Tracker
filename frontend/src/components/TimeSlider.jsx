@@ -71,6 +71,33 @@ export function formatDay(iso) {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
+/**
+ * How much clear track the horizon wording needs, as a percentage.
+ *
+ * It has to clear both labels, not just its own: "forecast ends" runs about
+ * 75 px and a month label another 20, which is a little over 14% of an 800 px
+ * track. Ten percent was tried first and was not enough -- on 4 September the
+ * horizon falls 10.5% from the October tick and the two still read as
+ * "forecast endsOct".
+ *
+ * Expressed as a share rather than pixels because the track is fluid, and
+ * erring generous: losing the wording costs a hint, while overlapping it costs
+ * legibility in both labels at once.
+ */
+export const HORIZON_CLEARANCE_PCT = 14;
+
+/**
+ * Whether the horizon wording would collide with a month label.
+ *
+ * Separated out so it can be checked without a browser; the horizon is today
+ * plus sixteen days, so it drifts across the track as the season runs and
+ * lands on a month tick a few days in every month.
+ */
+export function horizonCollides(horizonPct, monthPcts, clearance = HORIZON_CLEARANCE_PCT) {
+  if (horizonPct == null) return false;
+  return monthPcts.some((pct) => Math.abs(pct - horizonPct) < clearance);
+}
+
 export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, horizonDate }) {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -132,6 +159,18 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
     return ticks;
   }, [start, total]);
 
+  // Whether the horizon marker's wording would land on a month label.
+  //
+  // Measured in track percentage rather than pixels because the track is
+  // fluid: the words are about seven characters and need roughly a tenth of
+  // the track clear beside them, which holds at any width the slider is drawn
+  // at. Closer than that and the label is dropped, leaving the dashed line.
+  const crowded = useMemo(() => {
+    if (horizonPct == null) return false;
+    return horizonCollides(horizonPct, monthTicks.map((t) => t.pct));
+  }, [horizonPct, monthTicks]);
+
+
   return (
     <div className="slider">
       <button
@@ -187,10 +226,13 @@ export default function TimeSlider({ seasonStart, seasonEnd, value, onChange, ho
               style={{ left: `${horizonPct}%` }}
               title="Beyond here the forecast is climatology, not a forecast"
             >
-              {/* The dashed marker is drawn by CSS and always shows; only the
-                  wording folds away on a narrow screen, where it would sit on
-                  top of the month labels. */}
-              <span className="tick__text">forecast ends</span>
+              {/* The dashed marker is drawn by CSS and always shows. The
+                  wording folds away when it would collide with a month label:
+                  the horizon is today plus sixteen days, so it drifts across
+                  the track as the season runs and lands on top of a month tick
+                  a few days in every month. It read as "forecast endsOct" for
+                  most of September. */}
+              {!crowded && <span className="tick__text">forecast ends</span>}
             </span>
           )}
         </div>

@@ -54,6 +54,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Two commits, so a push can be asked what it actually changed.
+          fetch-depth: 2
+
+      # Does this push need the forecast re-exported at all?
+      #
+      # The export reads every cell for every day of the season -- roughly 15
+      # million rows for the daily files and again for the timelines -- and it
+      # ran on every push, including the ones that only touched a colour or a
+      # label. Eight such deploys in one evening re-read the whole country for
+      # changes that did not touch a single row, which is a large share of how
+      # a month's database allowance disappeared.
+      #
+      # Anything under backend/ or .github/ can change what the data says, so
+      # those still export. A change confined to frontend/ or docs/ cannot, and
+      # rebuilds against the data the last export already published.
+      - name: Decide whether the data must be re-exported
+        id: plan
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "reason=not a push" >> "$GITHUB_OUTPUT"
+            echo "export=true" >> "$GITHUB_OUTPUT"
+          elif ! git rev-parse HEAD~1 >/dev/null 2>&1; then
+            echo "reason=no parent commit to compare against" >> "$GITHUB_OUTPUT"
+            echo "export=true" >> "$GITHUB_OUTPUT"
+          else
+            CHANGED=$(git diff --name-only HEAD~1 HEAD)
+            echo "changed files:"; echo "$CHANGED"
+            if echo "$CHANGED" | grep -qE '^(backend/|\.github/)'; then
+              echo "reason=backend or workflow changed" >> "$GITHUB_OUTPUT"
+              echo "export=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "reason=frontend or docs only" >> "$GITHUB_OUTPUT"
+              echo "export=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      # The last export's output, so a frontend-only build has data to publish
+      # without touching the database.
+      - name: Reuse the last export
+        if: steps.plan.outputs.export == 'false'
+        id: reuse
+        uses: actions/cache/restore@v4
+        with:
+          path: site-data
+          key: site-data-
+          restore-keys: site-data-
 
       - uses: actions/setup-java@v5
         with:
@@ -105,6 +152,10 @@ jobs:
       # The backend is a batch pipeline, not a server: it boots, exports the
       # season as static JSON, and exits. Nothing is hosted.
       - name: Export forecast data
+        # Skipped only when this push cannot have changed the data *and* the
+        # previous export is still available to publish. A cache miss falls
+        # through to exporting rather than shipping nothing.
+        if: steps.plan.outputs.export == 'true' || steps.reuse.outputs.cache-matched-key == ''
         working-directory: backend
         env:
           FOLIAGE_DB_URL: ${{ secrets.FOLIAGE_DB_URL }}
@@ -155,8 +206,16 @@ jobs:
           # arguments.
           ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.refresh=$REFRESH --foliage.export.refresh-state=$REFRESH_STATE --foliage.export.backfill=true --foliage.export.backfill-states=$BACKFILL_STATES --foliage.export.backfill-minutes=$BACKFILL_MINUTES"
 
-      - name: Check the export produced data
+      - name: Save the export for the next frontend-only build
+        if: steps.plan.outputs.export == 'true' || steps.reuse.outputs.cache-matched-key == ''
+        uses: actions/cache/save@v4
+        with:
+          path: site-data
+          key: site-data-${{ github.run_id }}
+
+      - name: Check the data is there and whole
         run: |
+          echo "exported=${{ steps.plan.outputs.export }} (${{ steps.plan.outputs.reason }})"
           test -f site-data/meta.json || { echo "meta.json missing"; exit 1; }
           COUNT=$(ls site-data/forecast | wc -l)
           echo "exported $COUNT daily files, $(du -sh site-data | cut -f1) total"
