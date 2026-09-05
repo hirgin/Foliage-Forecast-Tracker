@@ -42,7 +42,7 @@ describe('progressionColor', () => {
   });
 
   it('advances monotonically through a band', () => {
-    const samples = [75, 79, 83, 87, 90].map((p) => progressionColor(p, 'PEAK'));
+    const samples = [75, 79, 83, 87, 94].map((p) => progressionColor(p, 'PEAK'));
     for (let i = 1; i < samples.length; i++) {
       expect(samples[i]).not.toEqual(samples[i - 1]);
     }
@@ -50,7 +50,7 @@ describe('progressionColor', () => {
 
   it('deepens rather than jumping in the final stage', () => {
     // PAST_PEAK has no successor to blend toward, so it darkens instead.
-    const start = progressionColor(90, 'PAST_PEAK');
+    const start = progressionColor(94, 'PAST_PEAK');
     const end = progressionColor(100, 'PAST_PEAK');
     expect(end.every((c, i) => c <= start[i])).toBe(true);
     expect(end).not.toEqual(start);
@@ -59,7 +59,7 @@ describe('progressionColor', () => {
   it('clamps progression outside the band rather than extrapolating', () => {
     // Out-of-band values must not produce colours outside the ramp.
     expect(progressionColor(-20, 'PEAK')).toEqual(progressionColor(75, 'PEAK'));
-    expect(progressionColor(999, 'PEAK')).toEqual(progressionColor(90, 'PEAK'));
+    expect(progressionColor(999, 'PEAK')).toEqual(progressionColor(94, 'PEAK'));
   });
 
   it('returns a neutral grey for an unknown stage', () => {

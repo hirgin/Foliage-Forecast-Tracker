@@ -115,8 +115,12 @@ describe('stageOf', () => {
     expect(stageOf(55)).toBe('NEAR_PEAK');
     expect(stageOf(74.9)).toBe('NEAR_PEAK');
     expect(stageOf(75)).toBe('PEAK');
-    expect(stageOf(89.9)).toBe('PEAK');
-    expect(stageOf(90)).toBe('PAST_PEAK');
+    // Peak ends at 94, not 90. The four points between them are New England
+    // in the first half of October -- still peak by every published window,
+    // and drawn brown until this moved.
+    expect(stageOf(90)).toBe('PEAK');
+    expect(stageOf(93.9)).toBe('PEAK');
+    expect(stageOf(94)).toBe('PAST_PEAK');
   });
 });
 

@@ -99,8 +99,12 @@ const BOUNDS = {
   PATCHY: [10, 30],
   PARTIAL: [30, 55],
   NEAR_PEAK: [55, 75],
-  PEAK: [75, 90],
-  PAST_PEAK: [90, 100],
+  // Peak runs to 94 rather than 90; see PhenologyModel.PAST_PEAK_PROGRESSION.
+  // Widening it also stretches the red anchor over more of the ramp, which is
+  // the visual half of the same correction -- a canopy the model reads at 92
+  // is still worth travelling to see.
+  PEAK: [75, 94],
+  PAST_PEAK: [94, 100],
 };
 
 const lerp = (a, b, t) => a + (b - a) * t;

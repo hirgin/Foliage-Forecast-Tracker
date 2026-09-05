@@ -31,7 +31,9 @@ export function stageOf(progression) {
   if (progression < 30) return 'PATCHY';
   if (progression < 55) return 'PARTIAL';
   if (progression < 75) return 'NEAR_PEAK';
-  if (progression < 90) return 'PEAK';
+  // 94, not 90: see PhenologyModel.PAST_PEAK_PROGRESSION. At 90 the map turned
+  // New England brown while every published window still called it peak.
+  if (progression < 94) return 'PEAK';
   return 'PAST_PEAK';
 }
 

@@ -317,12 +317,39 @@ object PhenologyModel {
         )
     }
 
+    /**
+     * Where peak ends, on the 0-100 progression scale.
+     *
+     * **The one band boundary here fitted against anything.** The rest are
+     * round numbers chosen when the scale was invented and never checked; this
+     * one was 90 for the same reason, and 90 turned New England brown while
+     * the published windows still called it peak. Measured against
+     * docs/published-peak-windows.md: at 90 the northern reference towns go
+     * past peak a mean of 3 days early and Fort Kent 8 days early, on 2
+     * October against a window running to the 10th. At 94 that mean error is
+     * zero and the worst town is 3 days.
+     *
+     * Raised rather than the model being re-fitted, because the fault is one
+     * of scale and not of timing. Against 46,424 USA-NPN leaf-colour records
+     * this model's progression reads about 27 points high -- a mismatch
+     * docs/model.md says must not be fitted into the timing constants, having
+     * watched three attempts flatten the map trying. A hexagon reading 90 has
+     * a canopy nearer 63% turned, which is not past peak by any description.
+     * A display band is exactly where that belongs.
+     *
+     * The entry boundary at 75 is deliberately untouched: peak *dates* already
+     * land inside their published windows, and every diagnostic that finds a
+     * cell's peak reads the first PEAK day, so moving 75 would silently move
+     * the numbers this project measures itself by.
+     */
+    const val PAST_PEAK_PROGRESSION = 94.0
+
     fun stageOf(progression: Double): FoliageStage = when {
         progression < 10 -> FoliageStage.NO_CHANGE
         progression < 30 -> FoliageStage.PATCHY
         progression < 55 -> FoliageStage.PARTIAL
         progression < 75 -> FoliageStage.NEAR_PEAK
-        progression < 90 -> FoliageStage.PEAK
+        progression < PAST_PEAK_PROGRESSION -> FoliageStage.PEAK
         else -> FoliageStage.PAST_PEAK
     }
 
