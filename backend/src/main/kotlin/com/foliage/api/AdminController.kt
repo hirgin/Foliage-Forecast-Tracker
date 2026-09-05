@@ -41,6 +41,7 @@ class AdminController(
     private val normals: com.foliage.persistence.NormalRepository,
     private val modelValidation: com.foliage.validate.ModelValidation,
     private val forecasts: com.foliage.persistence.ForecastRepository,
+    private val grid: com.foliage.grid.H3Grid,
     @org.springframework.beans.factory.annotation.Value("\${foliage.grid.min-canopy-pct}")
     private val minCanopyPct: Int,
     @org.springframework.beans.factory.annotation.Value("\${foliage.grid.metro-population}")
@@ -181,6 +182,25 @@ class AdminController(
     @org.springframework.web.bind.annotation.GetMapping("/peak-spread")
     fun peakSpread(): List<com.foliage.persistence.StatePeakSpread> =
         forecasts.peakSpreadByState(minCanopyPct, season.days(java.time.LocalDate.now().year).size)
+
+    /**
+     * How far apart *neighbouring* hexagons peak, which a state median cannot
+     * show and which model fits keep quietly destroying. Reads only.
+     *
+     * Scoped to a state because that is how a model change is validated here:
+     * five states, one per region, before the country. See LocalSpread and
+     * CLAUDE.md.
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/local-spread")
+    fun localSpread(
+        @RequestParam(required = false) stateFips: String?,
+        @RequestParam(defaultValue = "4") k: Int,
+    ): com.foliage.validate.LocalSpreadResult = com.foliage.validate.LocalSpread.of(
+        peaks = forecasts.peakDayByCell(stateFips),
+        disk = grid::disk,
+        k = k,
+        stateFips = stateFips,
+    )
 
     @PostMapping("/sample-forest-type")
     fun sampleForestType(
