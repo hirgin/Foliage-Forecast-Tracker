@@ -134,6 +134,13 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
   December; no empty hexes. Constants: `S_PEAK` 100, floor 1.25 below 11.5 h.
   A change that improves peak-date error while dropping Vermont below ~12 days
   is a regression however good the fit looks.
+- **Ask before touching the database. Every time.** Any rescore, export,
+  deploy (a push runs the export) or diagnostic over `foliage_forecast` needs
+  agreement first, stating what will run, which states it covers, how many
+  rows it moves, and what has already been verified so the run is not
+  exploratory. One session put roughly 95 million row writes and twenty full
+  exports through a metered tier, almost none of it asked for; each step
+  looked small in isolation and nobody was counting.
 - **Most fixes are not national, even when the code change is.** Only a
   constant that moves every cell's timing needs the whole country rescored;
   a fix aimed at data gaps, one forest type, or one region needs the states
