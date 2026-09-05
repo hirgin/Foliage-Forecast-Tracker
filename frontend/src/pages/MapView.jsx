@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useForecast, useMeta } from '../api/hooks';
+import { useForecast, useMeta, usePrefetchForecast } from '../api/hooks';
 import { resolutionForZoom, cellWidthKm, h3ForPlace, fetchBareCells } from '../api/client';
 import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
@@ -71,6 +71,16 @@ export default function MapView({ nav }) {
   }, [seasonStart, date]);
 
   const { data, error, isLoading } = useForecast(date, resolution);
+
+  // Every day of the season, so the days just ahead of the playhead can be
+  // fetched before they are asked for. See usePrefetchForecast.
+  const seasonDays = useMemo(() => {
+    if (!seasonStart || !seasonEnd) return [];
+    const out = [];
+    for (let d = seasonStart; d <= seasonEnd; d = addDays(d, 1)) out.push(d);
+    return out;
+  }, [seasonStart, seasonEnd]);
+  usePrefetchForecast(date, seasonDays, resolution);
   const cells = data?.cells ?? [];
 
   const horizonDate = useMemo(() => addDays(isoToday(), FORECAST_HORIZON_DAYS), []);
