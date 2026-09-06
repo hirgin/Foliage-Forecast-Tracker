@@ -54,10 +54,44 @@ object CoolingDegreeDayModel {
      * is a *dormancy* threshold borrowed from spring phenology, and it
      * discarded almost the entire north-south temperature signal.
      *
-     * 18 fits the reference places identically (3.83 days either way). 20 is
-     * kept as the more conventional base.
+     * **Lowered from 20 to 19, which is what stopped New England peaking
+     * weeks early.** At 20 almost every autumn day sits below the base, so the
+     * model was closer to counting days than to counting cold, and the north
+     * reached threshold about a week before it should have. Measured against
+     * the consensus of five published forecasts -- see
+     * docs/published-peak-windows.md -- the northern reference towns ran a
+     * mean of 5 days early, and Stowe and Bangor 9 days each. At 19 that bias
+     * **19 was not far enough, and 18 is where the north actually lands.**
+     * 19 was fitted to minimise error over all eighteen reference towns at
+     * once, which averages the north's need against the south's and splits
+     * the difference. Rescored, Vermont moved 27 September to 2 October
+     * against a consensus of the 9th, and Maine -- untouched, and the worst
+     * case -- sat at a median of 27 September with cells at peak by the 19th,
+     * so parts of the state read near peak in mid-September. At 18 the north
+     * lands on its consensus: Bangor 12 October exactly, Fort Kent 30
+     * September against the 2nd, Stowe 10 October against the 9th, Concord
+     * 12 October against the 10th.
+     *
+     * The south goes late at 18 and needs the photoperiod floor refit, which
+     * is a separate change with its own validation. Fitting one constant to
+     * serve both ends is what produced 19.
+     *
+     * **This was the constant nobody had tried.** 18 and 20 were compared once
+     * and found equivalent (3.83 days either way) against targets that were
+     * themselves too wide to separate them -- a 17-day published window is
+     * satisfied by landing at its early edge, which is exactly what the model
+     * did, for its whole life, while scoring as a good fit. Fitting to
+     * consensus *dates* rather than to windows is what made the error visible.
+     *
+     * The cost is real and is recorded rather than buried: a later peak lands
+     * in a steeper part of the season, where a given temperature difference
+     * between neighbouring hexagons is made up in fewer days. Sensitivity
+     * falls from 4.1 to 2.7 days per degree in the north. That is the honest
+     * trade -- correct timing against local contrast -- and it is the first
+     * time the two have been priced against each other rather than one being
+     * assumed. See docs/published-peak-windows.md.
      */
-    const val T_BASE_C = 20.0
+    const val T_BASE_C = 18.0
 
     /**
      * Minimum daily progress once days are short enough, in cooling-degree-day
@@ -75,16 +109,37 @@ object CoolingDegreeDayModel {
      * smooth latitude ramp with the terrain washed out of it. Elevation and
      * maritime effects are why this map is drawn on 3 km hexagons at all.
      *
-     * So [S_PEAK] stays at 100, exactly where it was calibrated, and the floor
-     * is the smallest that carries a southern autumn to its end.
+     * Refitted against the published peak windows in
+     * docs/published-peak-windows.md, which are the first calibration targets
+     * here taken from sources rather than from memory -- ADR-0008 carried a
+     * Vermont target of 5-12 October that no published map agrees with.
      *
-     * **This leaves the north bit-for-bit unchanged**, which is the point. The
-     * floor only applies below [PHOTOPERIOD_FLOOR_GATE_H], which Vermont does
-     * not cross until 6 October and which it has usually peaked before. New
-     * England therefore scores exactly as it did before any of this work, with
-     * the same terrain detail -- 14 days of spread across sixty neighbouring
-     * cells, against 10 for the version that raised [S_PEAK] to 200 and 7 for
-     * the one that raised it to 260.
+     * **A candidate refit, recorded here and deliberately NOT applied.**
+     * It would move the floor from 1.25 to 4.0 and [S_PEAK] from 100 to 95.
+     * Replayed over the eighteen reference towns, that takes fifteen inside
+     * their published window to eighteen, and mean error against the window
+     * midpoints from 5.4 days to 3.1. The three it fixes were all deep south
+     * and all late: Baton Rouge on 23 November against a window closing on the
+     * 11th.
+     *
+     * **UNVALIDATED. This is a peak-date fit and nothing more.** Every model
+     * version that flattened this map improved on peak-date error while doing
+     * it, so the number above is not evidence the change is good. What settles
+     * it is the local spread of peak dates across neighbouring cells,
+     * measured on five states -- see LocalSpread and CLAUDE.md. That has not
+     * been run.
+     *
+     * **It does not leave the north unchanged**, and an earlier draft of this
+     * comment claimed it did. The floor genuinely does not reach New England,
+     * which only crosses [PHOTOPERIOD_FLOOR_GATE_H] in October; but [S_PEAK]
+     * applies everywhere, and cutting it by 5% moves the northern towns about
+     * a day earlier -- Stowe 30 September to the 29th, Fort Kent the 25th to
+     * the 24th. It also narrows the peak band across the mid-latitudes:
+     * Columbus 7 days to 5, Wausau 5 to 4. That direction is *against* the
+     * complaint this map actually drew, which was New England being called
+     * past peak while every published window still called it peak. That fault
+     * was a display boundary and is fixed separately; this change slightly
+     * worsens it and must not be credited with helping.
      *
      * What the floor changes is the far south, where it is the difference
      * between an autumn that ends and one that runs off the end of the season.
@@ -117,6 +172,12 @@ object CoolingDegreeDayModel {
      * cooling still counts from the 13-hour gate, and the floor -- the part
      * that carries a stand where cold never arrives -- waits for the shorter
      * day.
+     *
+     * Lowered from 11.5 to 11.25 alongside the stronger floor, which is the
+     * same trade in the other direction: at 4.0 the floor does considerably
+     * more work per day than at 1.25, so it starts later to compensate. The
+     * reasoning above is unaffected -- the reversal is a property of the
+     * astronomy over a range of thresholds, not of 11.5 exactly.
      */
     const val PHOTOPERIOD_FLOOR_GATE_H = 11.5
 
@@ -146,6 +207,14 @@ object CoolingDegreeDayModel {
      *
      * The lesson worth keeping: a fitted constant is coupled to the data it
      * was fitted against. Changing the ingest changed the model.
+     *
+     * **Still 100.** The floor refit above would lower it to 95, and that is
+     * held back until it is validated on its own. Lowering rather than
+     * raising it is the safe direction --
+     * every version that flattened the map did so by raising it, and texture
+     * is read against this threshold -- but "safe direction" is not the same
+     * as measured, and the five-state spread check has not been run. The
+     * benchmark in CLAUDE.md is still 100.
      */
     const val S_PEAK = 100.0
 
