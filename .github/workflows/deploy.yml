@@ -55,8 +55,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # Two commits, so a push can be asked what it actually changed.
-          fetch-depth: 2
+          # The whole history, because the question is what a *push* changed
+          # and a push is any number of commits. At depth 2 only the tip and
+          # its parent existed, so the comparison below could not see past the
+          # last commit however many came with it.
+          fetch-depth: 0
 
       # Does this push need the forecast re-exported at all?
       #
@@ -70,26 +73,40 @@ jobs:
       # Anything under backend/ or .github/ can change what the data says, so
       # those still export. A change confined to frontend/ or docs/ cannot, and
       # rebuilds against the data the last export already published.
+      #
+      # **Compared across the whole push, not just its last commit.** This read
+      # `HEAD~1..HEAD`, which asks what the tip commit changed and ignores
+      # everything pushed with it. A push of five commits -- four of them
+      # backend, topped by one that touched only CLAUDE.md -- was judged
+      # docs-only and skipped the export. That is the exact failure this step
+      # exists to prevent, arrived at from the other direction: it was written
+      # to stop needless exports and instead skipped a needed one.
       - name: Decide whether the data must be re-exported
         id: plan
         run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
           if [ "${{ github.event_name }}" != "push" ]; then
-            echo "reason=not a push" >> "$GITHUB_OUTPUT"
-            echo "export=true" >> "$GITHUB_OUTPUT"
-          elif ! git rev-parse HEAD~1 >/dev/null 2>&1; then
-            echo "reason=no parent commit to compare against" >> "$GITHUB_OUTPUT"
-            echo "export=true" >> "$GITHUB_OUTPUT"
+            REASON="not a push"; EXPORT=true
+          # All-zeros is a branch's first push, and a force-push can leave a
+          # SHA that no longer exists. Neither can be diffed, so both export.
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            REASON="no previous commit to compare against"; EXPORT=true
+          elif ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            REASON="previous commit $BEFORE is unreachable (force push?)"; EXPORT=true
           else
-            CHANGED=$(git diff --name-only HEAD~1 HEAD)
-            echo "changed files:"; echo "$CHANGED"
+            CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
+            echo "changed across this push ($BEFORE..${{ github.sha }}):"
+            echo "$CHANGED"
             if echo "$CHANGED" | grep -qE '^(backend/|\.github/)'; then
-              echo "reason=backend or workflow changed" >> "$GITHUB_OUTPUT"
-              echo "export=true" >> "$GITHUB_OUTPUT"
+              REASON="backend or workflow changed"; EXPORT=true
             else
-              echo "reason=frontend or docs only" >> "$GITHUB_OUTPUT"
-              echo "export=false" >> "$GITHUB_OUTPUT"
+              REASON="frontend or docs only"; EXPORT=false
             fi
           fi
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+          echo "export=$EXPORT" >> "$GITHUB_OUTPUT"
+          echo "decision: export=$EXPORT ($REASON)"
 
       # The last export's output, so a frontend-only build has data to publish
       # without touching the database.
@@ -101,6 +118,43 @@ jobs:
           path: site-data
           key: site-data-
           restore-keys: site-data-
+
+      # What actually happens, as against what the plan asked for.
+      #
+      # A cache miss still falls through to exporting -- publishing a site with
+      # no data on it would be worse. But it used to do that inside an `if:`
+      # expression, so a run that had decided *not* to export quietly spent
+      # fifteen minutes reading 141,274 cells across 106 days, and the only
+      # trace was the step having run at all. The run summary said
+      # "exported=false". Escalation is fine; escalation you have to reverse-
+      # engineer from a step list is not.
+      - name: Confirm the export decision
+        id: final
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.plan.outputs.export }}" = "true" ]; then
+            EXPORT=true; WHY="${{ steps.plan.outputs.reason }}"
+          elif [ -z "${{ steps.reuse.outputs.cache-matched-key }}" ]; then
+            EXPORT=true
+            WHY="OVERRIDDEN: no cached export to reuse, so the data must be rebuilt"
+            echo "::warning title=Full export forced::This push did not need an export (${{ steps.plan.outputs.reason }}), but no cached export was found, so the whole grid is being re-read from the database."
+            {
+              echo "### :warning: Full export forced"
+              echo
+              echo "The plan was **no export** (${{ steps.plan.outputs.reason }}),"
+              echo "but the \`site-data-\` cache missed, so the database is being read in full."
+              echo
+              echo "Caches are evicted once the repository passes 10 GB, and each export"
+              echo "saves another ~265 MB entry, so this gets more likely the more often"
+              echo "it runs."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            EXPORT=false
+            WHY="reused cache ${{ steps.reuse.outputs.cache-matched-key }}"
+          fi
+          echo "export=$EXPORT" >> "$GITHUB_OUTPUT"
+          echo "why=$WHY" >> "$GITHUB_OUTPUT"
+          echo "final: export=$EXPORT ($WHY)"
 
       - uses: actions/setup-java@v5
         with:
@@ -153,9 +207,10 @@ jobs:
       # season as static JSON, and exits. Nothing is hosted.
       - name: Export forecast data
         # Skipped only when this push cannot have changed the data *and* the
-        # previous export is still available to publish. A cache miss falls
-        # through to exporting rather than shipping nothing.
-        if: steps.plan.outputs.export == 'true' || steps.reuse.outputs.cache-matched-key == ''
+        # previous export is still available to publish. Both halves of that
+        # are decided in "Confirm the export decision" above, which says so out
+        # loud when the cache is what forced this.
+        if: steps.final.outputs.export == 'true'
         working-directory: backend
         env:
           FOLIAGE_DB_URL: ${{ secrets.FOLIAGE_DB_URL }}
@@ -207,7 +262,7 @@ jobs:
           ./gradlew bootRun --no-daemon --stacktrace --args="--foliage.export.path=${{ github.workspace }}/site-data --foliage.export.refresh=$REFRESH --foliage.export.refresh-state=$REFRESH_STATE --foliage.export.backfill=true --foliage.export.backfill-states=$BACKFILL_STATES --foliage.export.backfill-minutes=$BACKFILL_MINUTES"
 
       - name: Save the export for the next frontend-only build
-        if: steps.plan.outputs.export == 'true' || steps.reuse.outputs.cache-matched-key == ''
+        if: steps.final.outputs.export == 'true'
         uses: actions/cache/save@v4
         with:
           path: site-data
@@ -215,7 +270,7 @@ jobs:
 
       - name: Check the data is there and whole
         run: |
-          echo "exported=${{ steps.plan.outputs.export }} (${{ steps.plan.outputs.reason }})"
+          echo "exported=${{ steps.final.outputs.export }} (${{ steps.final.outputs.why }})"
           test -f site-data/meta.json || { echo "meta.json missing"; exit 1; }
           COUNT=$(ls site-data/forecast | wc -l)
           echo "exported $COUNT daily files, $(du -sh site-data | cut -f1) total"
