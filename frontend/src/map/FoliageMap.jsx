@@ -193,31 +193,40 @@ function brightenLabels(map) {
  * How far the map lets you wander: the lower 48, with a margin.
  *
  * This is a forecast for the continental US and nothing is scored outside it,
- * so panning to the Pacific or zooming out to the globe only ever shows empty
- * ocean and a country the size of a postage stamp. Fencing the view keeps
- * every gesture landing somewhere that has data.
+ * so panning away or zooming out only ever shows ground with no data on it.
+ * Fencing the view keeps every gesture landing somewhere the forecast covers.
  *
- * Drawn to the actual coastlines rather than padded out. Since these bounds
- * set how far you may zoom out -- the floor is whatever fits them -- every
- * degree of slack is spent widening the view, and on a tall phone that slack
- * is paid vertically at several times the rate: padding to -128/51 pulled the
- * horizon down to Panama before the country fitted across.
+ * **New England, because that is now the whole forecast.** These were the
+ * lower 48 when the model claimed to cover it. It does not: PeakDateModel is
+ * fitted against observations from Maine and New Hampshire and scores six
+ * states, and foliage.grid.states stops anything else being exported. A fence
+ * around the country would have left a visitor panning across 42 states of
+ * empty basemap looking for the map.
+ *
+ * Drawn to the actual state edges rather than padded out. Since these bounds
+ * also set how far you may zoom out -- the floor is whatever fits them -- every
+ * degree of slack is spent widening the view, and on a tall phone that slack is
+ * paid vertically at several times the rate.
+ *
+ * West is Connecticut at -73.73, east is Maine at -66.95, south is the
+ * Connecticut shore at 40.98 and north is Maine at 47.46, each given a little
+ * under a tenth of a degree.
  */
-const US_BOUNDS = [[-125.5, 24.0], [-66.5, 49.5]];
+const NEW_ENGLAND_BOUNDS = [[-73.8, 40.9], [-66.85, 47.5]];
 
 /**
  * Where the map opens.
  *
- * The country, because that is what the site is about. It used to be Stowe,
- * Vermont at zoom 7 -- correct when Vermont was the only state with data, and
- * quietly wrong from the day the second one landed. Every visitor arrived
- * zoomed into one hillside in New England and had to find the rest of the
- * United States for themselves.
+ * New England, because that is what the site is about. It opened on Stowe at
+ * zoom 7 when Vermont was the only state loaded, then on the whole country
+ * when the grid went national. Both were right at the time and wrong
+ * afterwards; the opening view has to follow what is actually forecast, which
+ * is now six states.
  *
  * Set on the constructor rather than corrected after load, so there is no
  * first frame showing somewhere else.
  */
-const OPENING_VIEW = US_BOUNDS;
+const OPENING_VIEW = NEW_ENGLAND_BOUNDS;
 
 /**
  * The basemap style with everything this map needs already in it.
@@ -317,14 +326,14 @@ async function prepareStyle() {
 /**
  * Stops the zoom out once the whole country is on screen.
  *
- * Paired with [US_BOUNDS]: bounds alone stop you panning away but not zooming
+ * Paired with [NEW_ENGLAND_BOUNDS]: bounds alone stop you panning away but not zooming
  * out, and at zoom 2 the US sits in the middle of a world map.
  *
  * This cannot be a constant, which is the mistake it replaces. A fixed floor
  * of 3 fits the country on a desktop pane and strands a phone halfway: a
  * 375 px viewport covers far less ground at the same zoom, so the eastern half
  * filled the screen and there was no way to pull back and see the rest. The
- * floor has to be whatever zoom fits [US_BOUNDS] in *this* viewport, which is
+ * floor has to be whatever zoom fits [NEW_ENGLAND_BOUNDS] in *this* viewport, which is
  * what cameraForBounds computes -- so it is recomputed whenever the map is
  * resized, including on a phone rotating.
  */
@@ -407,7 +416,7 @@ function fenceZoomOut(map) {
   map.setMinZoom(0);
   // No padding argument: cameraForBounds already honours the map's own, and
   // passing it here as well applies it twice.
-  const camera = map.cameraForBounds(US_BOUNDS);
+  const camera = map.cameraForBounds(NEW_ENGLAND_BOUNDS);
   if (camera?.zoom == null) return;
   const narrow = map.getCanvas().clientWidth <= NARROW_PX;
   const floor = camera.zoom - (narrow ? NARROW_ZOOM_HEADROOM : ZOOM_HEADROOM);
@@ -539,7 +548,7 @@ function visibleSpan(map) {
 
 function clampCentre(map) {
   if (clamping) return;
-  const [[west, south], [east, north]] = US_BOUNDS;
+  const [[west, south], [east, north]] = NEW_ENGLAND_BOUNDS;
   const centre = map.getCenter();
   const span = visibleSpan(map);
 
@@ -630,7 +639,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
       fenceZoomOut(map);
       // Again now that fenceZoomOut has set the padding, so the country is
       // framed in the space the interface leaves rather than the whole canvas.
-      map.fitBounds(US_BOUNDS, { duration: 0 });
+      map.fitBounds(NEW_ENGLAND_BOUNDS, { duration: 0 });
       setStyleReady(true);
     });
     // A phone rotating, or a desktop pane being dragged wider, changes how
