@@ -195,7 +195,7 @@ class ForecastService(
         precipFrom: LocalDate?,
         seasonFirstDay: LocalDate,
     ): FoliageScore {
-        val input = CellInput(cell.centroidLat, cell.elevationM, cell.forestTypeGroup)
+        val input = CellInput(cell.centroidLat, cell.elevationM, cell.forestTypeGroup, cell.centroidLon)
         return if (modelKind == "photoperiod") {
             PhenologyModel.score(input, inputs, target, normalPrecipMm, precipFrom)
         } else {

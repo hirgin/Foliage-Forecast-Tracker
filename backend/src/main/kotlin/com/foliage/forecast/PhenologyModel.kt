@@ -36,6 +36,12 @@ data class CellInput(
      * rather than a failure -- see [com.foliage.forecast.ForestTypeGroup].
      */
     val forestTypeGroup: Int? = null,
+    /**
+     * Only [PeakDateModel] uses it, for distance to the Atlantic. Defaulted so
+     * that every existing caller and test constructs a cell exactly as before;
+     * a cell without one sits at the fitted intercept's distance.
+     */
+    val longitude: Double = -71.0,
 )
 
 /** A single named term, so the UI can explain *why* a cell scores as it does. */

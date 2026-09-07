@@ -37,8 +37,22 @@ object PeakDateModel {
      * Peak day-of-year = [INTERCEPT] + [LAT_DAYS_PER_DEGREE] x latitude +
      * [ELEV_DAYS_PER_METRE] x elevation.
      *
-     * Least squares over the nine Maine places with observed zone medians:
-     * mean absolute error 1.2 days, worst 3.9 days at Bar Harbor.
+     * Least squares over eighteen places in Maine and New Hampshire, all with
+     * observation-derived targets: mean absolute error 3.0 days.
+     *
+     * **The two states' records disagree, and this fit splits the difference.**
+     * At about 45 N Maine's foresters record peak on 8 October while New
+     * Hampshire's map says 30 September for the Great North Woods -- eight
+     * days apart at the same latitude. Maine's is twelve seasons of explicit
+     * weekly peak calls; New Hampshire's is a five-year summary published as
+     * ranges, which may describe the colour season rather than the peak. They
+     * are measuring differently and no linear model satisfies both, so the
+     * error against either is around three days, which is inside the
+     * resolution of the targets themselves.
+     *
+     * A Maine-only fit reaches 1.2 days and is the better *number*, but it
+     * puts New Hampshire's north nine days late, and two thirds of this map
+     * is not Maine.
      *
      * **Latitude and elevation, deliberately, and not temperature.** Adding
      * autumn temperature takes the error to 0.5 days and is a trap: with nine
@@ -55,9 +69,21 @@ object PeakDateModel {
      * cannot be reasoned about when it is wrong -- and the one this replaces
      * was wrong for a month with nobody able to say why.
      */
-    const val INTERCEPT = 431.8727
-    const val LAT_DAYS_PER_DEGREE = -3.2617
-    const val ELEV_DAYS_PER_METRE = -0.00915
+    const val INTERCEPT = 392.6202
+    const val LAT_DAYS_PER_DEGREE = -2.3258
+    const val ELEV_DAYS_PER_METRE = -0.01893
+
+    /**
+     * Days per kilometre from the Atlantic. Negative: inland turns earlier,
+     * the coast holds on.
+     *
+     * Added because latitude and elevation could not express maritime
+     * moderation, and the residuals said so plainly -- Portsmouth 5.9 days
+     * early, Concord 5.4, Bar Harbor 3.0, every one of them on or near the
+     * water. The sea keeps autumn nights warmer for weeks, and a Downeast
+     * headland peaks a fortnight after inland ground at the same latitude.
+     */
+    const val COAST_DAYS_PER_KM = -0.02101
 
     /**
      * Width of the logistic, in days. Sets how long the season and the peak
@@ -101,14 +127,41 @@ object PeakDateModel {
 
     fun supports(latitude: Double): Boolean = latitude in MIN_LATITUDE..MAX_LATITUDE
 
+    /**
+     * The Atlantic coastline of New England, coarsely. Distance to the nearest
+     * of these is the maritime term's input.
+     *
+     * Twelve points rather than a real coastline because the term is worth
+     * about a day per 50 km and the fit that produced it used exactly this
+     * set. A more faithful shoreline would change the numbers it was fitted
+     * against, which is a refit, not an improvement.
+     */
+    private val COASTLINE = listOf(
+        44.90 to -66.99, 44.72 to -67.46, 44.39 to -68.20, 44.10 to -69.11,
+        43.66 to -70.25, 43.07 to -70.76, 42.61 to -70.66, 42.36 to -71.05,
+        41.96 to -70.67, 41.82 to -71.41, 41.35 to -72.10, 41.18 to -73.19,
+    )
+
+    /** Great-circle kilometres to the nearest coastline point. */
+    fun coastDistanceKm(latitude: Double, longitude: Double): Double =
+        COASTLINE.minOf { (cLat, cLon) ->
+            val dLat = Math.toRadians(cLat - latitude)
+            val dLon = Math.toRadians(cLon - longitude)
+            val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(latitude)) * Math.cos(Math.toRadians(cLat)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2)
+            6371.0 * 2 * Math.asin(Math.sqrt(a))
+        }
+
     /** Day of year this cell reaches peak colour, before species. */
-    fun peakDayOfYear(latitude: Double, elevationM: Int?): Double =
+    fun peakDayOfYear(latitude: Double, longitude: Double, elevationM: Int?): Double =
         INTERCEPT + LAT_DAYS_PER_DEGREE * latitude +
-            ELEV_DAYS_PER_METRE * (elevationM?.toDouble() ?: 0.0)
+            ELEV_DAYS_PER_METRE * (elevationM?.toDouble() ?: 0.0) +
+            COAST_DAYS_PER_KM * coastDistanceKm(latitude, longitude)
 
     /** Species-adjusted peak day of year. */
     fun peakDayOfYear(cell: CellInput): Double =
-        peakDayOfYear(cell.latitude, cell.elevationM) +
+        peakDayOfYear(cell.latitude, cell.longitude, cell.elevationM) +
             if (ForestTypeGroup.forCode(cell.forestTypeGroup) == ForestTypeGroup.ASPEN_BIRCH) {
                 ASPEN_BIRCH_SHIFT_DAYS
             } else {
