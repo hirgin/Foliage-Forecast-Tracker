@@ -98,7 +98,12 @@ jobs:
             CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
             echo "changed across this push ($BEFORE..${{ github.sha }}):"
             echo "$CHANGED"
-            if echo "$CHANGED" | grep -qE '^(backend/|\.github/)'; then
+            # Test sources and fixtures are excluded deliberately. They
+            # cannot change a single exported row -- nothing under
+            # backend/src/test is on the path that scores or exports -- and
+            # checking in a reference dataset is exactly the kind of change
+            # that should not cost fifteen minutes of reading the whole grid.
+            if echo "$CHANGED" | grep -vE '^backend/src/test/' | grep -qE '^(backend/|\.github/)'; then
               REASON="backend or workflow changed"; EXPORT=true
             else
               REASON="frontend or docs only"; EXPORT=false
