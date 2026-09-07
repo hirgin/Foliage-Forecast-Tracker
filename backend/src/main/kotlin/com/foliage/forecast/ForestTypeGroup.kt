@@ -6,13 +6,20 @@ import com.foliage.ingest.terrain.CellSampling
  * FIA forest type groups, and how much earlier or later each one turns.
  *
  * The model's largest identifiable residual, and until now the only structured
- * one left. [CoolingDegreeDayModel] describes a maple-beech stand everywhere,
+ * one left. [PeakDateModel] describes a maple-beech stand everywhere,
  * so every forest that is not maple-beech is wrong by a fixed amount that no
  * weather term can explain. Measured against reference places, the aspen-birch
  * north ran 7 to 12 days late and oak-hickory Litchfield 19 days early --
  * errors that track species cleanly and geography not at all.
  *
- * **The multiplier scales [CoolingDegreeDayModel.S_PEAK], not a date.** A fixed
+ * **The multiplier is no longer applied to timing.** It scaled a cooling
+ * threshold in the model that has been removed, which meant a different
+ * number of days in Minnesota than in Maine and nobody could say how many in
+ * either. [PeakDateModel] shifts aspen and birch by a stated week instead,
+ * and the multipliers below are kept for the forest-type diagnostic and as
+ * the record of what was measured. What follows describes that measurement.
+ *
+ * A fixed
  * day offset would be wrong everywhere except where it was fitted: the same
  * shift in days costs very different amounts of cooling in Minnesota and
  * Georgia, and the whole point of a degree-day model is that timing follows
@@ -42,7 +49,7 @@ import com.foliage.ingest.terrain.CellSampling
 enum class ForestTypeGroup(
     /** FIA forest type group codes that map to this behaviour. */
     val codes: Set<Int>,
-    /** Multiplier on [CoolingDegreeDayModel.S_PEAK]. Below 1 turns earlier. */
+    /** Measured ratio of accumulated cooling at peak, against maple. Below 1 turns earlier. */
     val sPeakMultiplier: Double,
     val label: String,
 ) {
@@ -58,7 +65,7 @@ enum class ForestTypeGroup(
      *
      * This shipped at 1.6, damped from 2.61 measured at Litchfield, on the
      * reasoning that oak holds its leaves later than maple. It does. But
-     * refitting it jointly with [CoolingDegreeDayModel.PHOTOPERIOD_FLOOR] puts
+     * refitting it jointly with the photoperiod floor put
      * it at exactly 1.0, and holding it above that only makes oak country late
      * again.
      *

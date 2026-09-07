@@ -186,21 +186,36 @@ object PeakDateModel {
                 Factor(
                     "Forest type",
                     if (species == ForestTypeGroup.ASPEN_BIRCH) ASPEN_BIRCH_SHIFT_DAYS else 0.0,
-                    if (species == ForestTypeGroup.ASPEN_BIRCH) "a week early" else "the usual timing",
+                    // Surveyed-and-empty is a different statement from
+                    // not-surveyed, and conflating them tells someone standing
+                    // in a suburb that nobody has looked, when somebody looked
+                    // and found parkland. Both score at the baseline; only one
+                    // is a gap in the data.
+                    when {
+                        cell.forestTypeGroup == null -> "not surveyed"
+                        cell.forestTypeGroup == 0 -> "little forest"
+                        species == ForestTypeGroup.ASPEN_BIRCH -> "turns early"
+                        else -> "the usual timing"
+                    },
                     when {
                         cell.forestTypeGroup == null ->
                             "The trees here have not been surveyed, so this assumes a maple and " +
                                 "beech wood, which is the commonest kind in New England."
                         cell.forestTypeGroup == 0 ->
                             "Not much continuous forest here -- open ground, farmland, water or " +
-                                "town. Any colour will come from scattered trees."
+                                "town. Any colour will come from scattered trees rather than a " +
+                                "hillside."
                         species == ForestTypeGroup.CONIFER ->
                             "Mostly evergreens, which do not put on much of an autumn display."
                         species == ForestTypeGroup.ASPEN_BIRCH ->
-                            "Mostly aspen and birch, which turn about a week before the maples."
+                            "Mostly ${species.label}. These turn about a week before the maples " +
+                                "and drop their leaves quickly once they do."
+                        species == null ->
+                            "The trees here were surveyed but are not a kind this forecast has " +
+                                "measured, so it assumes the usual maple and beech timing."
                         else ->
-                            "Mostly ${species?.label ?: "maple and beech"}, which is the timing " +
-                                "this forecast is built around."
+                            "Mostly ${species.label}, which is the timing this forecast is " +
+                                "built around."
                     },
                 ),
                 Factor(

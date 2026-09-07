@@ -38,8 +38,8 @@ class SpeciesTimingTest {
         val days = season()
         val cell = CellInput(latitude = lat, elevationM = 300, forestTypeGroup = forestTypeGroup)
         return days.map { it.day }.firstOrNull { target ->
-            CoolingDegreeDayModel.score(cell, days, target).progression >=
-                CoolingDegreeDayModel.PEAK_PROGRESSION
+            PeakDateModel.score(cell, days, target).progression >=
+                PeakDateModel.PEAK_ENTRY
         }
     }
 
@@ -50,10 +50,10 @@ class SpeciesTimingTest {
         // from the sampling job's progress.
         val days = season()
         val target = LocalDate.of(2026, 10, 15)
-        val unsampled = CoolingDegreeDayModel.score(
+        val unsampled = PeakDateModel.score(
             CellInput(lat, 300, forestTypeGroup = null), days, target,
         )
-        val maple = CoolingDegreeDayModel.score(
+        val maple = PeakDateModel.score(
             CellInput(lat, 300, forestTypeGroup = 800), days, target,
         )
         assertEquals(maple.progression, unsampled.progression, 1e-12)
@@ -87,26 +87,40 @@ class SpeciesTimingTest {
     fun `progress is reported against this forest's peak, not a maple's`() {
         // Otherwise an aspen stand is told it is 61% of the way to full colour
         // on the very day it peaks.
+        //
+        // Under the cooling model this needed a separate per-species threshold
+        // to report against, and got it wrong for a long time. Here the curve
+        // is drawn around each cell's own date, so a stand is at exactly the
+        // peak entry value on its own peak day whatever it is made of -- the
+        // property is structural rather than something to keep in step.
         val days = season()
         val aspenPeak = peakDay(900)!!
-        val score = CoolingDegreeDayModel.score(
-            CellInput(lat, 300, forestTypeGroup = 900), days, aspenPeak,
+        val maplePeak = peakDay(800)!!
+        val aspen = PeakDateModel.score(CellInput(lat, 300, 900), days, aspenPeak)
+        val maple = PeakDateModel.score(CellInput(lat, 300, 800), days, maplePeak)
+
+        assertTrue(
+            aspen.progression >= PeakDateModel.PEAK_ENTRY,
+            "aspen should read as peak on its own peak day, was ${aspen.progression}",
         )
-        val cool = score.factors.first { it.name == "Cool weather" }
-        val pct = Regex("""(\d+)%""").find(cool.detail)?.groupValues?.get(1)?.toInt()
-        assertTrue(pct != null && pct >= 70, "should read as near full colour, was $pct%")
+        assertEquals(
+            maple.progression, aspen.progression, 0.5,
+            "every forest should read the same on its own peak day",
+        )
+        // And the days themselves differ, which is the point of the term.
+        assertTrue(aspenPeak < maplePeak, "aspen $aspenPeak should precede maple $maplePeak")
     }
 
     @Test
     fun `the explanation names the forest`() {
         val days = season()
         val target = LocalDate.of(2026, 10, 15)
-        val aspen = CoolingDegreeDayModel.score(CellInput(lat, 300, 900), days, target)
+        val aspen = PeakDateModel.score(CellInput(lat, 300, 900), days, target)
             .factors.first { it.name == "Forest type" }
         assertTrue(aspen.detail.contains("aspen-birch"), "was: ${aspen.detail}")
         assertEquals("turns early", aspen.effect)
 
-        val unsampled = CoolingDegreeDayModel.score(CellInput(lat, 300, null), days, target)
+        val unsampled = PeakDateModel.score(CellInput(lat, 300, null), days, target)
             .factors.first { it.name == "Forest type" }
         assertEquals("not surveyed", unsampled.effect)
         assertTrue(unsampled.detail.contains("not been surveyed"), "was: ${unsampled.detail}")
@@ -115,7 +129,7 @@ class SpeciesTimingTest {
         // Both score at the baseline, but only one is a gap in the data, and
         // telling someone in a Minneapolis suburb that nobody has looked --
         // when somebody looked and found parkland -- is simply false.
-        val noForest = CoolingDegreeDayModel.score(CellInput(lat, 300, 0), days, target)
+        val noForest = PeakDateModel.score(CellInput(lat, 300, 0), days, target)
             .factors.first { it.name == "Forest type" }
         assertEquals("little forest", noForest.effect)
         assertTrue(!noForest.detail.contains("not been surveyed"), "was: ${noForest.detail}")

@@ -29,7 +29,7 @@ class AutumnColourTest {
     }
 
     private fun scoreAt(forestTypeGroup: Int?, day: LocalDate) =
-        CoolingDegreeDayModel.score(CellInput(lat, 300, forestTypeGroup), season(), day)
+        PeakDateModel.score(CellInput(lat, 300, forestTypeGroup), season(), day)
 
     @Test
     fun `an evergreen forest turns on the same schedule, less brightly`() {
@@ -75,7 +75,7 @@ class AutumnColourTest {
         val maple = scoreAt(800, day).intensity
         assertTrue(conifer > 0.0, "a mixed stand still shows something")
         assertTrue(conifer < maple)
-        assertEquals(maple * CoolingDegreeDayModel.CONIFER_VIVIDNESS, conifer, 1e-9)
+        assertEquals(maple * PeakDateModel.CONIFER_VIVIDNESS, conifer, 1e-9)
     }
 
     @Test

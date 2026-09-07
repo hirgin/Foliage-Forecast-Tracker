@@ -142,17 +142,34 @@ class CellRepository(private val jdbc: JdbcTemplate) {
      * Excluded cells still render, as the faded ground the legend already
      * describes. An evergreen forest is forest; it simply is not foliage.
      */
+    /**
+     * @param states FIPS codes the forecast covers, or empty for every state.
+     *
+     * The filter exists because the model is only fitted where there are
+     * observations to fit against. A cell outside these states is not scored,
+     * not exported and not drawn, which is a truthful "we do not forecast
+     * here" rather than a number produced by extrapolating a Maine fit across
+     * the continent. See foliage.grid.states.
+     */
     fun findAll(
         minCanopyPct: Int,
         metroPopulation: Int = Int.MAX_VALUE,
         foliageOnly: Boolean = false,
-    ): List<Cell> = jdbc.query(
-        "$selectCell WHERE " + (if (foliageOnly) "$displaysColour AND " else "") +
-            "(canopy_pct IS NULL OR canopy_pct >= ? " +
-            "OR parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p " +
-            "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?)) ORDER BY h3",
-        cellMapper, minCanopyPct, metroPopulation,
-    )
+        states: List<String> = emptyList(),
+    ): List<Cell> {
+        val scope = if (states.isEmpty()) {
+            ""
+        } else {
+            "state_fips IN (${states.joinToString(",") { "'" + it.replace("'", "") + "'" }}) AND "
+        }
+        return jdbc.query(
+            "$selectCell WHERE " + scope + (if (foliageOnly) "$displaysColour AND " else "") +
+                "(canopy_pct IS NULL OR canopy_pct >= ? " +
+                "OR parent_res5 IN (SELECT DISTINCT c2.parent_res5 FROM place p " +
+                "JOIN cell c2 ON c2.h3 = p.h3 WHERE p.population >= ?)) ORDER BY h3",
+            cellMapper, minCanopyPct, metroPopulation,
+        )
+    }
 
     /** Diagnostic: how many drawable cells a given predicate would remove. */
     fun countExcludedBy(predicate: String, minCanopyPct: Int, metroPopulation: Int): Int =

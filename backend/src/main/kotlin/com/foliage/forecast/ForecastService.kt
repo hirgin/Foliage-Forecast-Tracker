@@ -34,14 +34,18 @@ class ForecastService(
     private val audit: IngestRunRecorder,
     @Value("\${foliage.model-version}") private val modelVersion: String,
     /**
-     * Which senescence model scores. "cooling" is the cooling-degree-day model
-     * of ADR-0008; "photoperiod" is the one it replaces, kept callable so the
-     * two can be run over identical inputs and compared rather than argued
-     * about.
+     * Which model scores. "peak" is [PeakDateModel], which predicts the date
+     * and draws a curve around it; "photoperiod" is the original accumulator,
+     * kept callable so the two can be run over identical inputs.
+     *
+     * The cooling-degree-day model that sat between them is gone. It could not
+     * be calibrated: the peak date was emergent, so every fix was a guess at a
+     * rate constant, and a small error compounded into a fortnight by October.
      */
-    @Value("\${foliage.model.kind:cooling}") private val modelKind: String,
+    @Value("\${foliage.model.kind:peak}") private val modelKind: String,
     @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
     @Value("\${foliage.grid.metro-population}") private val metroPopulation: Int,
+    @Value("\${foliage.grid.states:}") private val coveredStates: List<String> = emptyList(),
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -69,7 +73,7 @@ class ForecastService(
             // Nevada desert changes colour. findAll keeps cells whose canopy
             // is unsampled, so a terrain gap leaves a cell uncoloured rather
             // than deleting it from the map.
-            val grid = if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation)
+            val grid = if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation, states = coveredStates)
                        else cells.findByState(stateFips, minCanopyPct, metroPopulation)
             require(grid.isNotEmpty()) { "no cells for $scope -- run the grid bootstrap first" }
 
@@ -195,7 +199,7 @@ class ForecastService(
         return if (modelKind == "photoperiod") {
             PhenologyModel.score(input, inputs, target, normalPrecipMm, precipFrom)
         } else {
-            CoolingDegreeDayModel.score(input, inputs, target, normalPrecipMm, precipFrom, seasonFirstDay)
+            PeakDateModel.score(input, inputs, target, normalPrecipMm, precipFrom)
         }
     }
 
@@ -246,7 +250,7 @@ class ForecastService(
 
     fun peakFactors(stateFips: String?, peakDays: Map<Long, LocalDate>, year: Int): Map<Long, List<Factor>> {
         // Same forest floor as scoring; see computeState.
-        val grid = if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation)
+        val grid = if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation, states = coveredStates)
                    else cells.findByState(stateFips, minCanopyPct, metroPopulation)
         val parents = grid.map { it.parentRes5 }.distinct()
         val series = weather.seriesByCell(parents)

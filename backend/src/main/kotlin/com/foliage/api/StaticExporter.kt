@@ -47,6 +47,7 @@ class StaticExporter(
     @Value("\${foliage.model-version}") private val modelVersion: String,
     @Value("\${foliage.grid.min-canopy-pct}") private val minCanopyPct: Int,
     @Value("\${foliage.grid.metro-population}") private val metroPopulation: Int,
+    @Value("\${foliage.grid.states:}") private val coveredStates: List<String> = emptyList(),
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -158,7 +159,7 @@ class StaticExporter(
         // belong on a forest map, and an evergreen hexagon drawn green in
         // November is telling the truth. What they are kept out of is the
         // *average* below.
-        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation)
+        val grid6 = (if (stateFips == null) cells.findAll(minCanopyPct, metroPopulation, states = coveredStates)
                      else cells.findByState(stateFips, minCanopyPct, metroPopulation))
             .sortedBy { it.h3 }
         require(grid6.isNotEmpty()) { "no cells for ${stateFips ?: "the grid"}" }
@@ -227,7 +228,7 @@ class StaticExporter(
         // wherever there is no forest -- a quarter of Ohio, a fifth of
         // Maryland -- which reads as broken data rather than as farmland.
         val scoreable = HashSet(order)
-        val bare = (if (stateFips == null) cells.findAll(0, metroPopulation)
+        val bare = (if (stateFips == null) cells.findAll(0, metroPopulation, states = coveredStates)
                     else cells.findByState(stateFips, 0, metroPopulation))
             .filter { it.h3 !in scoreable }
             .sortedBy { it.h3 }
