@@ -45,7 +45,13 @@ foliage:
     kind: cooling
   # Bumped for the cooling-degree-day model (ADR-0008). Forecast rows carry
   # this, so a mixed table can be told apart after a partial rescore.
-  model-version: "0.3.0-photoperiod"
+  #
+  # Bumped again for T_BASE_C 20 -> 18, which stopped the north peaking two weeks
+  # early. Validated on five states before the country, so the table is
+  # deliberately mixed for a while, and without a new version string the
+  # rescored states would be indistinguishable from the 0.3.0 benchmark they
+  # are being compared against.
+  model-version: "0.4.0-tbase18"
   grid:
     # H3 resolution the forecast is computed at (~3 km edge). See ADR-0002.
     resolution: 6
