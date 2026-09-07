@@ -51,6 +51,16 @@ class StaticExporter(
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
+
+    init {
+        // An empty scope means the whole country, which is a real setting and
+        // also what a failed binding looks like. Log which one is in force.
+        if (coveredStates.isEmpty()) {
+            log.warn("export scope: ALL STATES -- foliage.grid.states is empty or unbound")
+        } else {
+            log.info("export scope: {} states {}", coveredStates.size, coveredStates)
+        }
+    }
     private val mapper = ObjectMapper()
 
     /**

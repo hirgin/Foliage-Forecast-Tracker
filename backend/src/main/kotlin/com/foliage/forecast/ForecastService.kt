@@ -50,6 +50,16 @@ class ForecastService(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    init {
+        // An empty scope means the whole country, which is a real setting and
+        // also what a failed binding looks like. Log which one is in force.
+        if (coveredStates.isEmpty()) {
+            log.warn("scoring scope: ALL STATES -- foliage.grid.states is empty or unbound")
+        } else {
+            log.info("scoring scope: {} states {}", coveredStates.size, coveredStates)
+        }
+    }
+
     /** [stateFips] null scores the whole loaded grid rather than one state. */
     /**
      * Share of the season a cell needs real weather for before it is scored.

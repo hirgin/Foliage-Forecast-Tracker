@@ -42,6 +42,8 @@ class AdminController(
     private val modelValidation: com.foliage.validate.ModelValidation,
     private val forecasts: com.foliage.persistence.ForecastRepository,
     private val grid: com.foliage.grid.H3Grid,
+    @org.springframework.beans.factory.annotation.Value("\${foliage.grid.states:}")
+    private val coveredStates: List<String> = emptyList(),
     @org.springframework.beans.factory.annotation.Value("\${foliage.grid.min-canopy-pct}")
     private val minCanopyPct: Int,
     @org.springframework.beans.factory.annotation.Value("\${foliage.grid.metro-population}")
@@ -145,8 +147,8 @@ class AdminController(
     /** How many cells the map draws, with and without the foliage filter. */
     @org.springframework.web.bind.annotation.GetMapping("/grid-size")
     fun gridSize(): Map<String, Int> = mapOf(
-        "scored" to cells.findAll(minCanopyPct, metroPopulation).size,
-        "drawn" to cells.findAll(minCanopyPct, metroPopulation).size,
+        "scored" to cells.findAll(minCanopyPct, metroPopulation, states = coveredStates).size,
+        "national" to cells.findAll(minCanopyPct, metroPopulation).size,
         "evergreenNotAveraged" to cells.countExcludedBy(
             "forest_type_group BETWEEN 100 AND 319 OR forest_type_group BETWEEN 330 AND 399",
             minCanopyPct, metroPopulation,

@@ -69,7 +69,12 @@ foliage:
     #
     # Cells outside these states are not scored and not exported. Widening
     # this means finding observations for the new states first.
-    states: ["09", "23", "25", "33", "44", "50"]
+    # Comma-separated, NOT a YAML list. Spring stores a YAML list as indexed
+    # properties -- states[0], states[1] -- so ${foliage.grid.states} is
+    # undefined, @Value falls through to its empty default, and empty means
+    # "every state". The first attempt was a YAML list and it published all 48
+    # states while reporting success.
+    states: "09,23,25,33,44,50"
     # A cell counts as forest at or above this canopy percentage. Applied at
     # query time, never at ingest, so it can be retuned without re-sampling --
     # which is exactly what happened here.
