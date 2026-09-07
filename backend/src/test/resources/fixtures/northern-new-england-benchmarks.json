@@ -1,0 +1,182 @@
+{
+ "gathered": "2026-09-07",
+ "note": "Sub-state peak targets for Vermont, New Hampshire and Maine. Whole-state targets are useless here: Vermont's north and south differ by two weeks, and a model fitted to one number per state cannot be judged on the thing that matters, which is whether it reproduces that spread. Dates are the midpoint of each source's stated range.",
+ "sources": {
+  "maine": "MaineFoliage.com (Maine DACF), official zone map and typical peak weeks",
+  "vermont": "Vermont tourism and Yankee regional guides",
+  "newHampshire": "VisitNH and Yankee regional guides; White Mountains, Lakes and Monadnock stated separately"
+ },
+ "places": [
+  {
+   "name": "Fort Kent ME",
+   "lat": 47.25,
+   "lon": -68.59,
+   "region": "Maine zone 7, far north",
+   "peak": "2026-10-01",
+   "elevationM": 158.0,
+   "autumnMeanC": 11.55
+  },
+  {
+   "name": "Presque Isle ME",
+   "lat": 46.68,
+   "lon": -68.02,
+   "region": "Maine zone 6, north",
+   "peak": "2026-10-01",
+   "elevationM": 134.0,
+   "autumnMeanC": 12.05
+  },
+  {
+   "name": "Greenville ME",
+   "lat": 45.46,
+   "lon": -69.59,
+   "region": "Maine zone 5, western mountains",
+   "peak": "2026-10-11",
+   "elevationM": 318.0,
+   "autumnMeanC": 12.15
+  },
+  {
+   "name": "Rangeley ME",
+   "lat": 44.97,
+   "lon": -70.64,
+   "region": "Maine zone 5, western mountains",
+   "peak": "2026-10-11",
+   "elevationM": 472.0,
+   "autumnMeanC": 11.85
+  },
+  {
+   "name": "Bangor ME",
+   "lat": 44.8,
+   "lon": -68.77,
+   "region": "Maine zone 3, central",
+   "peak": "2026-10-12",
+   "elevationM": 3.0,
+   "autumnMeanC": 13.97
+  },
+  {
+   "name": "Augusta ME",
+   "lat": 44.31,
+   "lon": -69.78,
+   "region": "Maine zone 3, central",
+   "peak": "2026-10-12",
+   "elevationM": 38.0,
+   "autumnMeanC": 14.23
+  },
+  {
+   "name": "Bar Harbor ME",
+   "lat": 44.39,
+   "lon": -68.2,
+   "region": "Maine zone 2, eastern coast",
+   "peak": "2026-10-24",
+   "elevationM": 0.0,
+   "autumnMeanC": 13.92
+  },
+  {
+   "name": "Camden ME",
+   "lat": 44.21,
+   "lon": -69.06,
+   "region": "Maine zone 1, mid-coast",
+   "peak": "2026-10-22",
+   "elevationM": 14.0,
+   "autumnMeanC": 14.35
+  },
+  {
+   "name": "Portland ME",
+   "lat": 43.66,
+   "lon": -70.26,
+   "region": "Maine zone 1, south coastal",
+   "peak": "2026-10-22",
+   "elevationM": 8.0,
+   "autumnMeanC": 14.78
+  },
+  {
+   "name": "Newport VT",
+   "lat": 44.94,
+   "lon": -72.21,
+   "region": "Northeast Kingdom",
+   "peak": "2026-10-02",
+   "elevationM": 207.0,
+   "autumnMeanC": 12.66
+  },
+  {
+   "name": "Stowe VT",
+   "lat": 44.47,
+   "lon": -72.69,
+   "region": "northern Green Mountains",
+   "peak": "2026-10-05",
+   "elevationM": 251.0,
+   "autumnMeanC": 12.73
+  },
+  {
+   "name": "Montpelier VT",
+   "lat": 44.26,
+   "lon": -72.58,
+   "region": "central Vermont",
+   "peak": "2026-10-08",
+   "elevationM": 164.0,
+   "autumnMeanC": 13.27
+  },
+  {
+   "name": "Rutland VT",
+   "lat": 43.61,
+   "lon": -72.97,
+   "region": "central-southern Vermont",
+   "peak": "2026-10-12",
+   "elevationM": 206.0,
+   "autumnMeanC": 13.63
+  },
+  {
+   "name": "Brattleboro VT",
+   "lat": 42.85,
+   "lon": -72.56,
+   "region": "southern Vermont",
+   "peak": "2026-10-15",
+   "elevationM": 81.0,
+   "autumnMeanC": 14.62
+  },
+  {
+   "name": "Colebrook NH",
+   "lat": 44.89,
+   "lon": -71.5,
+   "region": "Great North Woods",
+   "peak": "2026-10-01",
+   "elevationM": 314.0,
+   "autumnMeanC": 12.57
+  },
+  {
+   "name": "Franconia NH",
+   "lat": 44.22,
+   "lon": -71.75,
+   "region": "White Mountains",
+   "peak": "2026-10-05",
+   "elevationM": 284.0,
+   "autumnMeanC": 13.35
+  },
+  {
+   "name": "Laconia NH",
+   "lat": 43.53,
+   "lon": -71.47,
+   "region": "Lakes Region",
+   "peak": "2026-10-08",
+   "elevationM": 158.0,
+   "autumnMeanC": 13.97
+  },
+  {
+   "name": "Concord NH",
+   "lat": 43.21,
+   "lon": -71.54,
+   "region": "Merrimack Valley",
+   "peak": "2026-10-22",
+   "elevationM": 92.0,
+   "autumnMeanC": 14.15
+  },
+  {
+   "name": "Keene NH",
+   "lat": 42.93,
+   "lon": -72.28,
+   "region": "Monadnock",
+   "peak": "2026-10-22",
+   "elevationM": 145.0,
+   "autumnMeanC": 14.66
+  }
+ ]
+}

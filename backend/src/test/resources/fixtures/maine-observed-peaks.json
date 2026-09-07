@@ -1,0 +1,151 @@
+{
+ "source": "Maine Forest Service (DACF) weekly foliage reports, mainefoliage.com",
+ "url": "https://www.maine.gov/dacf/mfs/projects/fall_foliage/report/past.shtml",
+ "retrieved": "2026-09-07",
+ "note": "OBSERVED, not forecast. Field observers file weekly zone conditions through the season; this is the first report each year in which a zone read Peak. Weekly cadence, so resolution is about 7 days, but 12 seasons give a distribution rather than one number. This is the best evidence available for Maine and outranks any prediction map.",
+ "zones": {
+  "1": {
+   "region": "Mid-Coast and South Coastal (Rockland, Camden, Portland, Kennebunkport, Kittery)",
+   "years": 10,
+   "observedPeaks": [
+    "2014-10-15",
+    "2015-10-14",
+    "2016-10-12",
+    "2017-10-18",
+    "2018-10-10",
+    "2020-10-07",
+    "2021-10-20",
+    "2022-10-19",
+    "2024-10-16",
+    "2025-10-15"
+   ],
+   "medianPeak": "2026-10-15",
+   "earliest": "2026-10-07",
+   "latest": "2026-10-20"
+  },
+  "2": {
+   "region": "Downeast (Calais, Machias, Bar Harbor, Penobscot Bay)",
+   "years": 10,
+   "observedPeaks": [
+    "2014-10-08",
+    "2015-10-21",
+    "2016-10-19",
+    "2017-10-18",
+    "2018-10-10",
+    "2020-10-07",
+    "2021-10-20",
+    "2022-10-19",
+    "2024-10-16",
+    "2025-10-15"
+   ],
+   "medianPeak": "2026-10-18",
+   "earliest": "2026-10-07",
+   "latest": "2026-10-21"
+  },
+  "3": {
+   "region": "Central and Southwestern (Bangor, Augusta, Fryeburg)",
+   "years": 12,
+   "observedPeaks": [
+    "2014-10-01",
+    "2015-10-14",
+    "2016-10-12",
+    "2017-10-18",
+    "2018-10-10",
+    "2019-10-09",
+    "2020-09-30",
+    "2021-10-13",
+    "2022-10-12",
+    "2023-10-18",
+    "2024-10-16",
+    "2025-10-08"
+   ],
+   "medianPeak": "2026-10-12",
+   "earliest": "2026-09-30",
+   "latest": "2026-10-18"
+  },
+  "4": {
+   "region": "Eastern Mid-Maine (Houlton, Millinocket)",
+   "years": 12,
+   "observedPeaks": [
+    "2014-10-01",
+    "2015-10-14",
+    "2016-10-05",
+    "2017-10-11",
+    "2018-10-03",
+    "2019-10-02",
+    "2020-09-30",
+    "2021-10-13",
+    "2022-10-12",
+    "2023-10-18",
+    "2024-10-02",
+    "2025-10-08"
+   ],
+   "medianPeak": "2026-10-08",
+   "earliest": "2026-09-30",
+   "latest": "2026-10-18"
+  },
+  "5": {
+   "region": "Western Mid-Maine (Greenville, Rangeley, Bethel)",
+   "years": 12,
+   "observedPeaks": [
+    "2014-10-01",
+    "2015-10-14",
+    "2016-10-05",
+    "2017-10-11",
+    "2018-10-10",
+    "2019-10-09",
+    "2020-09-30",
+    "2021-10-06",
+    "2022-10-05",
+    "2023-10-11",
+    "2024-10-02",
+    "2025-10-08"
+   ],
+   "medianPeak": "2026-10-08",
+   "earliest": "2026-09-30",
+   "latest": "2026-10-14"
+  },
+  "6": {
+   "region": "Northwestern (Caribou, Presque Isle)",
+   "years": 12,
+   "observedPeaks": [
+    "2014-09-24",
+    "2015-10-07",
+    "2016-10-05",
+    "2017-10-11",
+    "2018-10-03",
+    "2019-10-02",
+    "2020-09-30",
+    "2021-10-06",
+    "2022-10-05",
+    "2023-10-04",
+    "2024-10-02",
+    "2025-10-01"
+   ],
+   "medianPeak": "2026-10-04",
+   "earliest": "2026-09-24",
+   "latest": "2026-10-11"
+  },
+  "7": {
+   "region": "Northeastern (Fort Kent)",
+   "years": 12,
+   "observedPeaks": [
+    "2014-09-24",
+    "2015-10-07",
+    "2016-10-05",
+    "2017-10-11",
+    "2018-10-03",
+    "2019-10-02",
+    "2020-09-30",
+    "2021-10-06",
+    "2022-10-05",
+    "2023-10-04",
+    "2024-10-02",
+    "2025-10-01"
+   ],
+   "medianPeak": "2026-10-04",
+   "earliest": "2026-09-24",
+   "latest": "2026-10-11"
+  }
+ }
+}
