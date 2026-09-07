@@ -12,7 +12,17 @@ export const STAGES = [
   { key: 'PATCHY', label: 'Patchy', rgb: [141, 163, 62] },
   { key: 'PARTIAL', label: 'Partial', rgb: [212, 163, 39] },
   { key: 'NEAR_PEAK', label: 'Near peak', rgb: [224, 124, 42] },
-  { key: 'PEAK', label: 'Peak', rgb: [204, 62, 44] },
+  // Peak deepens into its own crimson rather than blending toward the russet
+  // of past peak. Every other stage hands over to the next one, which keeps
+  // the ramp continuous; peak is the exception on purpose.
+  //
+  // Blending peak into past peak made a hexagon read brown while it was still
+  // at peak -- at progression 90, four points inside the band, it was already
+  // 79% of the way to the russet. The two stages melted into each other, and
+  // the one thing a leaf-peeper needs from this map is where peak *stops*.
+  // Deepening instead keeps the within-band gradient that shows northern
+  // Vermont running ahead of the south, and leaves a visible edge at 94.
+  { key: 'PEAK', label: 'Peak', rgb: [204, 62, 44], endRgb: [156, 42, 40] },
   // Darker than peak's red so the two separate by brightness and not only by
   // hue -- they were 88.5 against 90.9, which is the same brightness, and hue
   // alone is the first thing red-green colour blindness takes away.
@@ -195,8 +205,9 @@ export function progressionColor(progression, stage) {
 
   const from = STAGES[i].rgb;
   // Blend toward the next stage, so the ramp is continuous across boundaries
-  // rather than stepping. The last stage has nowhere to go, so it deepens.
-  const to = STAGES[i + 1]?.rgb ?? from.map((c) => Math.round(c * 0.72));
+  // rather than stepping. A stage with its own endRgb deepens within itself
+  // instead -- see PEAK. The last stage has nowhere to go, so it darkens.
+  const to = STAGES[i].endRgb ?? STAGES[i + 1]?.rgb ?? from.map((c) => Math.round(c * 0.72));
   return [0, 1, 2].map((k) => Math.round(lerp(from[k], to[k], t)));
 }
 

@@ -48,6 +48,31 @@ describe('progressionColor', () => {
     }
   });
 
+  it('keeps peak red, so the edge with past peak is visible', () => {
+    // The complaint this fixes: peak and past peak blended into each other.
+    // Blending peak toward the russet made the last day of peak
+    // rgb(109,74,46) against past peak's rgb(108,74,46) -- a difference of
+    // one, on a map whose whole job is showing where peak stops.
+    const lastPeak = progressionColor(93.9, 'PEAK');
+    const firstPast = progressionColor(94, 'PAST_PEAK');
+    const gap = Math.max(...[0, 1, 2].map((i) => Math.abs(lastPeak[i] - firstPast[i])));
+    expect(gap).toBeGreaterThan(30);
+
+    // And it is still recognisably red at the top of the band, not brown.
+    const [r, g] = progressionColor(92, 'PEAK');
+    expect(r).toBeGreaterThan(140);
+    expect(r - g).toBeGreaterThan(90);
+  });
+
+  it('still varies within the peak band', () => {
+    // The reason peak is interpolated at all: northern Vermont runs about six
+    // progression points ahead of the south, and flat-filling the stage hid
+    // that entirely. Deepening must not undo it.
+    const early = progressionColor(76, 'PEAK');
+    const late = progressionColor(93, 'PEAK');
+    expect(early).not.toEqual(late);
+  });
+
   it('deepens rather than jumping in the final stage', () => {
     // PAST_PEAK has no successor to blend toward, so it darkens instead.
     const start = progressionColor(94, 'PAST_PEAK');
