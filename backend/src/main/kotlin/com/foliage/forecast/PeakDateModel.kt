@@ -37,8 +37,9 @@ object PeakDateModel {
      * Peak day-of-year = [INTERCEPT] + [LAT_DAYS_PER_DEGREE] x latitude +
      * [ELEV_DAYS_PER_METRE] x elevation.
      *
-     * Least squares over eighteen places in Maine and New Hampshire, all with
-     * observation-derived targets: mean absolute error 3.0 days.
+     * Least squares over twenty-two places in Maine and New Hampshire, all
+     * with observation-derived targets: mean absolute error 2.7 days, and 2.5
+     * across Maine with a bias of +0.2 -- effectively unbiased.
      *
      * **The two states' records disagree, and this fit splits the difference.**
      * At about 45 N Maine's foresters record peak on 8 October while New
@@ -69,21 +70,52 @@ object PeakDateModel {
      * cannot be reasoned about when it is wrong -- and the one this replaces
      * was wrong for a month with nobody able to say why.
      */
-    const val INTERCEPT = 392.6202
-    const val LAT_DAYS_PER_DEGREE = -2.3258
-    const val ELEV_DAYS_PER_METRE = -0.01893
+    const val INTERCEPT = 573.0817
+    const val LAT_DAYS_PER_DEGREE = -4.1698
 
     /**
-     * Days per kilometre from the Atlantic. Negative: inland turns earlier,
-     * the coast holds on.
+     * Days per degree of longitude. Positive: the further east, the later.
      *
-     * Added because latitude and elevation could not express maritime
-     * moderation, and the residuals said so plainly -- Portsmouth 5.9 days
-     * early, Concord 5.4, Bar Harbor 3.0, every one of them on or near the
-     * water. The sea keeps autumn nights warmer for weeks, and a Downeast
-     * headland peaks a fortnight after inland ground at the same latitude.
+     * **This is the maritime term, and it replaced a distance-to-coast one
+     * that could not do the job.** Distance saturates: Bar Harbor and Portland
+     * both sit at zero kilometres and got identical treatment, after which
+     * latitude dragged Bar Harbor *earlier* for being further north. But
+     * Maine's foresters record Downeast peaking on 18 October and the south
+     * coast on the 15th -- the northern coast peaks last in the state, and no
+     * latitude-driven model can produce that.
+     *
+     * Eastern Maine juts into the cold Gulf of Maine and is moderated on two
+     * sides; western New England is continental. In this region longitude is
+     * that gradient, and it fixed exactly the cells that were wrong: Machias
+     * went from 4.0 days early to 1.0, Ellsworth 3.2 to 2.0, Bar Harbor 2.9 to
+     * 0.5.
+     *
+     * A regional proxy, not a law of nature, which is legitimate only because
+     * [supports] confines this model to New England. It would be nonsense in
+     * Michigan.
      */
-    const val COAST_DAYS_PER_KM = -0.02101
+    const val LON_DAYS_PER_DEGREE = 1.4291
+
+    /**
+     * Days per metre of elevation. **Pinned from physics, not fitted.**
+     *
+     * 0.6 C per 100 m of lapse rate times 3.44 days per degree Celsius -- the
+     * latter measured by a temperature-only fit against Maine's observed zone
+     * peaks -- gives 2.1 days per 100 m.
+     *
+     * Pinned because every attempt to fit it alongside latitude and longitude
+     * destroyed it. Those three are collinear in New England, where the coast
+     * runs diagonally, and least squares resolves that by inflating latitude
+     * to -12.9 days per degree and collapsing elevation to -0.0006, which is
+     * elevation having no effect at all. That version scored a better mean
+     * error and would have flattened every ridge and valley on the map --
+     * the same trade, made the same way, as the model this replaced.
+     *
+     * Fixing it costs 0.2 days of fitted error and keeps 10 days of spread
+     * across a 500 m slope, which is where a 3 km hexagon map earns its
+     * resolution.
+     */
+    const val ELEV_DAYS_PER_METRE = -0.0206
 
     /**
      * Width of the logistic, in days. Sets how long the season and the peak
@@ -127,37 +159,10 @@ object PeakDateModel {
 
     fun supports(latitude: Double): Boolean = latitude in MIN_LATITUDE..MAX_LATITUDE
 
-    /**
-     * The Atlantic coastline of New England, coarsely. Distance to the nearest
-     * of these is the maritime term's input.
-     *
-     * Twelve points rather than a real coastline because the term is worth
-     * about a day per 50 km and the fit that produced it used exactly this
-     * set. A more faithful shoreline would change the numbers it was fitted
-     * against, which is a refit, not an improvement.
-     */
-    private val COASTLINE = listOf(
-        44.90 to -66.99, 44.72 to -67.46, 44.39 to -68.20, 44.10 to -69.11,
-        43.66 to -70.25, 43.07 to -70.76, 42.61 to -70.66, 42.36 to -71.05,
-        41.96 to -70.67, 41.82 to -71.41, 41.35 to -72.10, 41.18 to -73.19,
-    )
-
-    /** Great-circle kilometres to the nearest coastline point. */
-    fun coastDistanceKm(latitude: Double, longitude: Double): Double =
-        COASTLINE.minOf { (cLat, cLon) ->
-            val dLat = Math.toRadians(cLat - latitude)
-            val dLon = Math.toRadians(cLon - longitude)
-            val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(Math.toRadians(latitude)) * Math.cos(Math.toRadians(cLat)) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2)
-            6371.0 * 2 * Math.asin(Math.sqrt(a))
-        }
-
     /** Day of year this cell reaches peak colour, before species. */
     fun peakDayOfYear(latitude: Double, longitude: Double, elevationM: Int?): Double =
-        INTERCEPT + LAT_DAYS_PER_DEGREE * latitude +
-            ELEV_DAYS_PER_METRE * (elevationM?.toDouble() ?: 0.0) +
-            COAST_DAYS_PER_KM * coastDistanceKm(latitude, longitude)
+        INTERCEPT + LAT_DAYS_PER_DEGREE * latitude + LON_DAYS_PER_DEGREE * longitude +
+            ELEV_DAYS_PER_METRE * (elevationM?.toDouble() ?: 0.0)
 
     /** Species-adjusted peak day of year. */
     fun peakDayOfYear(cell: CellInput): Double =

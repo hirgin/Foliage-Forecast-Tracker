@@ -89,7 +89,22 @@ class PeakDateModelTest {
         val valley = PeakDateModel.peakDayOfYear(44.5, -71.0, 100)
         val ridge = PeakDateModel.peakDayOfYear(44.5, -71.0, 600)
         assertTrue(ridge < valley, "ridge $ridge should peak before valley $valley")
-        assertEquals(9, (valley - ridge).toInt(), "500 m should be about 9 days")
+        assertEquals(10, (valley - ridge).toInt(), "500 m should be about 10 days")
+    }
+
+    @Test
+    fun `Downeast Maine peaks after the southern coast, as its foresters record`() {
+        // The property a distance-to-coast term could not express and this one
+        // exists for. Maine records Zone 2 (Downeast) at 18 October and Zone 1
+        // (south coast) at the 15th -- the *northern* coast peaks last, which
+        // latitude alone must get backwards.
+        val barHarbor = PeakDateModel.peakDayOfYear(44.39, -68.20, 0)
+        val portland = PeakDateModel.peakDayOfYear(43.66, -70.26, 8)
+        assertTrue(
+            barHarbor > portland,
+            "Bar Harbor $barHarbor should peak after Portland $portland, " +
+                "despite sitting 0.7 degrees further north",
+        )
     }
 
     @Test
@@ -97,9 +112,9 @@ class PeakDateModelTest {
         // Latitude and elevation alone put Portsmouth and Bar Harbor almost
         // six days early, every one of the worst residuals sitting on the
         // water. The sea keeps autumn nights warmer for weeks.
-        val coastal = PeakDateModel.peakDayOfYear(44.0, -68.3, 10)
+        val downeast = PeakDateModel.peakDayOfYear(44.0, -68.3, 10)
         val inland = PeakDateModel.peakDayOfYear(44.0, -70.6, 10)
-        assertTrue(coastal > inland, "coast $coastal should peak after inland $inland")
+        assertTrue(downeast > inland, "Downeast $downeast should peak after inland $inland")
     }
 
     @Test
