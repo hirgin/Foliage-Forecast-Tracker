@@ -84,7 +84,7 @@ async function staticIndex() {
   return indexPromise;
 }
 
-let barePromise = null;
+let barePromise = null; // Map<resolution, Promise<string[]>>
 
 /**
  * The tiled cells that are not forest, as indexes only.
@@ -98,13 +98,20 @@ let barePromise = null;
  * map with holes in it, which is what the map was before, so this resolves to
  * an empty list rather than rejecting.
  */
-export async function fetchBareCells() {
-  if (!barePromise) {
-    barePromise = request('/cells-bare.json')
-      .then((r) => r.h3 ?? [])
-      .catch(() => []);
+export async function fetchBareCells(resolution = 6) {
+  if (!barePromise) barePromise = new Map();
+  if (!barePromise.has(resolution)) {
+    // Each resolution has its own index, because the coarse ones are not
+    // derivable from res 6 here: a 22 km parent counts as bare only when it
+    // has no *forested* children, and the client does not know which cells
+    // those are until the whole grid has loaded.
+    const path = resolution === 6 ? '/cells-bare.json' : `/cells-bare-r${resolution}.json`;
+    barePromise.set(
+      resolution,
+      request(path).then((r) => r.h3 ?? []).catch(() => []),
+    );
   }
-  return barePromise;
+  return barePromise.get(resolution);
 }
 
 const shardKey = (h3) => cellToParent(h3, SHARD_RES);

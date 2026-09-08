@@ -41,9 +41,11 @@ export default function MapView({ nav }) {
   // so anyone who looks at the national view and leaves never pays for it.
   const [bareCells, setBareCells] = useState([]);
   useEffect(() => {
-    if (resolution !== 6) return undefined;
+    // Every resolution has a bare index now, not just res 6 -- a coarse
+    // hexagon whose every cell is farmland is absent from the forested index
+    // and would otherwise draw as a hole.
     let live = true;
-    fetchBareCells().then((h3) => { if (live) setBareCells(h3); });
+    fetchBareCells(resolution).then((h3) => { if (live) setBareCells(h3); });
     return () => { live = false; };
   }, [resolution]);
   // Where the map should centre. Carries a nonce so choosing the same place

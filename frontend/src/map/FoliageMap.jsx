@@ -787,11 +787,17 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
       // of it. Flat, unpickable and unlabelled: it is there to close the holes
       // in the grid, not to be read.
       //
-      // Only at res 6. The coarse levels aggregate whatever forest a cell
-      // contains, so a 22 km hexagon over farmland already exists wherever any
-      // of its children is forest, and the holes this fills are a res 6
-      // phenomenon.
-      visible.bare.length > 0 && resolution === 6
+      // At every resolution, not just res 6.
+      //
+      // The reasoning for restricting it was that a coarse hexagon over
+      // farmland already exists wherever *any* child is forest -- true, and it
+      // misses the case where none is. Six 22 km hexagons across the eastern
+      // Dakotas and northwest Iowa had no forested child at all, so they were
+      // absent from the coarse index and the basemap showed through. Genuinely
+      // treeless country, drawn as a hole.
+      //
+      // Each resolution now has its own bare index; see the exporter.
+      visible.bare.length > 0
         ? new H3HexagonLayer({
           id: 'no-forest',
           data: visible.bare,

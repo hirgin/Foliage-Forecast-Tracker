@@ -260,6 +260,32 @@ class StaticExporter(
                     "h3" to cellOrder.map { grid.toAddress(it) },
                 ),
             )
+
+            // Bare ground at this resolution too, and it needs its own index
+            // because the one above is built from *forested* cells only.
+            //
+            // A 22 km hexagon whose every cell is prairie has no parent in
+            // cellOrder, so nothing was drawn there and the basemap showed
+            // through -- six holes across the eastern Dakotas and northwest
+            // Iowa, which is genuinely treeless row crop. Around Sioux Falls
+            // 112 of 127 cells are bare and 15 forested.
+            //
+            // That is precisely the pitting cells-bare.json exists to prevent,
+            // reappearing one zoom level out: handled at res 6 and lost above
+            // it. A hole reads as broken data, not as a cornfield.
+            val coarseScoreable = cellOrder.toHashSet()
+            val coarseBare = bare.map { grid.parent(it.h3, res) }
+                .distinct()
+                .filterNot { it in coarseScoreable }
+                .sorted()
+            writeJson(
+                target.resolve("cells-bare-r$res.json"),
+                mapOf(
+                    "count" to coarseBare.size,
+                    "resolution" to res,
+                    "h3" to coarseBare.map { grid.toAddress(it) },
+                ),
+            )
             Triple(res, children, cellOrder)
         }
 
