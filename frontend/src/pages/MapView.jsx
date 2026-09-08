@@ -199,25 +199,6 @@ export default function MapView({ nav }) {
                 </span>
               </div>
             )}
-            {/*
-              The gaps need explaining as much as the colours do.
-
-              The grid is masked to real forest, so farmland, towns and water
-              get no hexagon at all and the basemap shows through. Across the
-              farm belt that is a quarter of them -- 75% of cells present in a
-              sample of Ohio, 80% in Maryland, against 100% in Vermont -- which
-              scatters holes through the map and reads as something broken.
-              Every other absence on this map is labelled; this one was not,
-              so it was the one people asked about.
-            */}
-            <p className="legend__note">
-              Faded tiles are places with no reading of their own — fields,
-              towns and water, or forest whose weather never arrived — and take
-              their colour from the nearest forest that does turn. Read them as
-              the season around there rather than a forecast for that spot.
-              Where a forest is mostly evergreen, its autumn is drawn in muted
-              colour: the same timing, far less of it.
-            </p>
           </section>
         )}
 
