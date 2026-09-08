@@ -5,7 +5,7 @@ import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { cellToLatLng } from 'h3-js';
 import { NO_FOREST_RGB, NO_FOREST_ALPHA, progressionColor, stageForProgression } from './colors';
 import { donorsFor, fillValue } from './neighbourFill';
-import { bucketByAncestor, ancestorsInView, cellsInView } from './viewport';
+import { bucketByAncestor, cellsInView } from './viewport';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { foliageColor, stageLabel } from './colors';
 
@@ -726,11 +726,15 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
 
   const visible = useMemo(() => {
     if (!windowed) return { cells, bare: bareCells };
-    const ancestors = ancestorsInView(view);
-    const onScreen = new Set(cellsInView(cellBuckets, ancestors));
+    // Buckets are asked where their own cells are, rather than the viewport
+    // being asked which ancestors it covers. See viewport.js: H3 parentage and
+    // geography disagree near boundaries, and the old approach lost cells in
+    // that gap -- at any zoom narrower than a res 3 cell it selected nothing
+    // at all and the map went blank.
+    const onScreen = new Set(cellsInView(cellBuckets, view));
     return {
       cells: cells.filter((c) => onScreen.has(c.h3)),
-      bare: cellsInView(bareBuckets, ancestors),
+      bare: cellsInView(bareBuckets, view),
     };
   }, [windowed, view, cells, bareCells, cellBuckets, bareBuckets]);
 
