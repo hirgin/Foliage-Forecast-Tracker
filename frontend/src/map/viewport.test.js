@@ -41,6 +41,38 @@ describe('ancestorsInView', () => {
     expect(padded.length).toBeGreaterThanOrEqual(tight.length);
   });
 
+  it('finds ancestors at every zoom, not just when the view is wide', () => {
+    // THE REGRESSION. polygonToCells returns the cells whose *centre* is
+    // inside the polygon, and a res 3 cell is about 176 km across -- so a
+    // viewport narrower than that could contain no centre and come back
+    // empty, and the map drew nothing at all. Measured around Pierre: 159 km
+    // across found 3 ancestors, 79 km found none, and every zoom below that
+    // found none either.
+    //
+    // It looked regional rather than zoom-dependent, because whether it broke
+    // came down to where res 3 centres happen to fall: South Dakota went blank
+    // while Maine was fine.
+    const at = (deg) => ancestorsInView({
+      west: -100.35 - deg / 2,
+      east: -100.35 + deg / 2,
+      south: 44.37 - deg / 4,
+      north: 44.37 + deg / 4,
+    });
+    for (const deg of [8, 4, 2, 1, 0.6, 0.3, 0.15, 0.05]) {
+      expect(at(deg).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('covers a viewport sitting entirely inside one ancestor', () => {
+    // A street-level view is far smaller than a 176 km bucket, so it lies
+    // inside one and touches the ring around it. Both have to come back or
+    // hexagons pop in at the edges as you pan.
+    const tiny = ancestorsInView({
+      west: -100.36, east: -100.34, south: 44.36, north: 44.38,
+    });
+    expect(tiny.length).toBeGreaterThanOrEqual(7);
+  });
+
   it('returns nothing rather than throwing on a degenerate viewport', () => {
     // Happens for real during a resize, when the container briefly has no
     // height. Drawing nothing for one frame is recoverable; an exception

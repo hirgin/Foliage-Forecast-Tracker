@@ -1,4 +1,4 @@
-import { cellToParent, polygonToCells } from 'h3-js';
+import { cellToParent, gridDisk, latLngToCell, polygonToCells } from 'h3-js';
 
 /**
  * Drawing only the hexagons that are on screen.
@@ -52,23 +52,51 @@ export function bucketByAncestor(h3List, res = BUCKET_RES) {
 export function ancestorsInView(bounds, res = BUCKET_RES, pad = 0.25) {
   if (!bounds) return [];
   const { west, south, east, north } = bounds;
+  // A viewport with no extent at all is a resize mid-flight, not a place. The
+  // seeding below would happily answer "which cell contains this point" for it
+  // and draw a bucket of hexagons somewhere off Africa for a frame.
+  if (east === west && north === south) return [];
   const dx = (east - west) * pad;
   const dy = (north - south) * pad;
-  const ring = [
-    [south - dy, west - dx],
-    [north + dy, west - dx],
-    [north + dy, east + dx],
-    [south - dy, east + dx],
-    [south - dy, west - dx],
-  ];
+  const w = west - dx;
+  const e = east + dx;
+  const s = south - dy;
+  const n = north + dy;
+  const ring = [[s, w], [n, w], [n, e], [s, e], [s, w]];
+
+  const found = new Set();
   try {
-    return polygonToCells(ring, res, false);
+    for (const c of polygonToCells(ring, res, false)) found.add(c);
   } catch {
     // A degenerate viewport -- zero height during a resize, or coordinates
-    // that have run past the antimeridian -- should draw nothing this frame
-    // rather than take the map down.
-    return [];
+    // that have run past the antimeridian -- contributes nothing rather than
+    // taking the map down. The seeds below still cover it.
   }
+
+  // **The polygon fill alone goes blank when zoomed in, which is why this
+  // exists.** polygonToCells returns the cells whose *centre* lies inside the
+  // polygon, and a res 3 cell is about 176 km across. A viewport narrower than
+  // that can easily contain no centre at all, so the fill came back empty and
+  // the map drew nothing: measured at Pierre, 159 km across found 3 ancestors,
+  // 79 km found none, and every zoom below that found none either.
+  //
+  // Whether it broke depended on where res 3 centres happened to fall, so it
+  // looked like a regional fault -- South Dakota blank while Maine was fine --
+  // rather than the zoom-dependent one it is.
+  //
+  // Seeding from the corners and the middle asks the opposite question: which
+  // cell *contains* this point. That can never come back empty. Their
+  // immediate neighbours come too, so a viewport sitting inside one cell still
+  // pulls in the ring around it and nothing pops in at the edges on a pan.
+  const seeds = [[s, w], [n, w], [n, e], [s, e], [(s + n) / 2, (w + e) / 2]];
+  for (const [lat, lon] of seeds) {
+    try {
+      for (const c of gridDisk(latLngToCell(lat, lon, res), 1)) found.add(c);
+    } catch {
+      // An out-of-range coordinate from a mid-gesture viewport. Skip it.
+    }
+  }
+  return [...found];
 }
 
 /** The cells of whichever buckets are in view, flattened. */
