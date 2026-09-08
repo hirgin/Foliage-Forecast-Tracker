@@ -148,16 +148,26 @@ object PeakDateModel {
     const val ASPEN_BIRCH_SHIFT_DAYS = -7.0
 
     /**
-     * The latitudes this was fitted across, plus a margin.
+     * The box this was fitted inside, plus a margin.
      *
-     * Outside them the fit is extrapolation and the model declines rather than
-     * guessing. The model this replaces had no such limit and scored Florida
-     * from constants fitted in Vermont.
+     * **Longitude bounds it as well as latitude, and that is not fussiness.**
+     * A latitude-only guard admits Michigan, Wisconsin and Minnesota, which
+     * sit in the same band as Maine -- and this model is 10 days early in
+     * Michigan and 36 in Minnesota, because [LON_DAYS_PER_DEGREE] means
+     * "distance from the cold Gulf of Maine" and there is no Gulf of Maine in
+     * Duluth. Bounding latitude alone would have handed the Great Lakes to a
+     * model that cannot see them.
+     *
+     * Outside this box [NationalPeakDateModel] scores instead, less well and
+     * saying so.
      */
     const val MIN_LATITUDE = 40.5
     const val MAX_LATITUDE = 48.0
+    const val MIN_LONGITUDE = -73.9
+    const val MAX_LONGITUDE = -66.8
 
-    fun supports(latitude: Double): Boolean = latitude in MIN_LATITUDE..MAX_LATITUDE
+    fun supports(latitude: Double, longitude: Double): Boolean =
+        latitude in MIN_LATITUDE..MAX_LATITUDE && longitude in MIN_LONGITUDE..MAX_LONGITUDE
 
     /** Day of year this cell reaches peak colour, before species. */
     fun peakDayOfYear(latitude: Double, longitude: Double, elevationM: Int?): Double =
@@ -186,8 +196,24 @@ object PeakDateModel {
         target: LocalDate,
         normalPrecipMm: Double? = null,
         precipFrom: LocalDate? = null,
+    ): FoliageScore = scoreAtPeak(cell, days, target, peakDayOfYear(cell), normalPrecipMm, precipFrom)
+
+    /**
+     * The scoring body, with the peak date supplied rather than computed.
+     *
+     * Shared with [NationalPeakDateModel], which predicts a different date
+     * from a different fit and then draws the season identically. Two models
+     * that differed in how they *rendered* as well as when they turned would
+     * put a visible seam at the New England border on top of the real one.
+     */
+    fun scoreAtPeak(
+        cell: CellInput,
+        days: List<DayInput>,
+        target: LocalDate,
+        peakDoy: Double,
+        normalPrecipMm: Double? = null,
+        precipFrom: LocalDate? = null,
     ): FoliageScore {
-        val peakDoy = peakDayOfYear(cell)
         val progression = progressionOn(target, peakDoy)
 
         // Weather no longer sets timing. It still sets how good the display

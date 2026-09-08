@@ -132,14 +132,57 @@ class PeakDateModelTest {
     }
 
     @Test
-    fun `it declines to predict outside the latitudes it was fitted for`() {
-        // Fitted on nine Maine places. Georgia is not one of them, and the
-        // model this replaces had no such limit -- it scored Florida from
-        // constants fitted in Vermont and nobody noticed for a month.
-        assertTrue(PeakDateModel.supports(44.5), "Maine is in range")
-        assertTrue(PeakDateModel.supports(41.8), "Connecticut is in range")
-        assertTrue(!PeakDateModel.supports(33.7), "Atlanta is not")
-        assertTrue(!PeakDateModel.supports(29.2), "Florida is not")
+    fun `it declines to predict outside the box it was fitted for`() {
+        // Latitude alone is not enough, and getting this wrong would be
+        // expensive rather than embarrassing. Michigan, Wisconsin and
+        // Minnesota sit in the same latitude band as Maine, and this model is
+        // 10 days early in Michigan and 36 in Minnesota -- its longitude term
+        // means "distance from the cold Gulf of Maine", and there is no Gulf
+        // of Maine in Duluth.
+        assertTrue(PeakDateModel.supports(44.5, -69.0), "Maine is in the box")
+        assertTrue(PeakDateModel.supports(41.8, -72.7), "Connecticut is in the box")
+        assertTrue(PeakDateModel.supports(44.5, -73.2), "Vermont is in the box")
+
+        assertTrue(!PeakDateModel.supports(44.3, -85.6), "Michigan is not")
+        assertTrue(!PeakDateModel.supports(46.8, -92.1), "Duluth is not")
+        assertTrue(!PeakDateModel.supports(42.9, -78.9), "western New York is not")
+        assertTrue(!PeakDateModel.supports(33.7, -84.4), "Atlanta is not")
+    }
+
+    @Test
+    fun `the national model takes over outside that box, at lower confidence`() {
+        // The seam. Everything outside New England is scored against a
+        // tourism prediction map rather than field observations -- 4.1 days
+        // against 2.1 -- and the map has to show that rather than drawing a
+        // Utah guess as confidently as Bar Harbor.
+        val days = (1..120).map {
+            val d = LocalDate.of(2026, 8, 1).plusDays(it.toLong())
+            DayInput(d, WeatherKind.CLIMATOLOGY, 16.0, 6.0, 3.0)
+        }
+        val target = LocalDate.of(2026, 10, 12)
+        val maine = PeakDateModel.score(CellInput(44.8, 60, null, -68.8), days, target)
+        val utah = NationalPeakDateModel.score(CellInput(39.3, 1400, null, -111.7), days, target)
+
+        assertTrue(
+            utah.confidence < maine.confidence,
+            "a national cell must read less certain than an observed one: " +
+                "${utah.confidence} against ${maine.confidence}",
+        )
+    }
+
+    @Test
+    fun `the national model puts the mountain west back where it belongs`() {
+        // Without elevation the national fit was two to three weeks late
+        // across the high country -- Utah +19.8 days, Nevada +15.9. Elevation
+        // came from this project's own grid rather than any API, and it is
+        // what made a national map worth showing at all.
+        val lowUtah = NationalPeakDateModel.peakDayOfYear(39.3, -111.7, 1300)
+        val highUtah = NationalPeakDateModel.peakDayOfYear(39.3, -111.7, 2600)
+        assertTrue(highUtah < lowUtah, "the high ground must turn first")
+        assertTrue(
+            (lowUtah - highUtah) > 12,
+            "1300 m should be worth more than a fortnight, was ${lowUtah - highUtah}",
+        )
     }
 
     @Test

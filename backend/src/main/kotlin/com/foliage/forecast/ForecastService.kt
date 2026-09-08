@@ -206,10 +206,23 @@ class ForecastService(
         seasonFirstDay: LocalDate,
     ): FoliageScore {
         val input = CellInput(cell.centroidLat, cell.elevationM, cell.forestTypeGroup, cell.centroidLon)
-        return if (modelKind == "photoperiod") {
-            PhenologyModel.score(input, inputs, target, normalPrecipMm, precipFrom)
-        } else {
+        if (modelKind == "photoperiod") {
+            return PhenologyModel.score(input, inputs, target, normalPrecipMm, precipFrom)
+        }
+        // Chosen per cell, not per run. PeakDateModel is fitted against field
+        // observations and covers the latitudes those observations span;
+        // everywhere else falls to the national fit, which is a weaker claim
+        // and says so through a lower confidence.
+        //
+        // Dispatching on the cell rather than configuring one model for the
+        // whole job is what lets New England keep its 2.1 days while the rest
+        // of the country is drawn at 4.1 -- and lets the map show which is
+        // which instead of averaging them into a single number that describes
+        // neither.
+        return if (PeakDateModel.supports(input.latitude, input.longitude)) {
             PeakDateModel.score(input, inputs, target, normalPrecipMm, precipFrom)
+        } else {
+            NationalPeakDateModel.score(input, inputs, target, normalPrecipMm, precipFrom)
         }
     }
 
