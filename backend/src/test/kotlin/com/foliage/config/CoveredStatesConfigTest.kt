@@ -49,15 +49,19 @@ class CoveredStatesConfigTest {
     }
 
     @Test
-    fun `it names the six New England states`() {
+    fun `it names states explicitly, always including New England`() {
         val fips = (states as String).split(",").map { it.trim() }
-        // Connecticut, Maine, Massachusetts, New Hampshire, Rhode Island, Vermont.
-        // Leading zeros matter: Connecticut is "09", and losing it to an
-        // unquoted YAML number would silently drop the state.
+        // Connecticut, Maine, Massachusetts, New Hampshire, Rhode Island,
+        // Vermont -- the six with observations behind them. Leading zeros
+        // matter: Connecticut is "09", and an unquoted YAML number would make
+        // it 9 and silently drop the state.
         assertTrue(
             fips.containsAll(listOf("09", "23", "25", "33", "44", "50")),
-            "expected the six New England FIPS codes, got $fips",
+            "the observed states must always be covered, got $fips",
         )
-        assertTrue(fips.size == 6, "the model is only fitted for New England, got $fips")
+        // Explicit rather than empty. Empty means every state *and* is what a
+        // failed binding produces, so the two would be indistinguishable.
+        assertTrue(fips.size >= 6, "expected an explicit list, got $fips")
+        assertTrue(fips.all { it.length == 2 }, "FIPS codes are two characters: $fips")
     }
 }

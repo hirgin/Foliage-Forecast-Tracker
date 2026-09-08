@@ -51,7 +51,7 @@ foliage:
   # deliberately mixed for a while, and without a new version string the
   # rescored states would be indistinguishable from the 0.3.0 benchmark they
   # are being compared against.
-  model-version: "0.5.0-peakdate"
+  model-version: "0.6.0-national"
   grid:
     # H3 resolution the forecast is computed at (~3 km edge). See ADR-0002.
     resolution: 6
@@ -70,11 +70,17 @@ foliage:
     # Cells outside these states are not scored and not exported. Widening
     # this means finding observations for the new states first.
     # Comma-separated, NOT a YAML list. Spring stores a YAML list as indexed
-    # properties -- states[0], states[1] -- so ${foliage.grid.states} is
-    # undefined, @Value falls through to its empty default, and empty means
-    # "every state". The first attempt was a YAML list and it published all 48
-    # states while reporting success.
-    states: "09,23,25,33,44,50"
+    # properties -- states[0], states[1] -- so the placeholder is undefined,
+    # @Value falls through to its empty default, and empty means "every
+    # state". An early version was a YAML list and it published all 48 states
+    # while reporting success.
+    #
+    # **Now the whole of CONUS.** It was the six New England states while
+    # PeakDateModel was the only model; NationalPeakDateModel covers the rest,
+    # less well and saying so through a lower confidence. Listed explicitly
+    # rather than left empty, because empty is also what a failed binding looks
+    # like and the startup warning has to keep meaning something.
+    states: "01,04,05,06,08,09,10,11,12,13,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,44,45,46,47,48,49,50,51,53,54,55,56"
     # A cell counts as forest at or above this canopy percentage. Applied at
     # query time, never at ingest, so it can be retuned without re-sampling --
     # which is exactly what happened here.
