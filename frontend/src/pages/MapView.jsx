@@ -6,17 +6,7 @@ import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
 import PlaceSearch from '../components/PlaceSearch';
 import { STAGES, EVERGREEN_STAGE } from '../map/colors';
-
-const FORECAST_HORIZON_DAYS = 16;
-
-function isoToday() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function addDays(iso, n) {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
-}
+import { addDays, horizonDate } from '../season';
 
 export default function MapView({ nav }) {
   const meta = useMeta();
@@ -85,8 +75,8 @@ export default function MapView({ nav }) {
   usePrefetchForecast(date, seasonDays, resolution);
   const cells = data?.cells ?? [];
 
-  const horizonDate = useMemo(() => addDays(isoToday(), FORECAST_HORIZON_DAYS), []);
-  const beyondHorizon = Boolean(date) && date > horizonDate;
+  const horizon = useMemo(() => horizonDate(), []);
+  const beyondHorizon = Boolean(date) && date > horizon;
 
   const counts = useMemo(() => {
     const out = {};
@@ -254,7 +244,7 @@ export default function MapView({ nav }) {
           seasonEnd={seasonEnd}
           value={date}
           onChange={setDate}
-          horizonDate={horizonDate}
+          horizonDate={horizon}
         />
       )}
 

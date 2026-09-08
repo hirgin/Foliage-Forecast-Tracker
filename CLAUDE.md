@@ -152,11 +152,17 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
   derived in the browser, so no stored row changes and no rescore is needed.
   Three copies of those boundaries have to stay in step -- `PhenologyModel`,
   `api/packed.js`, `map/colors.js`.
-- **The map cannot be viewed locally right now.** In dev the frontend requests
-  `/api/v1/forecast/{date}.bin` and the backend serves no such route -- only
-  `StaticExporter` writes packed files, and the live API returns JSON at
-  `/forecast?date=`. Seeing the real map therefore needs a full export, which
-  is exactly the metered operation that has to be agreed first.
+- **The site runs locally against a copy of the export, with no database.**
+  Copy `backend/build/site-data` (or any past export) to
+  `frontend/public/data`, which is gitignored, and set `VITE_DATA_MODE=static`
+  in `frontend/.env.local`. The dev server then reads packed files exactly as
+  the deployed site does. This is the way to see a change before spending an
+  export on it. What it cannot show you is *new* model output: the payload is
+  as old as the export it came from, so peak dates in it belong to whatever
+  model version wrote it -- check `meta.json` before believing a date.
+  Pointing the dev server at the live backend instead does not work: it
+  requests `/api/v1/forecast/{date}.bin` and the API serves JSON at
+  `/forecast?date=`.
 - **Ask before touching the database. Every time.** Any rescore, export,
   deploy (a push runs the export) or diagnostic over `foliage_forecast` needs
   agreement first, stating what will run, which states it covers, how many
@@ -188,6 +194,17 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
   have given a wrong answer about this project's own state three times --
   including "the species term is barely reaching anything" when it was reaching
   a quarter of Minnesota.
+
+- **A trip is the export read the other way.** The map slices it as every
+  cell on one day; `timeline/<res3>.bin` already holds whole seasons per cell,
+  which is a few cells across many days. The trip planner is built entirely on
+  that, so it needed no new endpoint, no export change and no rows. Before
+  adding a data channel for a read, check whether the timeline shards already
+  answer it.
+- **Date arithmetic and the forecast horizon live in `frontend/src/season.js`.**
+  `FORECAST_HORIZON_DAYS` is a claim about what the data *is* -- past it the
+  export is climatology, and ADR-0005 forbids presenting that as a forecast.
+  Both the map and the trip planner read it from there; do not re-declare it.
 
 ## Phases
 

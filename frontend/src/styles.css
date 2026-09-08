@@ -711,3 +711,176 @@ footer a { color: var(--accent); }
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* ---------------------------------------------------------------- trip */
+
+/* The strip is ~76 columns wide. It scrolls inside its own box either way,
+   but at the 700px reading measure almost none of the season is visible at
+   once, and seeing the trip against the season is the entire point. */
+.page__inner--wide { max-width: 960px; }
+
+.tripbar { margin-bottom: 4px; }
+.tripbar .search { margin-top: 0; }
+
+.strip__scroll {
+  overflow-x: auto;
+  padding: 14px 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  margin-top: 14px;
+}
+
+.strip { display: grid; min-width: min-content; }
+
+.strip__day {
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+  padding-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sticky, because the strip auto-scrolls to the trip and the labels are the
+   first column: without this every row is an anonymous band of colour by the
+   time you are looking at the dates you care about. */
+.strip__label {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 3px 10px 3px 2px;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* The header row's own corner, so day numbers do not slide under the labels. */
+.strip__corner {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--bg);
+}
+.strip__place {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.strip__meta { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.strip__cell { height: 26px; border-radius: 2px; position: relative; }
+
+/* A ring rather than another fill: "you are here" is a different kind of
+   statement from the stage the cell is showing, and must not read as one more
+   colour on the ramp. */
+.strip__cell--here::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 2px solid var(--text);
+  border-radius: 4px;
+}
+.strip__cell--here { z-index: 2; }
+
+.tripcontrols {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.tripcontrols label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.tripcontrols input[type='range'] { width: 200px; accent-color: var(--accent); }
+.tripcontrols__readout {
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 108px;
+}
+
+.btn {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn--quiet { background: transparent; color: var(--muted); }
+
+.verdict {
+  margin-top: 14px !important;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 13.5px;
+}
+.verdict strong { color: var(--accent); font-variant-numeric: tabular-nums; }
+.verdict__caveat { color: var(--muted); font-size: 12.5px; }
+
+.stoplist { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.stopcard {
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.stopcard__top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 11px; }
+.stopcard__name { font-size: 14.5px; font-weight: 600; }
+.stopcard__date {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 7px;
+  color-scheme: dark;
+}
+.stopcard__actions { margin-left: auto; display: flex; gap: 4px; }
+.stopcard__actions button {
+  width: 24px;
+  height: 24px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.stopcard__actions button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.stopcard__actions button:disabled { opacity: 0.3; cursor: default; }
+
+.stopcard__verdict { margin: 9px 0 0 !important; font-size: 13px; }
+.stopcard__window { margin: 4px 0 0 !important; font-size: 12px; color: var(--muted) !important; }
+.stopcard__window strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+.pill {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #17130d;
+  border-radius: 4px;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .stopcard__actions { margin-left: 0; }
+  .tripcontrols input[type='range'] { width: 100%; }
+}
