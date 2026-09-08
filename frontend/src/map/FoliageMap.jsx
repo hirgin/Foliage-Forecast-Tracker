@@ -761,7 +761,19 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
   useEffect(() => { donorCache.current = new Map(); }, [scoredH3]);
 
   const donors = donorCache.current;
-  if (windowed) {
+  // Coarse levels need donors too, and were not getting them.
+  //
+  // This was gated on `windowed`, which is `resolution === 6 && view != null`
+  // -- a *performance* flag about viewport filtering that was quietly also
+  // deciding whether holes get filled. So a bare hexagon at 22 km found no
+  // donor and fell back to flat grey, which is the barren patch the coarse
+  // bare index was supposed to remove: the hole stopped being a hole and
+  // became a grey blob instead.
+  //
+  // The guard is worth keeping for res 6, where there are 76,138 bare cells
+  // and each one ring-searches outward. The coarse levels hold 34 and 2,764,
+  // which is nothing.
+  if (windowed || resolution !== 6) {
     // Both kinds of hole, not just one.
     //
     // `bare` is ground with too few trees to forecast. The other kind is a
