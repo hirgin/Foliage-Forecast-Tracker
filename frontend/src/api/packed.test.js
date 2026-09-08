@@ -137,6 +137,37 @@ describe('toCells', () => {
   });
 });
 
+describe('the retired evergreen sentinel', () => {
+  // 254 marked a forest that never turns, drawn slate blue. The category is
+  // gone -- conifers score on the same curve at about a third the vividness --
+  // and every cell that still carried it turned out to have no forecast at
+  // all: all 32 were empty for all 106 days of the season.
+  //
+  // Published exports keep the byte until the next export runs, so decoding
+  // has to keep recognising it. Decoded as an ordinary reading it would halve
+  // to progression 127 and draw as past peak, which is the failure this pins.
+  it('decodes as no reading rather than as progression 127', () => {
+    const day = decodeDay(buildDay([{ progression: 254, intensity: 254, confidence: 254 }]));
+    const [cell] = toCells(day, ['8a2a1072b59ffff']);
+    expect(cell.progression).toBeNull();
+    expect(cell.stage).toBeNull();
+  });
+
+  it('is drawn as no forecast, not as a stage', () => {
+    expect(stageOf(null)).toBeNull();
+    // The bug it guards: 254 / 2 lands well inside past peak.
+    expect(stageOf(127)).toBe('PAST_PEAK');
+  });
+
+  it('is recognised inside a timeline shard too', () => {
+    const shard = decodeTimelineShard(buildShard(
+      [{ globalIndex: 0, series: [254, 254] }], 2,
+    ));
+    const days = seriesFor(shard, 0, ['2026-10-01', '2026-10-02']);
+    expect(days.map((d) => d.progression)).toEqual([null, null]);
+  });
+});
+
 describe('timeline shards', () => {
   const shardBuf = buildShard(
     [

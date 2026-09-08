@@ -105,8 +105,8 @@ export function peakWindow(days) {
  * Where a date falls relative to a window, as something a card can say.
  *
  * `null` window means this cell never reaches peak inside the exported season
- * -- evergreen, or a peak that falls outside it. That is a real answer and has
- * to be distinguishable from "no data".
+ * -- a peak falling outside it, or no readings at all. That is a real answer
+ * and has to be distinguishable from a stop still loading.
  */
 export function standingOn(date, window) {
   if (!window) return { where: 'never', days: 0 };

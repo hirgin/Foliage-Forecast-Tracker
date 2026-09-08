@@ -58,18 +58,6 @@ export const STAGES = [
  * Still clearly subordinate to the stage colours: neutral, and no more opaque
  * than it has to be to read as a hexagon.
  */
-/**
- * A forest that never turns: cool slate, not green.
- *
- * Green would be truthful about the trees and wrong about the map -- on a
- * December view where everything else has gone brown, a green Pacific
- * Northwest reads as a region yet to turn. Blue carries no such implication.
- *
- * Kept out of [STAGES], which is a ramp the colour interpolator walks in
- * order; an entry inside it made the map blend evergreen into "no change".
- */
-export const EVERGREEN_STAGE = { key: 'EVERGREEN', label: 'Evergreen', rgb: [62, 82, 96] };
-
 export const NO_FORECAST_RGB = [92, 90, 86];
 export const NO_FORECAST_ALPHA = 120;
 
@@ -97,9 +85,7 @@ export const NO_FORECAST_ALPHA = 120;
 export const NO_FOREST_RGB = [62, 66, 58];
 export const NO_FOREST_ALPHA = 236;
 
-// Evergreen is looked up like a stage even though it is not one, so the
-// legend and the detail panel can name it without special-casing either.
-const BY_KEY = Object.fromEntries([...STAGES, EVERGREEN_STAGE].map((s) => [s.key, s]));
+const BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s]));
 
 export function stageColor(stage) {
   return BY_KEY[stage]?.rgb ?? [70, 66, 60];
@@ -170,10 +156,6 @@ export function stageForProgression(progression) {
  * separately by drawing Esri's reference layer above the data.
  */
 export function foliageColor(cell) {
-  // Flat by definition: nothing to interpolate along, and no confidence worth
-  // varying alpha over.
-  if (cell.stage === 'EVERGREEN') return [...EVERGREEN_STAGE.rgb, 190];
-
   // No stage means no forecast for this cell yet, which is not the same as a
   // score of zero and should not be drawn as one.
   if (cell.stage == null) return [...NO_FORECAST_RGB, NO_FORECAST_ALPHA];

@@ -29,12 +29,13 @@ function series(peakDate, { confidence = 0.9, width = 6 } = {}) {
   });
 }
 
-const evergreen = () => Array.from({ length: SEASON_DAYS }, (_, i) => ({
+/** A cell with no forecast: exported, drawn, and empty every day of the season. */
+const unforecast = () => Array.from({ length: SEASON_DAYS }, (_, i) => ({
   date: addDays(SEASON_START, i),
-  progression: 'EVERGREEN',
+  progression: null,
   intensity: null,
-  confidence: 0.9,
-  stage: 'EVERGREEN',
+  confidence: null,
+  stage: null,
 }));
 
 const BOUNDS = { from: SEASON_START, to: addDays(SEASON_START, SEASON_DAYS - 1) };
@@ -92,9 +93,11 @@ describe('peakWindow', () => {
     expect(w.to).toBe(addDays(w.from, w.length - 1));
   });
 
-  it('returns null for a forest that never turns', () => {
-    // A real answer, and it must not be confused with missing data.
-    expect(peakWindow(evergreen())).toBeNull();
+  it('returns null for a cell that carries no readings', () => {
+    // The case that actually exists in the export: 32 cells are empty for
+    // every one of the 106 days. A window cannot be read off them, and that
+    // must not throw.
+    expect(peakWindow(unforecast())).toBeNull();
   });
 
   it('returns null when peak falls outside the exported season', () => {

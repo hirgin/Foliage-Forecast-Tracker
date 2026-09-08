@@ -266,9 +266,6 @@ function StopCard({ stop, shift, error, bounds, onDate, onRemove, onUp, onDown }
 function verdictFor(stop, error) {
   if (error) return 'Could not load the forecast for this place.';
   if (!stop.ready) return 'Loading…';
-  if (stop.day?.progression === 'EVERGREEN') {
-    return 'Evergreen forest — this one stays green all season.';
-  }
   if (stop.standing.where === 'never') {
     return 'No peak inside the forecast season for this place.';
   }

@@ -21,7 +21,6 @@ const LABEL_W = 150;
 
 function cellStyle(day) {
   if (!day || day.progression == null) return { background: 'rgba(120,116,108,.22)' };
-  if (day.progression === 'EVERGREEN') return { background: 'rgb(62, 82, 96)' };
   const [r, g, b] = progressionColor(day.progression, day.stage);
   return {
     background: `rgb(${r}, ${g}, ${b})`,

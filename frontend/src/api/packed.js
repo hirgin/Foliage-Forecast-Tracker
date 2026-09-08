@@ -14,18 +14,27 @@
 const NO_DATA = 255;
 
 /**
- * A forest that never turns all season.
+ * The retired evergreen sentinel, still present in published exports.
  *
- * Written by the exporter for a cell that is evergreen *and behaved like it* --
- * see StaticExporter. Distinct from NO_DATA because they are different claims:
- * no-data is a hole in the forecast, this is a forest that is known and known
- * to stay green.
+ * It marked a forest that was surveyed and never going to turn, drawn in a
+ * slate blue of its own. The category is gone because the model outgrew it:
+ * conifers now score on the same curve as everything else and carry about a
+ * third the vividness, so they read as a quiet autumn rather than as a class
+ * apart -- which left the category holding almost nothing.
+ *
+ * What it did still hold was wrong. Read out of the timeline shards, which
+ * never applied the sentinel, all 32 cells carrying it were empty for all 106
+ * days of the season. They are not forests known to stay green; they are cells
+ * with no forecast at all, and the map was asserting the opposite. Decoding
+ * them as "no reading" is the truthful answer rather than a downgrade.
+ *
+ * Still recognised, because published data carries it until the next export.
+ * Decoded as a number, 254 would become progression 127 and draw as past peak.
  */
-export const EVERGREEN = 254;
+const RETIRED_EVERGREEN = 254;
 
 /** Matches PhenologyModel.stageOf on the backend. */
 export function stageOf(progression) {
-  if (progression === 'EVERGREEN') return 'EVERGREEN';
   if (progression == null) return null;
   if (progression < 10) return 'NO_CHANGE';
   if (progression < 30) return 'PATCHY';
@@ -37,7 +46,7 @@ export function stageOf(progression) {
   return 'PAST_PEAK';
 }
 
-const dequantise = (b) => (b === NO_DATA ? null : b === EVERGREEN ? 'EVERGREEN' : b / 2);
+const dequantise = (b) => (b === NO_DATA || b === RETIRED_EVERGREEN ? null : b / 2);
 
 function readMagic(view) {
   return String.fromCharCode(
