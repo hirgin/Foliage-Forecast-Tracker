@@ -48,6 +48,26 @@ describe('progressionColor', () => {
     }
   });
 
+  it('draws each band in its own colour, not the next one', () => {
+    // Every band used to spend its top half nearer the next stage's anchor
+    // than its own -- near peak at 70 drew rgb(209,78,44), which is peak's
+    // red. The map ran half a stage ahead of the data, and that, not the
+    // model, was much of what "peaking too early" looked like on screen.
+    const anchors = Object.fromEntries(STAGES.map((s) => [s.key, s.rgb]));
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const nearest = (c) =>
+      Object.entries(anchors).reduce(
+        (best, [k, rgb]) => (dist(c, rgb) < best[1] ? [k, dist(c, rgb)] : best),
+        [null, Infinity],
+      )[0];
+
+    // Sampled well inside each band, where there is no honest ambiguity.
+    expect(nearest(progressionColor(65, 'NEAR_PEAK'))).toBe('NEAR_PEAK');
+    expect(nearest(progressionColor(70, 'NEAR_PEAK'))).toBe('NEAR_PEAK');
+    expect(nearest(progressionColor(45, 'PARTIAL'))).toBe('PARTIAL');
+    expect(nearest(progressionColor(88, 'PEAK'))).toBe('PEAK');
+  });
+
   it('keeps peak red, so the edge with past peak is visible', () => {
     // The complaint this fixes: peak and past peak blended into each other.
     // Blending peak toward the russet made the last day of peak

@@ -120,6 +120,16 @@ const BOUNDS = {
 const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
+ * How sharply a stage hands its colour over to the next one.
+ *
+ * 1 is a straight blend and was what shipped: half of every band drew closer
+ * to the next stage's colour than its own. Higher holds the anchor longer.
+ * 2.5 puts 83% of the ramp on the right side of the legend while keeping the
+ * boundaries continuous; past about 3 the handover starts to read as an edge.
+ */
+const BLEND_EASING = 2.5;
+
+/**
  * Which stage a progression falls in — the client-side twin of
  * PhenologyModel.stageOf, and it has to keep matching it.
  *
@@ -201,7 +211,22 @@ export function progressionColor(progression, stage) {
 
   const [lo, hi] = BOUNDS[stage];
   // How far through its own stage this cell is.
-  const t = hi > lo ? Math.min(1, Math.max(0, (progression - lo) / (hi - lo))) : 0;
+  const raw = hi > lo ? Math.min(1, Math.max(0, (progression - lo) / (hi - lo))) : 0;
+  // Eased, so a band holds its own colour for most of its width and hands over
+  // near the boundary.
+  //
+  // Blending linearly meant every band spent its top *half* closer to the next
+  // anchor than to its own: a near-peak hexagon at progression 70 drew
+  // rgb(209,78,44), which is peak's red. Only 54% of the ramp read as the
+  // stage it actually was, and the whole map ran about half a stage ahead of
+  // the data -- peak appeared to start early because near peak looked red, and
+  // to end early because peak looked brown.
+  //
+  // That is a large part of what "peaking too early" meant on screen, and it
+  // was not a timing bug at all. At 2.5 the figure is 83%, and the ramp is
+  // still continuous: t still reaches 1 at the boundary, so a band arrives at
+  // the next anchor exactly where it should.
+  const t = Math.pow(raw, BLEND_EASING);
 
   const from = STAGES[i].rgb;
   // Blend toward the next stage, so the ramp is continuous across boundaries
