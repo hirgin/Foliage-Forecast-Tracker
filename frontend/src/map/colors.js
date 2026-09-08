@@ -22,7 +22,13 @@ export const STAGES = [
   // the one thing a leaf-peeper needs from this map is where peak *stops*.
   // Deepening instead keeps the within-band gradient that shows northern
   // Vermont running ahead of the south, and leaves a visible edge at 94.
-  { key: 'PEAK', label: 'Peak', rgb: [204, 62, 44], endRgb: [156, 42, 40] },
+  //
+  // Brightened from rgb(204,62,44). Chroma 160 to 188 and a little more
+  // luminance, which also widens the brightness gap to past peak from 11.7 to
+  // 15.6 -- the separation that has to survive red-green colour blindness,
+  // since hue is the first thing that takes away. The gap down from near
+  // peak's orange stays 44.
+  { key: 'PEAK', label: 'Peak', rgb: [230, 60, 42], endRgb: [176, 42, 38] },
   // Darker than peak's red so the two separate by brightness and not only by
   // hue -- they were 88.5 against 90.9, which is the same brightness, and hue
   // alone is the first thing red-green colour blindness takes away.

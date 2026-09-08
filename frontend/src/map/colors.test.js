@@ -10,8 +10,11 @@ import {
   canopyColor,
 } from './colors';
 
-const PEAK = [204, 62, 44];
-const NEAR_PEAK = [224, 124, 42];
+// Read from STAGES rather than duplicated, so tuning a colour cannot leave
+// the tests asserting the old one. These check the ramp's *behaviour* -- that
+// bands meet at their boundaries and stay distinct -- not the hex values.
+const PEAK = STAGES.find((s) => s.key === 'PEAK').rgb;
+const NEAR_PEAK = STAGES.find((s) => s.key === 'NEAR_PEAK').rgb;
 
 describe('progressionColor', () => {
   it('sits on the stage anchor at the bottom of its band', () => {
