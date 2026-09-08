@@ -109,6 +109,7 @@ object NationalPeakDateModel {
     ): FoliageScore {
         val base = PeakDateModel.scoreAtPeak(
             cell, days, target, peakDayOfYear(cell), normalPrecipMm, precipFrom,
+            elevDaysPerMetre = ELEV_DAYS_PER_METRE,
         )
         return base.copy(confidence = base.confidence * CONFIDENCE_FACTOR)
     }

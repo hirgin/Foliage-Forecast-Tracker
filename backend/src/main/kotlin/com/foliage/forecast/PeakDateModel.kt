@@ -213,6 +213,14 @@ object PeakDateModel {
         peakDoy: Double,
         normalPrecipMm: Double? = null,
         precipFrom: LocalDate? = null,
+        /**
+         * The scoring model's own elevation coefficient, so the explanation
+         * quotes the figure that actually moved this cell. It said "a day for
+         * every 110 metres" for a while after the coefficient changed, which
+         * was a number from a superseded fit shown to readers as fact -- and
+         * the two models differ here anyway, 49 m against 77 m.
+         */
+        elevDaysPerMetre: Double = ELEV_DAYS_PER_METRE,
     ): FoliageScore {
         val progression = progressionOn(target, peakDoy)
 
@@ -264,8 +272,9 @@ object PeakDateModel {
                 ),
                 Factor(
                     "Height", (cell.elevationM ?: 0).toDouble(), "brings it forward",
-                    "About ${cell.elevationM ?: 0} m up. Higher ground turns " +
-                        "earlier -- roughly a day for every 110 metres you climb.",
+                    "About ${cell.elevationM ?: 0} m up. Higher ground is colder and turns " +
+                        "earlier -- about a day for every " +
+                        "${"%.0f".format(1.0 / Math.abs(elevDaysPerMetre))} metres you climb.",
                 ),
                 Factor(
                     "Forest type",

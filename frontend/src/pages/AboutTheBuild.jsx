@@ -2,11 +2,29 @@ const PHASES = [
   { n: 0, name: 'Foundations', body: 'Kotlin/Spring Boot and React/Vite skeletons, health endpoint, migrations that degrade instead of aborting startup.' },
   { n: 1, name: 'The grid', body: 'CONUS tiled into H3 hexagons, masked to real forest cover, each cell carrying its own elevation and canopy density.' },
   { n: 2, name: 'Weather pipeline', body: 'Observed, forecast and climatological weather for every cell, batched, audited, idempotent and resumable.' },
-  { n: 3, name: 'The model', body: 'A transparent phenology model scoring colour progression, calibrated against real ingested data.' },
+  { n: 3, name: 'The model', body: 'Peak date predicted from where a place sits — how far north, how high, how near the sea — and calibrated against twelve seasons of Maine Forest Service field reports. It replaced one that accumulated cool days toward a threshold, and ran a fortnight early because that error compounded all season.' },
   { n: 4, name: 'Map experience', body: 'Time slider, stage ramp, per-cell explanation, and confidence shown honestly.' },
 ];
 
 const FINDINGS = [
+  {
+    title: 'Every accuracy figure was measured against the wrong thing',
+    body:
+      'Peak dates were fitted to published foliage windows nine to seventeen days wide, and a '
+      + 'window that wide is satisfied by landing at its early edge. The model did exactly that '
+      + 'at every reference town, scored fifteen of eighteen, and put New England a fortnight '
+      + 'early on screen. The metric could not see the error it was supposed to catch. Targets '
+      + 'are now single dates from field observations, where a week of error is a week of error.',
+  },
+  {
+    title: 'The colour ramp was half a stage ahead of the data',
+    body:
+      'Each stage blended toward the next across its whole band, so a hexagon spent the top half '
+      + 'of “near peak” drawn in peak’s red and the top of “peak” drawn brown. Only 54% of the '
+      + 'ramp read as the stage it actually was. Much of what looked like a timing fault was this, '
+      + 'and it was reported as the map peaking early for days before anyone thought to check the '
+      + 'colours rather than the model.',
+  },
   {
     title: 'A hard freeze made the map more colourful',
     body:
@@ -110,9 +128,15 @@ export default function AboutTheBuild({ nav }) {
 
         <h2>What running it found</h2>
         <p className="lede lede--small">
-          Every one of these passed code review and unit tests. All five were only visible once
-          the pipeline ran against real data and the numbers were checked against what they
-          should have been.
+          Every one of these passed code review and unit tests. All were only visible once the
+          pipeline ran against real data and the numbers were checked against what they should
+          have been.
+        </p>
+        <p className="lede lede--small">
+          This is a record of what went wrong, not a description of what runs now. Several of
+          these are faults in a model since deleted — the chilling and drought terms below no
+          longer exist. They are kept because how a thing failed is worth more than a tidy
+          account of the version that replaced it.
         </p>
         <ol className="findings">
           {FINDINGS.map((f) => (
