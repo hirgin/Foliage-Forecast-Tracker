@@ -462,28 +462,93 @@ footer a { color: var(--accent); }
 
 /* ---------- navigation ---------- */
 
+/* A grid, not a flex row, and the column count is stated rather than derived.
+   Four equal flex children with nowrap labels overflowed the 262px map panel
+   the moment "Plan a trip" was added: the nav wanted 270px, had 211px, and
+   "About the build" was simply cut off with nothing to say it had been. Fixed
+   columns cannot do that -- a long label wraps inside its own cell.
+   auto-fit was the obvious alternative and is worse here: at a phone's ~340px
+   it lands on three columns, which leaves one item stranded on a second row. */
 .nav {
-  display: flex;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Every cell the height of the tallest. Without this the row holding
+     "About the build", which wraps to two lines in a 100px cell, stands 12px
+     taller than the row above it and the block reads as ragged. */
+  grid-auto-rows: 1fr;
+  gap: 4px;
   margin: 13px 0 0;
-  padding: 3px;
+  padding: 4px;
   background: rgba(255, 255, 255, 0.04);
-  border-radius: 8px;
+  border-radius: 9px;
 }
-.nav__item {
-  flex: 1;
-  padding: 5px 6px;
-  border: none;
+
+.nav .nav__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 6px 9px;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
-  white-space: nowrap;
 }
-.nav__item:hover { color: var(--text); }
-.nav__item--on { background: rgba(255, 255, 255, 0.1); color: var(--text); }
+
+.nav .nav__item:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+
+/* There was no focus style at all, so tabbing through the site was invisible. */
+.nav .nav__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The current page was a 10% white fill and a colour shift, which over a busy
+   map read as "slightly lighter" rather than "you are here". The accent bar
+   is the unambiguous part; it sits under the label rather than tinting the
+   whole pill, because an orange-filled pill floating over the hexagons reads
+   as another piece of data. */
+.nav .nav__item--on {
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--text);
+  font-weight: 600;
+  cursor: default;
+}
+.nav .nav__item--on::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 3px;
+  width: 15px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.nav .nav__item--on:hover { background: rgba(255, 255, 255, 0.11); }
+
+/* Content pages have the room for a single row. 470px fits the longest label
+   four times over at 12px without wrapping. */
+.page__head .nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 470px;
+}
+
+@media (max-width: 620px) {
+  .page__head .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: none; }
+}
+
+/* Coarse pointers get a target worth aiming at. 30px is fine for a mouse and
+   mean on a phone. */
+@media (pointer: coarse) {
+  .nav .nav__item { min-height: 40px; font-size: 12.5px; }
+}
 
 /* ---------- content pages ---------- */
 
@@ -503,7 +568,6 @@ footer a { color: var(--accent); }
 
 .page__head { margin-bottom: 30px; }
 .page__head h1 { font-size: 26px; margin-bottom: 4px; }
-.page__head .nav { max-width: 340px; }
 
 .page h2 {
   margin: 34px 0 10px;

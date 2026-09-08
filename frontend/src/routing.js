@@ -65,8 +65,3 @@ export function useHashRoute() {
 
   return route;
 }
-
-export function navigate(route, params) {
-  const suffix = params ? new URLSearchParams(params).toString() : '';
-  window.location.hash = route ? `#/${route}${suffix ? `?${suffix}` : ''}` : '#/';
-}
