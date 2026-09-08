@@ -367,11 +367,28 @@ footer a { color: var(--accent); }
     cursor: pointer;
   }
 
-  /* Folded away until asked for. Both are reference material, not the answer.
-     The legend deliberately is not among them -- hiding it leaves the map a
-     field of unexplained colour. */
-  .panel:not(.panel--open) .nav,
+  /* Folded away until asked for: notes and credits are reference material,
+     not the answer. The legend deliberately is not among them -- hiding it
+     leaves the map a field of unexplained colour.
+
+     Navigation is not among them either, and used to be. On a phone the map
+     is the landing page, so hiding the nav behind this toggle meant a visitor
+     had no way to discover that a trip planner or the explanation pages
+     existed at all -- and the toggle offered "legend and details", which
+     names neither. Costing ~50px of map to say the rest of the site is there
+     is a trade worth making. */
   .panel:not(.panel--open) .panel__more { display: none; }
+
+  /* One row rather than the 2x2 used elsewhere: this sits over the map, so
+     its height is map the visitor cannot see. Long labels wrap inside their
+     own cell and grid-auto-rows keeps all four the same height. */
+  .panel .nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 10px 0 0;
+    padding: 3px;
+    gap: 3px;
+  }
+  .panel .nav .nav__item { padding: 5px 4px; font-size: 11.5px; }
 
   /* Two columns, so six stages and their counts cost three rows instead of
      six. Counts sit right against their label rather than pushed to a far

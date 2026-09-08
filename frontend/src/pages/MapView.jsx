@@ -122,7 +122,7 @@ export default function MapView({ nav }) {
             className="panel__toggle"
             onClick={() => setPanelOpen((o) => !o)}
             aria-expanded={panelOpen}
-            aria-label={panelOpen ? 'Hide details' : 'Show legend and details'}
+            aria-label={panelOpen ? 'Hide notes about this map' : 'Show notes about this map'}
           >
             <span aria-hidden="true">{panelOpen ? '−' : '+'}</span>
           </button>
@@ -193,7 +193,12 @@ export default function MapView({ nav }) {
         )}
 
         {/* Reference rather than answer: folded away on a phone. */}
-        <div className="panel__more">
+        {/* Outside panel__more on purpose. This is the one thing on the page
+            that must not be missable: past the horizon the map is drawing a
+            typical year, and ADR-0005 forbids presenting that as a forecast.
+            Folded into the collapsed section it was invisible on a phone --
+            and the slider's horizon tick has its wording dropped at that
+            width too, so nothing said it at all. */}
         {beyondHorizon && (
           <p className="note note--warn">
             Beyond the 16-day weather forecast. This date is estimated from a
@@ -202,6 +207,7 @@ export default function MapView({ nav }) {
           </p>
         )}
 
+        <div className="panel__more">
         <footer>
           <p>
             A model, not an official forecast. No official record of peak dates
