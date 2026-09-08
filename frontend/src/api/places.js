@@ -93,3 +93,48 @@ export function describePlace(place) {
   if (place.nearby) return place.state ? `${place.state} · nearest woods` : 'nearest woods';
   return place.state ? `${place.state} · ${kind}` : kind;
 }
+
+/**
+ * The named place nearest a point, for labelling a stop dropped on the map.
+ *
+ * A hexagon has an address, not a name, and "862bab707ffffff" is not a stop
+ * anyone recognises. Search answers name-to-place; this is the other
+ * direction, and there is no index for it -- a linear pass over 260,479
+ * entries takes a few milliseconds, which is cheaper than building one.
+ *
+ * Ranking is by squared degrees rather than by ground distance: over the tens
+ * of kilometres that decide the answer the two orderings agree, and the
+ * longitude term is scaled by cos(latitude) so that a degree of longitude is
+ * not counted as a degree of latitude — at 45°N it is about 70% as wide, and
+ * without the scaling the answer drifts east-west.
+ *
+ * [maxDeg] keeps a click in open water from being named after a town a hundred
+ * miles away. Null is a real answer: not everywhere has a name nearby.
+ */
+export function nearestPlace(places, lat, lon, maxDeg = 0.75) {
+  if (!places?.lat?.length || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const scale = Math.cos((lat * Math.PI) / 180) || 1;
+  const limit = maxDeg * maxDeg;
+  let best = -1;
+  let bestD = Infinity;
+
+  for (let i = 0; i < places.lat.length; i += 1) {
+    const dLat = places.lat[i] - lat;
+    const dLon = (places.lon[i] - lon) * scale;
+    const d = dLat * dLat + dLon * dLon;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+
+  if (best < 0 || bestD > limit) return null;
+  return {
+    name: places.name[best],
+    state: places.state?.[best] ?? '',
+    kind: places.kind?.[best] ?? 'TOWN',
+    population: places.population?.[best] ?? 0,
+    cell: places.cell[best],
+    nearby: places.nearby?.[best] ?? false,
+    lat: places.lat[best],
+    lon: places.lon[best],
+  };
+}

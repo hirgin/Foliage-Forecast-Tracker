@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { searchPlaces, describePlace, KIND_LABEL } from './places';
+import { searchPlaces, describePlace, nearestPlace, KIND_LABEL } from './places';
 
 /** Mirrors the exported payload: parallel arrays, not objects. */
 function index(rows) {
@@ -153,5 +153,48 @@ describe('places on ground with too few trees to score', () => {
 
   it('still carries a cell to navigate to', () => {
     expect(typeof searchPlaces(index, 'boston')[0].cell).toBe('number');
+  });
+});
+
+describe('nearestPlace', () => {
+  // Columnar, like the real index.
+  const places = {
+    name: ['Stowe', 'Waterbury', 'Bar Harbor', 'Portland'],
+    state: ['VT', 'VT', 'ME', 'ME'],
+    kind: ['TOWN', 'TOWN', 'TOWN', 'TOWN'],
+    population: [4314, 5064, 5089, 68408],
+    cell: [1, 2, 3, 4],
+    nearby: [false, false, false, false],
+    lat: [44.465, 44.338, 44.387, 43.661],
+    lon: [-72.687, -72.756, -68.204, -70.255],
+  };
+
+  it('names a point by the closest entry', () => {
+    expect(nearestPlace(places, 44.46, -72.69).name).toBe('Stowe');
+    expect(nearestPlace(places, 44.34, -72.75).name).toBe('Waterbury');
+    expect(nearestPlace(places, 44.39, -68.21).name).toBe('Bar Harbor');
+  });
+
+  it('carries enough of the record to label and centre a stop', () => {
+    const p = nearestPlace(places, 44.46, -72.69);
+    expect(p).toMatchObject({ name: 'Stowe', state: 'VT', cell: 1 });
+    expect(typeof p.lat).toBe('number');
+  });
+
+  it('returns null rather than reaching across the country', () => {
+    // A click in open water must not be named after a town 300 km away.
+    expect(nearestPlace(places, 40.0, -72.0)).toBeNull();
+  });
+
+  it('survives an empty or unloaded index', () => {
+    // The index is 16 MB and fetched lazily, so "not here yet" is the normal
+    // state for the first click rather than an error.
+    expect(nearestPlace(null, 44, -72)).toBeNull();
+    expect(nearestPlace({ lat: [], lon: [] }, 44, -72)).toBeNull();
+  });
+
+  it('rejects a point that is not a point', () => {
+    expect(nearestPlace(places, undefined, -72)).toBeNull();
+    expect(nearestPlace(places, NaN, NaN)).toBeNull();
   });
 });

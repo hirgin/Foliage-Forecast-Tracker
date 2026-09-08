@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useMeta, useTimelines } from '../api/hooks';
-import { h3ForPlace } from '../api/client';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { cellToLatLng, cellToParent } from 'h3-js';
+import { useMeta, useTimelines, useForecast, usePlaces } from '../api/hooks';
+import { h3ForPlace, fetchBareCells, resolutionForZoom } from '../api/client';
+import { nearestPlace } from '../api/places';
+import FoliageMap from '../map/FoliageMap';
 import { seasonDates } from '../api/packed';
 import { hashParam, setHashParam } from '../routing';
 import { stageLabel, stageColor } from '../map/colors';
@@ -36,6 +39,25 @@ export default function Trip({ nav }) {
 
   const timelines = useTimelines(stops.map((s) => s.h3));
 
+  // Which stop the map is showing. The map draws one day and a trip has
+  // several, so it follows a stop rather than trying to average them: pick a
+  // stop and the map answers "what does it look like round here, that day".
+  const [focusIndex, setFocusIndex] = useState(0);
+  const [mapRes, setMapRes] = useState(6);
+  const [bareCells, setBareCells] = useState([]);
+  const [centre, setCentre] = useState(null);
+  // The place index is 16 MB. Search loads it on focus; the map needs it only
+  // to name a hexagon someone drops a pin on, so it is pulled when a pointer
+  // arrives over the map rather than on page load.
+  const [wantPlaces, setWantPlaces] = useState(false);
+  const { data: places } = usePlaces(wantPlaces);
+
+  useEffect(() => {
+    let live = true;
+    fetchBareCells(mapRes).then((h3) => { if (live) setBareCells(h3); });
+    return () => { live = false; };
+  }, [mapRes]);
+
   const dates = useMemo(
     () => (meta.data ? seasonDates(meta.data.seasonStart, meta.data.seasonEnd) : []),
     [meta.data],
@@ -45,6 +67,16 @@ export default function Trip({ nav }) {
     : null;
 
   const planned = planTrip(stops, timelines.byH3, shift);
+  const focused = planned[Math.min(focusIndex, Math.max(0, planned.length - 1))] || null;
+  const mapDate = focused?.date || bounds?.from || null;
+  const mapData = useForecast(mapDate, mapRes);
+
+  // Stops are res 6; zoomed out the map draws res 4 or 5, where a res 6
+  // address matches nothing. Highlight the ancestor actually on screen.
+  const highlighted = useMemo(
+    () => new Set(stops.map((s) => (mapRes === 6 ? s.h3 : cellToParent(s.h3, mapRes)))),
+    [stops, mapRes],
+  );
   const atPeak = countAtPeak(planned);
   const ready = planned.filter((p) => p.ready).length;
   // Past the horizon the export is climatology, and ADR-0005 is explicit that
@@ -64,6 +96,37 @@ export default function Trip({ nav }) {
       ? clampToSeason(addDays(last.date, 2), bounds?.from, bounds?.to)
       : clampToSeason(isoToday(), bounds?.from, bounds?.to);
     setStops([...stops, { h3, date, name: place.name }]);
+  };
+
+  // Clicking the map either jumps to a stop already there or drops a new one.
+  const onMapSelect = useCallback((h3) => {
+    if (!h3) return;
+    const existing = stops.findIndex(
+      (s) => s.h3 === h3 || (mapRes !== 6 && cellToParent(s.h3, mapRes) === h3),
+    );
+    if (existing >= 0) { setFocusIndex(existing); return; }
+    if (mapRes !== 6) return; // A 22 km hexagon is not a place to stand.
+    if (stops.length >= MAX_STOPS) return;
+
+    const [lat, lon] = cellToLatLng(h3);
+    // A hexagon has an address, not a name. Falling back to coordinates keeps
+    // the click working on the rare first one that beats the index loading.
+    const near = nearestPlace(places, lat, lon);
+    const last = stops[stops.length - 1];
+    setStops([...stops, {
+      h3,
+      date: last
+        ? clampToSeason(addDays(last.date, 2), bounds?.from, bounds?.to)
+        : clampToSeason(isoToday(), bounds?.from, bounds?.to),
+      name: near?.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`,
+    }]);
+    setFocusIndex(stops.length);
+  }, [stops, mapRes, places, bounds]);
+
+  const showOnMap = (i) => {
+    setFocusIndex(i);
+    const [lat, lon] = cellToLatLng(stops[i].h3);
+    setCentre({ lat, lon, nonce: Date.now() });
   };
 
   const setStopDate = (i, date) => {
@@ -117,6 +180,44 @@ export default function Trip({ nav }) {
               Everything stays in the address bar — copy the link to share the
               plan or keep it for later. Nothing is saved anywhere else.
             </p>
+          </section>
+        )}
+
+        {stops.length > 0 && mapDate && (
+          <section>
+            <h2>Where the trip goes</h2>
+            <p className="note">
+              Coloured for <strong>{formatDay(mapDate)}</strong>, the day you would
+              be at {focused?.name}. Pick another stop below to see its day, or
+              click any hexagon to add it to the trip.
+            </p>
+            <div
+              className="tripmap"
+              onPointerEnter={() => setWantPlaces(true)}
+            >
+              <FoliageMap
+                cells={mapData.data?.cells ?? []}
+                bareCells={bareCells}
+                resolution={mapRes}
+                selected={highlighted}
+                onSelect={onMapSelect}
+                focus={centre}
+                onZoom={(zoom) => setMapRes(resolutionForZoom(zoom))}
+              />
+            </div>
+            <div className="tripmap__stops">
+              {planned.map((stop, i) => (
+                <button
+                  type="button"
+                  key={`${stop.h3}-${i}`}
+                  className={i === focusIndex ? 'chip chip--on' : 'chip'}
+                  onClick={() => showOnMap(i)}
+                >
+                  {stop.name}
+                  <span>{formatDay(stop.date)}</span>
+                </button>
+              ))}
+            </div>
           </section>
         )}
 

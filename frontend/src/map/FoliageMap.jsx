@@ -4,6 +4,9 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { cellToLatLng } from 'h3-js';
 import { NO_FOREST_RGB, NO_FOREST_ALPHA, progressionColor, stageForProgression } from './colors';
+
+/** Shared, so "nothing selected" is one identity rather than a new Set a frame. */
+const EMPTY_SELECTION = new Set();
 import { donorsFor, fillValue } from './neighbourFill';
 import { bucketByAncestor, cellsInView } from './viewport';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -578,7 +581,22 @@ function clampCentre(map) {
 }
 
 
+/**
+ * [selected] is one cell on the map page and a whole trip's worth on the trip
+ * page, so it takes either an address or an iterable of them. Normalised once
+ * here rather than at each call site, and the layer is keyed on a string built
+ * from the members: a fresh Set every render has a fresh identity and would
+ * redraw the country on every keystroke.
+ */
 export default function FoliageMap({ cells, bareCells = [], resolution = 6, selected, onSelect, focus, onZoom }) {
+  const selectedSet = useMemo(
+    () => (selected == null ? EMPTY_SELECTION
+      : typeof selected === 'string' ? new Set([selected])
+        : new Set(selected)),
+    [selected],
+  );
+  const selectionKey = useMemo(() => [...selectedSet].sort().join(','), [selectedSet]);
+
   const [hovered, setHovered] = useState(null);
   // The visible bounds, refreshed on moveend. Null until the map first settles.
   const [view, setView] = useState(null);
@@ -851,8 +869,8 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
           if (value == null) return foliageColor(d);
           return [...progressionColor(value, stageForProgression(value)), FILLED_ALPHA];
         },
-        getLineColor: (d) => (d.h3 === selected ? [255, 255, 255, 230] : [10, 12, 9, 90]),
-        getLineWidth: (d) => (d.h3 === selected ? 3 : 1),
+        getLineColor: (d) => (selectedSet.has(d.h3) ? [255, 255, 255, 230] : [10, 12, 9, 90]),
+        getLineWidth: (d) => (selectedSet.has(d.h3) ? 3 : 1),
         lineWidthUnits: 'pixels',
         lineWidthMinPixels: 0.5,
         stroked: true,
@@ -863,14 +881,14 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
         onClick: ({ object }) => onSelect?.(object?.h3 ?? null),
         updateTriggers: {
           getFillColor: [visible, donors, scoredByH3],
-          getLineColor: [selected],
-          getLineWidth: [selected],
+          getLineColor: [selectionKey],
+          getLineWidth: [selectionKey],
         },
       }),
     // The bare layer is conditional, so drop the null when it is off rather
     // than handing deck.gl a hole in the list.
     ].filter(Boolean),
-    [visible, resolution, selected, onSelect, donors, scoredByH3],
+    [visible, resolution, selectedSet, selectionKey, onSelect, donors, scoredByH3],
   );
 
   useEffect(() => {
@@ -910,7 +928,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     <div className="map">
       <div className="map__canvas" ref={containerRef} />
 
-      {hovered && hovered.h3 !== selected && (
+      {hovered && !selectedSet.has(hovered.h3) && (
         <div className="hovercard">
           <strong>{stageLabel(hovered.stage)}</strong>
           <span>{Math.round(hovered.progression)}% turned</span>
