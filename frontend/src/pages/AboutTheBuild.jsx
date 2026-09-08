@@ -116,15 +116,98 @@ export default function AboutTheBuild({ nav }) {
             </p>
           </article>
           <article>
-            <h3>An explainable model</h3>
+            <h3>Fitted, but only against observations</h3>
             <p>
-              A fitted model would have been far harder to check — the only ground truth is
-              volunteer records of individual plants, which measure something subtly different
-              from a 3 km stand — and it could not tell you why a hexagon is the colour it is.
-              Every constant here is a stated assumption rather than a fitted parameter.
+              This used to say every constant was a stated assumption rather than a fitted
+              parameter. That stopped being true: the model is now a least-squares fit end to
+              end. What is kept from the old stance is the standard of evidence — it is fitted
+              against records of when leaves actually turned, not against other people&rsquo;s
+              forecasts, and every term still has to carry the sign physics requires. A fit that
+              scored better with warmer weather producing an earlier peak was rejected for that
+              reason alone.
             </p>
           </article>
         </div>
+
+        <h2>How accurate it is</h2>
+        <p className="lede lede--small">
+          A forecast is only as good as what it was checked against, and that varies enormously
+          across the country.
+        </p>
+        <div className="provenance">
+          <div>
+            <strong>New England</strong>
+            <span>6 states · within ~2 days</span>
+            <em>
+              Checked against twelve seasons of Maine Forest Service field reports and five years
+              of New Hampshire regional records — observations of real leaves. Coastal Maine runs
+              2.1 days mean error with no directional bias.
+            </em>
+          </div>
+          <div>
+            <strong>The other 42 states</strong>
+            <span>Drawn fainter · within ~4 days</span>
+            <em>
+              No comparable record exists, so these are fitted against a national county
+              prediction map — itself a forecast, and one running four to six days early where it
+              can be compared with Maine&rsquo;s foresters. 4.1 days mean error over 2,820
+              counties.
+            </em>
+          </div>
+        </div>
+
+        <h2>What it gets wrong</h2>
+        <ul className="limits">
+          <li>
+            <strong>The Pacific Northwest runs about a week early.</strong> The model reads
+            nearness to the sea along an east–west line, which is right on the Atlantic and
+            backwards on the Pacific. One coefficient cannot describe both coasts, and this one
+            is fitted to the Atlantic.
+          </li>
+          <li>
+            <strong>Only Maine and New Hampshire are checked against real observations.</strong>{' '}
+            Vermont, Massachusetts, Connecticut and Rhode Island are predicted by the pattern
+            those two set. Everywhere else is checked against another forecast rather than
+            against leaves.
+          </li>
+          <li>
+            <strong>It has never been tested on a season it did not already see.</strong> Every
+            accuracy figure above comes from the same years the model was built from, which
+            flatters it. The honest test is to predict a year held back, and that has not been
+            done.
+          </li>
+          <li>
+            <strong>It describes a typical year, not this one.</strong> Because the date comes
+            from geography, an unusually warm or cold autumn will not move it. That is the price
+            of not having an error that compounds all season, which is what the previous model
+            did.
+          </li>
+          <li>
+            <strong>It ignores cloud and wind.</strong> Both change how the display looks, and one
+            windy night can end a season early.
+          </li>
+          <li>
+            <strong>City centres are mostly missing.</strong> Anywhere with too few trees is drawn
+            as bare ground, which includes most of Boston.
+          </li>
+        </ul>
+
+        <h2>Where the data comes from</h2>
+        <ul className="sources">
+          <li>
+            <strong>When leaves actually peaked</strong> — Maine Forest Service weekly foliage
+            reports, 2014–2025; VisitNH regional peak records
+          </li>
+          <li>
+            <strong>Peak dates elsewhere</strong> — SmokyMountains.com county prediction map
+          </li>
+          <li><strong>Forest type</strong> — USFS BIGMAP forest type group</li>
+          <li><strong>Tree canopy</strong> — USFS / NLCD Tree Canopy Cover, 30 m raster</li>
+          <li><strong>Elevation</strong> — USGS 3DEP and AWS Terrain Tiles</li>
+          <li><strong>Weather</strong> — Open-Meteo, including its historical archive</li>
+          <li><strong>Boundaries</strong> — US Census TIGERweb</li>
+          <li><strong>Basemap</strong> — OpenFreeMap, built on OpenStreetMap data</li>
+        </ul>
 
         <h2>What running it found</h2>
         <p className="lede lede--small">
