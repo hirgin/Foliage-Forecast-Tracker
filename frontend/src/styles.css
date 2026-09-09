@@ -1035,3 +1035,10 @@ footer a { color: var(--accent); }
   .tripbar__row { flex-direction: column; align-items: stretch; }
   .tripbar__when input { width: 100%; }
 }
+
+/* Sized to the date field beside it so the row reads as one control rather
+   than a button that happened to land next to two inputs. */
+.btn--add { flex: none; padding: 9px 15px; align-self: flex-end; }
+.btn--add:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+@media (max-width: 620px) { .btn--add { width: 100%; } }

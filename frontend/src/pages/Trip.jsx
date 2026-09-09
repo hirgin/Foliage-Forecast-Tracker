@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cellToLatLng, cellToParent } from 'h3-js';
 import { useMeta, useTimelines, useForecast, usePlaces } from '../api/hooks';
 import { h3ForPlace, fetchBareCells, resolutionForZoom } from '../api/client';
@@ -50,6 +50,15 @@ export default function Trip({ nav }) {
   // same guess and advanced by the same two days after each add, so adding
   // several in a row still takes one click each.
   const [nextDate, setNextDate] = useState(null);
+  // The stop being composed, not yet added. Picking a place used to add it on
+  // the spot, which put the date after the decision it belonged to: by the
+  // time you reached the date field the stop already existed and had to be
+  // corrected. Now a place is staged, the date is set beside it, and the two
+  // are committed together.
+  const [pending, setPending] = useState(null);
+  // Bumped on each add, and used to remount the search box so it clears.
+  const [added, setAdded] = useState(0);
+  const barRef = useRef(null);
   const [mapRes, setMapRes] = useState(6);
   const [bareCells, setBareCells] = useState([]);
   const [centre, setCentre] = useState(null);
@@ -96,19 +105,28 @@ export default function Trip({ nav }) {
   const horizon = horizonDate();
   const beyondHorizon = planned.some((p) => p.date > horizon);
 
-  // Both ways of adding a stop -- searching for it and clicking it on the map
-  // -- go through here, so the date they get is the date the field shows.
-  const addAt = (h3, name) => {
-    if (!h3 || stops.length >= MAX_STOPS || !arriving) return;
-    setStops([...stops, { h3, date: arriving, name }]);
-    setNextDate(clampToSeason(addDays(arriving, 2), bounds?.from, bounds?.to));
-    setFocusIndex(stops.length);
+  // Both ways of choosing a stop -- searching for it and clicking it on the
+  // map -- stage it here rather than adding it, so neither can slip a stop in
+  // without the same confirmation.
+  const stage = (h3, name) => {
+    if (!h3 || stops.length >= MAX_STOPS) return;
+    setPending({ h3, name });
   };
 
-  const addStop = async (place) => {
+  const chooseFromSearch = async (place) => {
     if (stops.length >= MAX_STOPS) return;
     const h3 = await h3ForPlace(place, null);
-    addAt(h3, place.name);
+    stage(h3, place.name);
+  };
+
+  const commit = (e) => {
+    e?.preventDefault();
+    if (!pending || !arriving || stops.length >= MAX_STOPS) return;
+    setStops([...stops, { h3: pending.h3, date: arriving, name: pending.name }]);
+    setNextDate(clampToSeason(addDays(arriving, 2), bounds?.from, bounds?.to));
+    setFocusIndex(stops.length);
+    setPending(null);
+    setAdded((n) => n + 1);
   };
 
   // Clicking the map either jumps to a stop already there or drops a new one.
@@ -135,8 +153,9 @@ export default function Trip({ nav }) {
     // A hexagon has an address, not a name. Falling back to coordinates keeps
     // the click working on the rare first one that beats the index loading.
     const near = nearestPlace(places, lat, lon);
-    addAt(h3, near?.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`);
-  }, [stops, mapRes, places, bounds, arriving]);
+    stage(h3, near?.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`);
+    barRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [stops, mapRes, places]);
 
   const showOnMap = (i) => {
     setFocusIndex(i);
@@ -178,10 +197,14 @@ export default function Trip({ nav }) {
           what moving it a few days would do.
         </p>
 
-        <section className="tripbar">
-          <div className="tripbar__row">
+        <section className="tripbar" ref={barRef}>
+          {/* A form, so Enter submits and the button is a real submit rather
+              than a click handler wearing a button's clothes. */}
+          <form className="tripbar__row" onSubmit={commit}>
             <div className="tripbar__find">
-              <PlaceSearch onSelect={addStop} />
+              {/* Remounted after each add so the box clears and is ready for
+                  the next place, rather than holding the last one's name. */}
+              <PlaceSearch key={added} onSelect={chooseFromSearch} />
             </div>
             <label className="tripbar__when">
               <span>Arriving</span>
@@ -193,15 +216,26 @@ export default function Trip({ nav }) {
                 onChange={(e) => e.target.value && setNextDate(
                   clampToSeason(e.target.value, bounds?.from, bounds?.to),
                 )}
+                // A date input swallows Enter for its own segment handling, so
+                // implicit form submission never fires from here and the form
+                // silently ignores the key every other form accepts.
+                onKeyDown={(e) => { if (e.key === 'Enter') commit(e); }}
               />
             </label>
-          </div>
+            <button
+              type="submit"
+              className="btn btn--add"
+              disabled={!pending || stops.length >= MAX_STOPS}
+            >
+              {pending ? `Add ${pending.name}` : 'Add stop'}
+            </button>
+          </form>
           <p className="note">
             {stops.length >= MAX_STOPS
               ? `${MAX_STOPS} stops is the limit. Remove one to add another.`
-              : `Whatever you search for, or click on the map, is added for ${
-                arriving ? formatDay(arriving) : 'this date'
-              }. It moves on two days after each stop, and every stop's date can still be changed below.`}
+              : pending
+                ? `${pending.name} will be added for ${arriving ? formatDay(arriving) : 'this date'}. Change the date first if you want a different day.`
+                : 'Search for a place or click one on the map, set the day you would arrive, then add it. Every stop can still be moved afterwards.'}
           </p>
         </section>
 
