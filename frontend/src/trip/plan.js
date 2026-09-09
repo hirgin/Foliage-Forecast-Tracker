@@ -47,7 +47,14 @@ const FIELD_SEP = '~';
 export function encodeStops(stops) {
   return (stops || [])
     .slice(0, MAX_STOPS)
-    .map((s) => [s.h3, s.date, esc(s.name)].join(FIELD_SEP))
+    .map((s) => (
+      // A one-day stay writes one date, which keeps the common link short and
+      // means every link shared before stays existed still round-trips to
+      // exactly itself.
+      s.to && s.to !== s.from
+        ? [s.h3, s.from, s.to, esc(s.name)].join(FIELD_SEP)
+        : [s.h3, s.from, esc(s.name)].join(FIELD_SEP)
+    ))
     .join(STOP_SEP);
 }
 
@@ -56,17 +63,24 @@ export function decodeStops(raw) {
   return raw
     .split(STOP_SEP)
     .map((chunk) => {
-      const [h3, date, name] = chunk.split(FIELD_SEP);
+      // Three fields is a single day, four is a stay. Counting is unambiguous
+      // here because the third field is a date in one form and a name in the
+      // other, and a place is not called "2026-10-05".
+      const parts = chunk.split(FIELD_SEP);
+      const [h3, from] = parts;
+      const ranged = parts.length >= 4 && isDate(parts[2]);
+      const to = ranged ? parts[2] : from;
+      const name = ranged ? parts[3] : parts[2];
       // A hand-edited or truncated link should drop the bad stop, not blank
       // the page: the rest of the trip is still perfectly good.
-      if (!h3 || !isDate(date)) return null;
+      if (!h3 || !isDate(from) || !isDate(to) || to < from) return null;
       let label = h3;
       try {
         label = decodeURIComponent(name || '') || h3;
       } catch {
         label = h3;
       }
-      return { h3, date, name: label };
+      return { h3, from, to, name: label };
     })
     .filter(Boolean)
     .slice(0, MAX_STOPS);
@@ -102,17 +116,27 @@ export function peakWindow(days) {
 }
 
 /**
- * Where a date falls relative to a window, as something a card can say.
+ * How a stay lands against a peak window, as something a card can say.
+ *
+ * A stay rather than a day changes the question from "is this the right date"
+ * to "does any of my time here overlap peak", which is the one a traveller
+ * actually has: three nights that catch the last two days of peak is a good
+ * stop, and a single date cannot express it.
  *
  * `null` window means this cell never reaches peak inside the exported season
  * -- a peak falling outside it, or no readings at all. That is a real answer
  * and has to be distinguishable from a stop still loading.
  */
-export function standingOn(date, window) {
+export function standingOn(from, to, window) {
+  const leave = to || from;
   if (!window) return { where: 'never', days: 0 };
-  if (date < window.from) return { where: 'early', days: daysBetween(date, window.from) };
-  if (date > window.to) return { where: 'late', days: daysBetween(window.to, date) };
-  return { where: 'inside', days: daysBetween(window.from, date) };
+  // Measured from the day you leave: peak opening the day after you go is a
+  // near miss, and measuring from arrival would have called it a week early.
+  if (leave < window.from) return { where: 'early', days: daysBetween(leave, window.from) };
+  if (from > window.to) return { where: 'late', days: daysBetween(window.to, from) };
+  const overlapFrom = from > window.from ? from : window.from;
+  const overlapTo = leave < window.to ? leave : window.to;
+  return { where: 'inside', days: daysBetween(overlapFrom, overlapTo) + 1 };
 }
 
 /**
@@ -122,19 +146,28 @@ export function standingOn(date, window) {
  * shard is still in flight. A pending stop still renders its name and date.
  */
 export function planStop(stop, timeline, shift = 0) {
-  const date = addDays(stop.date, shift);
+  const from = addDays(stop.from, shift);
+  const to = addDays(stop.to || stop.from, shift);
   const days = timeline?.days || null;
   const window = peakWindow(days);
-  const day = dayAt(days, date);
+  const day = dayAt(days, from);
+  const last = dayAt(days, to);
+  const standing = standingOn(from, to, window);
   return {
     ...stop,
-    date,
+    from,
+    to,
+    nights: daysBetween(from, to),
     day,
-    // The row in the strip draws every day, not just the one being visited.
+    // The row in the strip draws every day, not just the ones being stayed.
     series: days,
     window,
-    standing: standingOn(date, window),
+    standing,
+    // Arrival and departure both, because a stay long enough to be worth
+    // planning is often long enough to change stage while you are in it.
     stage: day?.stage ?? null,
+    stageOnLeaving: last?.stage ?? null,
+    atPeak: standing.where === 'inside',
     confidence: day?.confidence ?? null,
     ready: Boolean(days),
   };
@@ -157,14 +190,24 @@ function scoreShift(stops, timelines, shift, bounds) {
   for (const stop of stops) {
     const days = timelines?.[stop.h3]?.days;
     if (!days) continue;
-    const date = addDays(stop.date, shift);
+    const from = addDays(stop.from, shift);
+    const to = addDays(stop.to || stop.from, shift);
     // A shift that pushes any stop off the end of the season is not a plan.
-    if (bounds && (date < bounds.from || date > bounds.to)) return null;
-    const day = dayAt(days, date);
-    if (!day || day.progression == null || typeof day.progression !== 'number') continue;
+    if (bounds && (from < bounds.from || to > bounds.to)) return null;
+    // Scored over the whole stay: catching peak on any day of it counts, and
+    // the best day is what the slack is measured from, so a longer stay is
+    // correctly easier to place than a single date.
+    let best = null;
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+      const day = dayAt(days, d);
+      if (!day || typeof day.progression !== 'number') continue;
+      const gap = Math.abs(day.progression - BAND_MIDDLE);
+      if (!best || gap < best.gap) best = { gap, peak: day.stage === 'PEAK' };
+    }
+    if (!best) continue;
     usable += 1;
-    if (day.stage === 'PEAK') atPeak += 1;
-    slack += Math.abs(day.progression - BAND_MIDDLE);
+    if (best.peak) atPeak += 1;
+    slack += best.gap;
   }
 
   return usable ? { shift, atPeak, slack } : null;
@@ -198,7 +241,7 @@ export function bestShift(stops, timelines, bounds, limit = SHIFT_LIMIT) {
   return best;
 }
 
-/** How many of the planned stops land at peak, for the running verdict. */
+/** How many stops catch peak at some point during their stay. */
 export function countAtPeak(planned) {
-  return planned.filter((p) => p.stage === 'PEAK').length;
+  return planned.filter((p) => p.atPeak).length;
 }

@@ -33,7 +33,7 @@ function cellStyle(day) {
 
 export default function TripStrip({ planned, dates }) {
   const scrollRef = useRef(null);
-  const firstDate = planned[0]?.date;
+  const firstDate = planned[0]?.from;
 
   // Follow the trip. The season is ~76 columns and the trip occupies a handful
   // of them, so without this the strip opens on September while the trip is in
@@ -65,7 +65,7 @@ export default function TripStrip({ planned, dates }) {
         })}
 
         {planned.map((stop) => (
-          <Row key={`${stop.h3}-${stop.date}`} stop={stop} dates={dates} />
+          <Row key={`${stop.h3}-${stop.from}`} stop={stop} dates={dates} />
         ))}
       </div>
     </div>
@@ -92,7 +92,10 @@ function Row({ stop, dates }) {
 
       {dates.map((d) => {
         const day = byDate.get(d) || null;
-        const here = d === stop.date;
+        // The whole stay is marked, not just its first day: adjacent rings
+        // overlap into one bar, so a four-night stop reads as a span rather
+        // than four separate visits.
+        const here = d >= stop.from && d <= stop.to;
         return (
           <div
             key={d}

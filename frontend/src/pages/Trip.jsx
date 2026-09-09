@@ -74,7 +74,8 @@ export default function Trip({ nav }) {
   // stop and then correct it on its card. Now it is a field, seeded with the
   // same guess and stepped on after each add, so adding several in a row still
   // takes one click each.
-  const [nextDate, setNextDate] = useState(null);
+  const [nextFrom, setNextFrom] = useState(null);
+  const [nextTo, setNextTo] = useState(null);
   // The stop being composed, not yet added. Picking a place used to add it on
   // the spot, which put the date after the decision it belonged to: by the
   // time you reached the date field the stop already existed and had to be
@@ -109,11 +110,14 @@ export default function Trip({ nav }) {
 
   // Falls back to the season's own bounds until meta arrives, so the control
   // always holds a date a date input will accept.
-  const arriving = nextDate || (bounds ? clampToSeason(isoToday(), bounds.from, bounds.to) : '');
+  const arriving = nextFrom || (bounds ? clampToSeason(isoToday(), bounds.from, bounds.to) : '');
+  // Departure never precedes arrival. A stay of one day is the default, which
+  // is what the planner did before stays existed.
+  const departing = nextTo && nextTo >= arriving ? nextTo : arriving;
 
   const planned = planTrip(stops, timelines.byH3, shift);
   const focused = planned[Math.min(focusIndex, Math.max(0, planned.length - 1))] || null;
-  const mapDate = focused?.date || bounds?.from || null;
+  const mapDate = focused?.from || bounds?.from || null;
   const mapData = useForecast(mapDate, mapRes);
 
   // Stops are res 6; zoomed out the map draws res 4 or 5, where a res 6
@@ -128,7 +132,7 @@ export default function Trip({ nav }) {
   // it must never be presented as a forecast. Trips are planned months out, so
   // this is the normal case here rather than an edge one.
   const horizon = horizonDate();
-  const beyondHorizon = planned.some((p) => p.date > horizon);
+  const beyondHorizon = planned.some((p) => p.to > horizon);
 
   // Both ways of choosing a stop -- searching for it and clicking it on the
   // map -- stage it here rather than adding it, so neither can slip a stop in
@@ -157,7 +161,8 @@ export default function Trip({ nav }) {
     // move the whole trip afterwards, which is what it is for.
     setStops([...stops, {
       h3: pending.h3,
-      date: addDays(arriving, -shift),
+      from: addDays(arriving, -shift),
+      to: addDays(departing, -shift),
       name: pending.name,
     }]);
     // One day, not two. Two was a guess about how a foliage trip is paced --
@@ -165,7 +170,12 @@ export default function Trip({ nav }) {
     // date: add the 10th and the field offers the 12th, the 11th gone with
     // nothing to say why. The next day is what the next stop most obviously
     // means, and anyone touring slower can still set it.
-    setNextDate(clampToSeason(addDays(arriving, 1), bounds?.from, bounds?.to));
+    // The next stop starts the day after this one ends, so a three-night stay
+    // advances three days rather than one -- the trip stays contiguous however
+    // long each stay is.
+    const next = clampToSeason(addDays(departing, 1), bounds?.from, bounds?.to);
+    setNextFrom(next);
+    setNextTo(next);
     setFocusIndex(stops.length);
     setPending(null);
     setAdded((n) => n + 1);
@@ -205,8 +215,17 @@ export default function Trip({ nav }) {
     setCentre({ lat, lon, nonce: Date.now() });
   };
 
-  const setStopDate = (i, date) => {
-    setStops(stops.map((s, j) => (j === i ? { ...s, date } : s)));
+  const setStopDate = (i, field, date) => {
+    setStops(stops.map((s, j) => {
+      if (j !== i) return s;
+      // Whichever end moves, the other gives way rather than letting the stay
+      // invert: dragging arrival past departure pushes departure, and vice
+      // versa. An inverted stay would be dropped on the next decode.
+      const next = { ...s, [field]: date };
+      if (field === 'from' && next.to < date) next.to = date;
+      if (field === 'to' && date < next.from) next.from = date;
+      return next;
+    }));
   };
 
   const removeStop = (i) => setStops(stops.filter((_, j) => j !== i));
@@ -255,12 +274,30 @@ export default function Trip({ nav }) {
                 value={arriving}
                 min={bounds?.from}
                 max={bounds?.to}
-                onChange={(e) => e.target.value && setNextDate(
-                  clampToSeason(e.target.value, bounds?.from, bounds?.to),
-                )}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const v = clampToSeason(e.target.value, bounds?.from, bounds?.to);
+                  setNextFrom(v);
+                  // Drag departure along rather than leaving a stay that ends
+                  // before it starts, which the model would then discard.
+                  if (departing < v) setNextTo(v);
+                }}
                 // A date input swallows Enter for its own segment handling, so
                 // implicit form submission never fires from here and the form
                 // silently ignores the key every other form accepts.
+                onKeyDown={(e) => { if (e.key === 'Enter') commit(e); }}
+              />
+            </label>
+            <label className="tripbar__when">
+              <span>Leaving</span>
+              <input
+                type="date"
+                value={departing}
+                min={arriving}
+                max={bounds?.to}
+                onChange={(e) => e.target.value && setNextTo(
+                  clampToSeason(e.target.value, arriving, bounds?.to),
+                )}
                 onKeyDown={(e) => { if (e.key === 'Enter') commit(e); }}
               />
             </label>
@@ -276,8 +313,12 @@ export default function Trip({ nav }) {
             {stops.length >= MAX_STOPS
               ? `${MAX_STOPS} stops is the limit. Remove one to add another.`
               : pending
-                ? `${pending.name} will be added for ${arriving ? formatDay(arriving) : 'this date'}. Change the date first if you want a different day.`
-                : 'Search for a place or click one on the map, set the day you would arrive, then add it. The date steps on a day after each stop, and every stop can still be moved afterwards.'}
+                ? `${pending.name} will be added for ${
+                  arriving === departing
+                    ? formatDay(arriving)
+                    : `${formatDay(arriving)} to ${formatDay(departing)}`
+                }. Change the dates first if you want different ones.`
+                : 'Search for a place or click one on the map, set when you arrive and leave, then add it. The next stop starts the day after this one ends, and every stay can still be changed afterwards.'}
           </p>
         </section>
 
@@ -297,7 +338,7 @@ export default function Trip({ nav }) {
             <h2>Where the trip goes</h2>
             <p className="note">
               Coloured for <strong>{formatDay(mapDate)}</strong>, the day you would
-              be at {focused?.name}. Pick another stop below to see its day.{' '}
+              arrive at {focused?.name}. Pick another stop below to see its day.{' '}
               {mapRes === 6
                 ? 'Click a forested hexagon to add it to the trip.'
                 : 'Zoom in — or click an area — to add a stop by hand.'}
@@ -325,7 +366,11 @@ export default function Trip({ nav }) {
                   onClick={() => showOnMap(i)}
                 >
                   {stop.name}
-                  <span>{formatDay(stop.date)}</span>
+                  <span>
+                    {stop.from === stop.to
+                      ? formatDay(stop.from)
+                      : `${formatDay(stop.from)}–${formatDay(stop.to)}`}
+                  </span>
                 </button>
               ))}
             </div>
@@ -337,8 +382,8 @@ export default function Trip({ nav }) {
             <section>
               <h2>Your trip against the season</h2>
               <p className="note">
-                Each row is a stop, each column a day. The outlined cell is when
-                you would be there. Faded means the forecast is working from a
+                Each row is a stop, each column a day. The outlined run is
+                your stay. Faded means the forecast is working from a
                 typical year rather than this one.
               </p>
 
@@ -374,7 +419,7 @@ export default function Trip({ nav }) {
                 <p className="verdict">
                   <strong>{atPeak} of {ready}</strong>{' '}
                   {ready === 1 ? 'stop lands' : 'stops land'} at peak
-                  {shift !== 0 && `, leaving ${formatDay(planned[0].date)}`}.
+                  {shift !== 0 && `, leaving ${formatDay(planned[0].from)}`}.
                   {beyondHorizon && (
                     <span className="verdict__caveat">
                       {' '}This is beyond the 16-day forecast, so it describes a
@@ -396,7 +441,7 @@ export default function Trip({ nav }) {
                     shift={shift}
                     error={timelines.errors[stop.h3]}
                     bounds={bounds}
-                    onDate={(d) => setStopDate(i, addDays(d, -shift))}
+                    onDate={(field, d) => setStopDate(i, field, addDays(d, -shift))}
                     onRemove={() => removeStop(i)}
                     onUp={i > 0 ? () => move(i, -1) : null}
                     onDown={i < planned.length - 1 ? () => move(i, 1) : null}
@@ -430,24 +475,48 @@ export default function Trip({ nav }) {
 
 function StopCard({ stop, shift, error, bounds, onDate, onRemove, onUp, onDown }) {
   const rgb = stop.stage ? stageColor(stop.stage) : [110, 106, 98];
+  // A stay long enough to plan often changes stage inside itself, and showing
+  // only one end would be picking a favourite.
+  const turns = stop.stageOnLeaving && stop.stageOnLeaving !== stop.stage;
+  const endRgb = turns ? stageColor(stop.stageOnLeaving) : rgb;
 
   return (
     <li className="stopcard">
       <div className="stopcard__top">
         <span className="stopcard__name">{stop.name}</span>
-        <input
-          type="date"
-          className="stopcard__date"
-          value={stop.date}
-          min={bounds?.from}
-          max={bounds?.to}
-          onChange={(e) => e.target.value && onDate(e.target.value)}
-          aria-label={`Date at ${stop.name}`}
-        />
+        <span className="stopcard__stay">
+          <input
+            type="date"
+            className="stopcard__date"
+            value={stop.from}
+            min={bounds?.from}
+            max={bounds?.to}
+            onChange={(e) => e.target.value && onDate('from', e.target.value)}
+            aria-label={`Arriving at ${stop.name}`}
+          />
+          <span aria-hidden="true">–</span>
+          <input
+            type="date"
+            className="stopcard__date"
+            value={stop.to}
+            min={stop.from}
+            max={bounds?.to}
+            onChange={(e) => e.target.value && onDate('to', e.target.value)}
+            aria-label={`Leaving ${stop.name}`}
+          />
+        </span>
         {stop.stage && (
           <span className="pill" style={{ background: `rgb(${rgb.join(',')})` }}>
             {stageLabel(stop.stage)}
           </span>
+        )}
+        {turns && (
+          <>
+            <span className="stopcard__arrow" aria-hidden="true">→</span>
+            <span className="pill" style={{ background: `rgb(${endRgb.join(',')})` }}>
+              {stageLabel(stop.stageOnLeaving)}
+            </span>
+          </>
         )}
         <span className="stopcard__actions">
           <button type="button" onClick={onUp} disabled={!onUp} aria-label="Move earlier in trip">↑</button>
@@ -484,12 +553,26 @@ function verdictFor(stop, error) {
   if (!stop.day) return 'Outside the forecast season.';
 
   const { where, days } = stop.standing;
-  const n = `${days} day${days === 1 ? '' : 's'}`;
+  const n = (x) => `${x} day${x === 1 ? '' : 's'}`;
+  const stayLength = stop.nights + 1;
+  // A stay of one day is still the common case, and phrasing written for a
+  // range reads badly on it -- "at peak for all 1 day of the stay", or
+  // "leaving 4 days before peak" about a visit with no leaving in it.
+  const single = stayLength === 1;
+
   if (where === 'inside') {
-    return days === 0
-      ? 'Arriving exactly as peak opens.'
-      : `${n} into peak.`;
+    if (single) return 'At peak on the day you are there.';
+    // How much of peak the stay catches, which is the question a stay asks
+    // and a single date could not.
+    if (days >= stayLength) return `At peak for all ${n(stayLength)}.`;
+    return `${n(days)} of the ${stayLength} at peak.`;
   }
-  if (where === 'early') return `${n} early — peak opens ${formatDay(stop.window.from)}.`;
-  return `${n} late — peak closed ${formatDay(stop.window.to)}.`;
+  if (where === 'early') {
+    return single
+      ? `${n(days)} early — peak opens ${formatDay(stop.window.from)}.`
+      : `Leaving ${n(days)} before peak opens on ${formatDay(stop.window.from)}.`;
+  }
+  return single
+    ? `${n(days)} late — peak closed ${formatDay(stop.window.to)}.`
+    : `Arriving ${n(days)} after peak closed on ${formatDay(stop.window.to)}.`;
 }

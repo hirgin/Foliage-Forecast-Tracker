@@ -1042,3 +1042,17 @@ footer a { color: var(--accent); }
 .btn--add:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 
 @media (max-width: 620px) { .btn--add { width: 100%; } }
+
+/* Arriving and leaving read as one control with a range in it, rather than
+   two unrelated dates that happen to sit together. */
+.stopcard__stay { display: flex; align-items: center; gap: 5px; }
+.stopcard__stay > span { color: var(--muted); font-size: 12px; }
+.stopcard__arrow { color: var(--muted); font-size: 12px; }
+
+@media (max-width: 620px) {
+  /* Three date controls will not fit a phone row, so the pair wraps together
+     and the search keeps its full width. */
+  .tripbar__row { flex-direction: column; align-items: stretch; }
+  .tripbar__when { flex: 1; }
+  .stopcard__stay { flex-wrap: wrap; }
+}
