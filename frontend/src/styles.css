@@ -1003,3 +1003,35 @@ footer a { color: var(--accent); }
 @media (max-width: 620px) {
   .tripmap { height: 300px; }
 }
+
+/* Search and the arrival date sit together: the date is a property of the
+   stop being added, not a separate step, and putting it here is what stops
+   the two-day rule being a secret only the stop cards can reveal. */
+.tripbar__row { display: flex; align-items: flex-end; gap: 10px; }
+.tripbar__find { flex: 1; min-width: 0; }
+
+.tripbar__when { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.tripbar__when span {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tripbar__when input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color-scheme: dark;
+}
+.tripbar__when input:focus { outline: none; border-color: var(--accent); }
+
+@media (max-width: 620px) {
+  /* Stacked, because side by side the date control squeezes the search box
+     below the width a place name needs. */
+  .tripbar__row { flex-direction: column; align-items: stretch; }
+  .tripbar__when input { width: 100%; }
+}

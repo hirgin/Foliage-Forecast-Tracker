@@ -43,6 +43,13 @@ export default function Trip({ nav }) {
   // several, so it follows a stop rather than trying to average them: pick a
   // stop and the map answers "what does it look like round here, that day".
   const [focusIndex, setFocusIndex] = useState(0);
+  // The date the next stop will get. It used to be inferred silently -- today
+  // for the first stop, two days after the last one after that -- which is a
+  // reasonable guess and a bad secret: the only way to see it was to add the
+  // stop and then correct it on its card. Now it is a field, seeded with the
+  // same guess and advanced by the same two days after each add, so adding
+  // several in a row still takes one click each.
+  const [nextDate, setNextDate] = useState(null);
   const [mapRes, setMapRes] = useState(6);
   const [bareCells, setBareCells] = useState([]);
   const [centre, setCentre] = useState(null);
@@ -66,6 +73,10 @@ export default function Trip({ nav }) {
     ? { from: meta.data.seasonStart, to: meta.data.seasonEnd }
     : null;
 
+  // Falls back to the season's own bounds until meta arrives, so the control
+  // always holds a date a date input will accept.
+  const arriving = nextDate || (bounds ? clampToSeason(isoToday(), bounds.from, bounds.to) : '');
+
   const planned = planTrip(stops, timelines.byH3, shift);
   const focused = planned[Math.min(focusIndex, Math.max(0, planned.length - 1))] || null;
   const mapDate = focused?.date || bounds?.from || null;
@@ -85,17 +96,19 @@ export default function Trip({ nav }) {
   const horizon = horizonDate();
   const beyondHorizon = planned.some((p) => p.date > horizon);
 
+  // Both ways of adding a stop -- searching for it and clicking it on the map
+  // -- go through here, so the date they get is the date the field shows.
+  const addAt = (h3, name) => {
+    if (!h3 || stops.length >= MAX_STOPS || !arriving) return;
+    setStops([...stops, { h3, date: arriving, name }]);
+    setNextDate(clampToSeason(addDays(arriving, 2), bounds?.from, bounds?.to));
+    setFocusIndex(stops.length);
+  };
+
   const addStop = async (place) => {
     if (stops.length >= MAX_STOPS) return;
     const h3 = await h3ForPlace(place, null);
-    if (!h3) return;
-    // A new stop lands two days after the last one, which is the usual shape
-    // of a foliage trip and saves setting a date for every stop by hand.
-    const last = stops[stops.length - 1];
-    const date = last
-      ? clampToSeason(addDays(last.date, 2), bounds?.from, bounds?.to)
-      : clampToSeason(isoToday(), bounds?.from, bounds?.to);
-    setStops([...stops, { h3, date, name: place.name }]);
+    addAt(h3, place.name);
   };
 
   // Clicking the map either jumps to a stop already there or drops a new one.
@@ -105,23 +118,25 @@ export default function Trip({ nav }) {
       (s) => s.h3 === h3 || (mapRes !== 6 && cellToParent(s.h3, mapRes) === h3),
     );
     if (existing >= 0) { setFocusIndex(existing); return; }
-    if (mapRes !== 6) return; // A 22 km hexagon is not a place to stand.
+
+    // A 22 km hexagon is not a place to stand, so a click at that zoom cannot
+    // become a stop. It used to return here and do nothing at all, under a
+    // caption promising that any hexagon could be clicked -- so zoom to it
+    // instead, which is what someone aiming at a whole state actually wants
+    // next and leaves the click meaning something.
+    if (mapRes !== 6) {
+      const [clat, clon] = cellToLatLng(h3);
+      setCentre({ lat: clat, lon: clon, nonce: Date.now() });
+      return;
+    }
     if (stops.length >= MAX_STOPS) return;
 
     const [lat, lon] = cellToLatLng(h3);
     // A hexagon has an address, not a name. Falling back to coordinates keeps
     // the click working on the rare first one that beats the index loading.
     const near = nearestPlace(places, lat, lon);
-    const last = stops[stops.length - 1];
-    setStops([...stops, {
-      h3,
-      date: last
-        ? clampToSeason(addDays(last.date, 2), bounds?.from, bounds?.to)
-        : clampToSeason(isoToday(), bounds?.from, bounds?.to),
-      name: near?.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`,
-    }]);
-    setFocusIndex(stops.length);
-  }, [stops, mapRes, places, bounds]);
+    addAt(h3, near?.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`);
+  }, [stops, mapRes, places, bounds, arriving]);
 
   const showOnMap = (i) => {
     setFocusIndex(i);
@@ -164,12 +179,30 @@ export default function Trip({ nav }) {
         </p>
 
         <section className="tripbar">
-          <PlaceSearch onSelect={addStop} />
-          {stops.length >= MAX_STOPS && (
-            <p className="note">
-              {MAX_STOPS} stops is the limit. Remove one to add another.
-            </p>
-          )}
+          <div className="tripbar__row">
+            <div className="tripbar__find">
+              <PlaceSearch onSelect={addStop} />
+            </div>
+            <label className="tripbar__when">
+              <span>Arriving</span>
+              <input
+                type="date"
+                value={arriving}
+                min={bounds?.from}
+                max={bounds?.to}
+                onChange={(e) => e.target.value && setNextDate(
+                  clampToSeason(e.target.value, bounds?.from, bounds?.to),
+                )}
+              />
+            </label>
+          </div>
+          <p className="note">
+            {stops.length >= MAX_STOPS
+              ? `${MAX_STOPS} stops is the limit. Remove one to add another.`
+              : `Whatever you search for, or click on the map, is added for ${
+                arriving ? formatDay(arriving) : 'this date'
+              }. It moves on two days after each stop, and every stop's date can still be changed below.`}
+          </p>
         </section>
 
         {!stops.length && (
@@ -188,8 +221,10 @@ export default function Trip({ nav }) {
             <h2>Where the trip goes</h2>
             <p className="note">
               Coloured for <strong>{formatDay(mapDate)}</strong>, the day you would
-              be at {focused?.name}. Pick another stop below to see its day, or
-              click any hexagon to add it to the trip.
+              be at {focused?.name}. Pick another stop below to see its day.{' '}
+              {mapRes === 6
+                ? 'Click a forested hexagon to add it to the trip.'
+                : 'Zoom in — or click an area — to add a stop by hand.'}
             </p>
             <div
               className="tripmap"
