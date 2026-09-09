@@ -12,8 +12,22 @@
 /** Days ahead that a real forecast exists. Beyond this the export is climatology. */
 export const FORECAST_HORIZON_DAYS = 16;
 
+/**
+ * Today, on the reader's calendar rather than UTC's.
+ *
+ * This used to be `toISOString().slice(0, 10)`, which is UTC. Everyone this
+ * site is for is behind UTC by four to eight hours, so from late afternoon
+ * onwards it returned tomorrow -- opening the trip planner on the evening of
+ * the 8th offered the 9th, with nothing to explain why.
+ *
+ * Stored times are UTC and stay that way; this is not one. A season runs on
+ * calendar dates with no time attached, and "today" for someone planning a
+ * trip is the date on their own wall.
+ */
 export function isoToday() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
 }
 
 export function addDays(iso, n) {

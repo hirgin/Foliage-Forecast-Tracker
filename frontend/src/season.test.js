@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addDays, daysBetween, isDate, clampToSeason, horizonDate, FORECAST_HORIZON_DAYS,
+  addDays, daysBetween, isDate, clampToSeason, horizonDate, isoToday, FORECAST_HORIZON_DAYS,
 } from './season';
 
 describe('addDays', () => {
@@ -57,9 +57,23 @@ describe('clampToSeason', () => {
   });
 });
 
+describe('isoToday', () => {
+  it('is the local calendar date, not the UTC one', () => {
+    // The bug this replaced: toISOString() is UTC, and every US timezone is
+    // behind it, so an evening visitor was offered tomorrow.
+    const now = new Date();
+    const expected = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+    expect(isoToday()).toBe(expected);
+  });
+});
+
 describe('the forecast horizon', () => {
   it('is 16 days out, matching ADR-0005', () => {
     expect(FORECAST_HORIZON_DAYS).toBe(16);
-    expect(daysBetween(new Date().toISOString().slice(0, 10), horizonDate())).toBe(16);
+    expect(daysBetween(isoToday(), horizonDate())).toBe(16);
   });
 });

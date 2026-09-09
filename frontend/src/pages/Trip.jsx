@@ -37,6 +37,31 @@ export default function Trip({ nav }) {
     setHashParam('s', encodeStops(stops));
   }, [stops]);
 
+  // The URL is read at mount, which is not the only time it changes. Someone
+  // pasting a trip link while already on this page gets a hashchange and no
+  // reload, so without this the address bar shows their friend's trip and the
+  // page goes on showing theirs -- in a feature whose entire sharing model is
+  // the link. Writes above go through replaceState and fire no event, so this
+  // only ever hears changes from outside; the encoded comparison stops an
+  // equivalent trip from replacing state and bouncing off the writer.
+  useEffect(() => {
+    const onHash = () => {
+      const incoming = decodeStops(hashParam('s'));
+      setStops((current) => {
+        if (encodeStops(current) === encodeStops(incoming)) return current;
+        // A trip that arrives from outside should be read as its author sent
+        // it, not through whatever the slider was left on: inheriting a +10
+        // would show every one of their stops ten days off.
+        setShift(0);
+        setFocusIndex(0);
+        setPending(null);
+        return incoming;
+      });
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   const timelines = useTimelines(stops.map((s) => s.h3));
 
   // Which stop the map is showing. The map draws one day and a trip has
@@ -44,11 +69,11 @@ export default function Trip({ nav }) {
   // stop and the map answers "what does it look like round here, that day".
   const [focusIndex, setFocusIndex] = useState(0);
   // The date the next stop will get. It used to be inferred silently -- today
-  // for the first stop, two days after the last one after that -- which is a
+  // for the first stop, a step on from the last one after that -- which is a
   // reasonable guess and a bad secret: the only way to see it was to add the
   // stop and then correct it on its card. Now it is a field, seeded with the
-  // same guess and advanced by the same two days after each add, so adding
-  // several in a row still takes one click each.
+  // same guess and stepped on after each add, so adding several in a row still
+  // takes one click each.
   const [nextDate, setNextDate] = useState(null);
   // The stop being composed, not yet added. Picking a place used to add it on
   // the spot, which put the date after the decision it belonged to: by the
@@ -122,8 +147,25 @@ export default function Trip({ nav }) {
   const commit = (e) => {
     e?.preventDefault();
     if (!pending || !arriving || stops.length >= MAX_STOPS) return;
-    setStops([...stops, { h3: pending.h3, date: arriving, name: pending.name }]);
-    setNextDate(clampToSeason(addDays(arriving, 2), bounds?.from, bounds?.to));
+    // Stored unshifted, so the stop *displays* on the date the field showed.
+    //
+    // Everything on this page is drawn through planTrip, which adds the shift
+    // to every stop. The field was not, so with the slider at +10 a stop
+    // entered for the 9th appeared as the 19th -- the date you typed was not
+    // the date you got, which reads as the planner skipping days at random.
+    // Converting here keeps the field's promise and leaves the slider free to
+    // move the whole trip afterwards, which is what it is for.
+    setStops([...stops, {
+      h3: pending.h3,
+      date: addDays(arriving, -shift),
+      name: pending.name,
+    }]);
+    // One day, not two. Two was a guess about how a foliage trip is paced --
+    // a night somewhere, then move on -- and it read as the planner skipping a
+    // date: add the 10th and the field offers the 12th, the 11th gone with
+    // nothing to say why. The next day is what the next stop most obviously
+    // means, and anyone touring slower can still set it.
+    setNextDate(clampToSeason(addDays(arriving, 1), bounds?.from, bounds?.to));
     setFocusIndex(stops.length);
     setPending(null);
     setAdded((n) => n + 1);
@@ -235,7 +277,7 @@ export default function Trip({ nav }) {
               ? `${MAX_STOPS} stops is the limit. Remove one to add another.`
               : pending
                 ? `${pending.name} will be added for ${arriving ? formatDay(arriving) : 'this date'}. Change the date first if you want a different day.`
-                : 'Search for a place or click one on the map, set the day you would arrive, then add it. Every stop can still be moved afterwards.'}
+                : 'Search for a place or click one on the map, set the day you would arrive, then add it. The date steps on a day after each stop, and every stop can still be moved afterwards.'}
           </p>
         </section>
 
