@@ -1056,3 +1056,38 @@ footer a { color: var(--accent); }
   .tripbar__when { flex: 1; }
   .stopcard__stay { flex-wrap: wrap; }
 }
+
+/* ---- date controls that do not depend on the platform's idea of width ----
+
+   Reported as the date boxes running off the screen, and not reproducible in
+   Chromium, whose date input is 115px wide. Safari's is considerably wider and
+   reserves extra room for its own picker chrome, and a flex item defaults to
+   `min-width: auto`, which means it refuses to shrink below that intrinsic
+   size and pushes the row past the edge instead.
+
+   So none of this guesses a number. The flex chain is allowed to shrink, the
+   inputs are told their own width rather than inferring one, and the pair
+   stacks outright once the screen is too narrow to hold two of anything. */
+.tripbar__row, .tripbar__find, .tripbar__when,
+.stopcard__top, .stopcard__stay { min-width: 0; }
+
+.tripbar__when input, .stopcard__date {
+  min-width: 0;
+  max-width: 100%;
+  /* Stops Safari padding the control out to fit a picker glyph it draws
+     inside the box anyway. */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.stopcard__stay { flex-wrap: wrap; }
+.stopcard__stay .stopcard__date { flex: 1 1 8.5em; }
+
+@media (max-width: 620px) {
+  .tripbar__when input { width: 100%; }
+  /* One per line: two date controls plus a dash cannot share a phone row
+     whatever each one measures. */
+  .stopcard__stay { width: 100%; }
+  .stopcard__stay .stopcard__date { flex: 1 1 100%; }
+  .stopcard__stay > span { display: none; }
+}
