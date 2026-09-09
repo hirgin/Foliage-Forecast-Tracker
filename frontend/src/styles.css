@@ -1091,3 +1091,125 @@ footer a { color: var(--accent); }
   .stopcard__stay .stopcard__date { flex: 1 1 100%; }
   .stopcard__stay > span { display: none; }
 }
+
+/* ---------------------------------------------------------- date range ----
+
+   One control for arriving and leaving, replacing a pair of native date
+   inputs. Two boxes could only be read; a calendar can be looked at, which
+   matters here because the days are tinted by the forecast and the choice is
+   "where does my stay sit against that band of colour". */
+.daterange { position: relative; display: flex; flex-direction: column; gap: 4px; flex: none; }
+.daterange--compact { flex-direction: row; align-items: center; }
+
+.daterange__label {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.daterange__trigger {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.daterange__trigger:hover { border-color: var(--accent); }
+.daterange__trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.daterange__trigger em { font-style: normal; font-size: 11px; color: var(--muted); }
+.daterange--compact .daterange__trigger { font-size: 12px; padding: 5px 9px; }
+
+.cal {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: 258px;
+  /* Never wider than the screen it drops onto, whatever it is anchored to. */
+  max-width: calc(100vw - 24px);
+  padding: 12px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+}
+
+.cal__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal__head strong { font-size: 13px; font-weight: 600; }
+.cal__head button {
+  width: 26px;
+  height: 26px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cal__head button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.cal__head button:disabled { opacity: 0.3; cursor: default; }
+
+.cal__weekdays, .cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal__weekdays {
+  margin: 10px 0 4px;
+  font-size: 10px;
+  color: var(--dim, var(--muted));
+  text-align: center;
+  opacity: 0.7;
+}
+
+.cal__pad { height: 30px; }
+
+.cal__day {
+  position: relative;
+  height: 30px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  padding: 0 0 4px;
+}
+.cal__day:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); }
+.cal__day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cal__day--out { opacity: 0.22; cursor: default; }
+
+/* The chosen stay. Ends are solid and the middle is a wash, so a range reads
+   as one run rather than as several separately chosen days. */
+.cal__day--in { background: rgba(232, 150, 60, 0.18); border-radius: 0; }
+.cal__day--start { background: var(--accent); color: #17130d; border-radius: 5px 0 0 5px; }
+.cal__day--end { background: var(--accent); color: #17130d; border-radius: 0 5px 5px 0; }
+.cal__day--start.cal__day--end { border-radius: 5px; }
+
+/* What the forecast says that day, under the number rather than behind it:
+   a chosen day has to keep reading as chosen. */
+.cal__tint {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.cal__hint { margin: 9px 0 0 !important; font-size: 11px; color: var(--muted) !important; line-height: 1.4; }
+
+@media (max-width: 620px) {
+  .daterange { align-self: stretch; }
+  .daterange__trigger { justify-content: space-between; }
+}

@@ -9,6 +9,7 @@ import { hashParam, setHashParam } from '../routing';
 import { stageLabel, stageColor } from '../map/colors';
 import PlaceSearch from '../components/PlaceSearch';
 import TripStrip from '../components/TripStrip';
+import DateRange from '../components/DateRange';
 import { formatDay } from '../components/TimeSlider';
 import { addDays, clampToSeason, horizonDate, isoToday } from '../season';
 import {
@@ -62,7 +63,18 @@ export default function Trip({ nav }) {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const timelines = useTimelines(stops.map((s) => s.h3));
+  // The stop being composed, not yet added. Picking a place used to add it on
+  // the spot, which put the date after the decision it belonged to: by the
+  // time you reached the date field the stop already existed and had to be
+  // corrected. Now a place is staged, the date is set beside it, and the two
+  // are committed together.
+  const [pending, setPending] = useState(null);
+
+  const timelines = useTimelines(
+    // The staged place is fetched too, so the picker can tint the days you
+    // are choosing between by what the forecast says that cell is doing.
+    [...stops.map((s) => s.h3), pending?.h3].filter(Boolean),
+  );
 
   // Which stop the map is showing. The map draws one day and a trip has
   // several, so it follows a stop rather than trying to average them: pick a
@@ -76,12 +88,6 @@ export default function Trip({ nav }) {
   // takes one click each.
   const [nextFrom, setNextFrom] = useState(null);
   const [nextTo, setNextTo] = useState(null);
-  // The stop being composed, not yet added. Picking a place used to add it on
-  // the spot, which put the date after the decision it belonged to: by the
-  // time you reached the date field the stop already existed and had to be
-  // corrected. Now a place is staged, the date is set beside it, and the two
-  // are committed together.
-  const [pending, setPending] = useState(null);
   // Bumped on each add, and used to remount the search box so it clears.
   const [added, setAdded] = useState(0);
   const barRef = useRef(null);
@@ -215,17 +221,10 @@ export default function Trip({ nav }) {
     setCentre({ lat, lon, nonce: Date.now() });
   };
 
-  const setStopDate = (i, field, date) => {
-    setStops(stops.map((s, j) => {
-      if (j !== i) return s;
-      // Whichever end moves, the other gives way rather than letting the stay
-      // invert: dragging arrival past departure pushes departure, and vice
-      // versa. An inverted stay would be dropped on the next decode.
-      const next = { ...s, [field]: date };
-      if (field === 'from' && next.to < date) next.to = date;
-      if (field === 'to' && date < next.from) next.from = date;
-      return next;
-    }));
+  // Both ends arrive together from the picker, which cannot produce an
+  // inverted range, so there is no end to push out of the way any more.
+  const setStopStay = (i, from, to) => {
+    setStops(stops.map((s, j) => (j === i ? { ...s, from, to } : s)));
   };
 
   const removeStop = (i) => setStops(stops.filter((_, j) => j !== i));
@@ -267,40 +266,17 @@ export default function Trip({ nav }) {
                   the next place, rather than holding the last one's name. */}
               <PlaceSearch key={added} onSelect={chooseFromSearch} />
             </div>
-            <label className="tripbar__when">
-              <span>Arriving</span>
-              <input
-                type="date"
-                value={arriving}
-                min={bounds?.from}
-                max={bounds?.to}
-                onChange={(e) => {
-                  if (!e.target.value) return;
-                  const v = clampToSeason(e.target.value, bounds?.from, bounds?.to);
-                  setNextFrom(v);
-                  // Drag departure along rather than leaving a stay that ends
-                  // before it starts, which the model would then discard.
-                  if (departing < v) setNextTo(v);
-                }}
-                // A date input swallows Enter for its own segment handling, so
-                // implicit form submission never fires from here and the form
-                // silently ignores the key every other form accepts.
-                onKeyDown={(e) => { if (e.key === 'Enter') commit(e); }}
+            {bounds && (
+              <DateRange
+                label="Staying"
+                from={arriving}
+                to={departing}
+                min={bounds.from}
+                max={bounds.to}
+                series={pending ? timelines.byH3[pending.h3]?.days : null}
+                onChange={(f, t) => { setNextFrom(f); setNextTo(t); }}
               />
-            </label>
-            <label className="tripbar__when">
-              <span>Leaving</span>
-              <input
-                type="date"
-                value={departing}
-                min={arriving}
-                max={bounds?.to}
-                onChange={(e) => e.target.value && setNextTo(
-                  clampToSeason(e.target.value, arriving, bounds?.to),
-                )}
-                onKeyDown={(e) => { if (e.key === 'Enter') commit(e); }}
-              />
-            </label>
+            )}
             <button
               type="submit"
               className="btn btn--add"
@@ -441,7 +417,7 @@ export default function Trip({ nav }) {
                     shift={shift}
                     error={timelines.errors[stop.h3]}
                     bounds={bounds}
-                    onDate={(field, d) => setStopDate(i, field, addDays(d, -shift))}
+                    onStay={(f, t) => setStopStay(i, addDays(f, -shift), addDays(t, -shift))}
                     onRemove={() => removeStop(i)}
                     onUp={i > 0 ? () => move(i, -1) : null}
                     onDown={i < planned.length - 1 ? () => move(i, 1) : null}
@@ -473,7 +449,7 @@ export default function Trip({ nav }) {
   );
 }
 
-function StopCard({ stop, shift, error, bounds, onDate, onRemove, onUp, onDown }) {
+function StopCard({ stop, shift, error, bounds, onStay, onRemove, onUp, onDown }) {
   const rgb = stop.stage ? stageColor(stop.stage) : [110, 106, 98];
   // A stay long enough to plan often changes stage inside itself, and showing
   // only one end would be picking a favourite.
@@ -484,27 +460,18 @@ function StopCard({ stop, shift, error, bounds, onDate, onRemove, onUp, onDown }
     <li className="stopcard">
       <div className="stopcard__top">
         <span className="stopcard__name">{stop.name}</span>
-        <span className="stopcard__stay">
-          <input
-            type="date"
-            className="stopcard__date"
-            value={stop.from}
-            min={bounds?.from}
-            max={bounds?.to}
-            onChange={(e) => e.target.value && onDate('from', e.target.value)}
-            aria-label={`Arriving at ${stop.name}`}
+        {bounds && (
+          <DateRange
+            compact
+            label={`Stay at ${stop.name}`}
+            from={stop.from}
+            to={stop.to}
+            min={bounds.from}
+            max={bounds.to}
+            series={stop.series}
+            onChange={onStay}
           />
-          <span aria-hidden="true">–</span>
-          <input
-            type="date"
-            className="stopcard__date"
-            value={stop.to}
-            min={stop.from}
-            max={bounds?.to}
-            onChange={(e) => e.target.value && onDate('to', e.target.value)}
-            aria-label={`Leaving ${stop.name}`}
-          />
-        </span>
+        )}
         {stop.stage && (
           <span className="pill" style={{ background: `rgb(${rgb.join(',')})` }}>
             {stageLabel(stop.stage)}
