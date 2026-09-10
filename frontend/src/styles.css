@@ -805,24 +805,39 @@ footer a { color: var(--accent); }
 
 .strip__scroll {
   overflow-x: auto;
-  padding: 14px 14px 10px;
+  padding: 12px 14px 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.02);
   margin-top: 14px;
 }
 
-.strip { display: grid; min-width: min-content; }
+.strip { display: grid; min-width: min-content; row-gap: 3px; }
 
+/* Day numbers, under the month they belong to. Every fifth plus the first of
+   each month, which is as many as a 13px column will carry. */
 .strip__day {
-  font-size: 9px;
+  font-size: 9.5px;
   color: var(--muted);
   text-align: center;
   padding-bottom: 4px;
   font-variant-numeric: tabular-nums;
 }
 
-/* Sticky, because the strip auto-scrolls to the trip and the labels are the
+.strip__corner { position: sticky; left: 0; z-index: 3; background: var(--bg); }
+
+.strip__month {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 0 2px 4px;
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Sticky, because on a phone the strip still scrolls and the labels are the
    first column: without this every row is an anonymous band of colour by the
    time you are looking at the dates you care about. */
 .strip__label {
@@ -834,17 +849,9 @@ footer a { color: var(--accent); }
   flex-direction: column;
   justify-content: center;
   gap: 1px;
-  padding: 3px 10px 3px 2px;
+  padding: 2px 12px 2px 2px;
   border-right: 1px solid var(--border);
   overflow: hidden;
-}
-
-/* The header row's own corner, so day numbers do not slide under the labels. */
-.strip__corner {
-  position: sticky;
-  left: 0;
-  z-index: 3;
-  background: var(--bg);
 }
 .strip__place {
   font-size: 12px;
@@ -853,21 +860,74 @@ footer a { color: var(--accent); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.strip__meta { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* When you are there, which is what someone reading their own trip wants from
+   this column, so it is the line that carries colour. */
+.strip__stay {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.strip__stay em { font-style: normal; font-size: 9.5px; opacity: 0.75; }
+.strip__meta {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
-.strip__cell { height: 26px; border-radius: 2px; position: relative; }
+.strip__cell { height: 26px; position: relative; }
+.strip__cell--month { box-shadow: inset 1px 0 0 rgba(53, 46, 36, 0.9); }
 
-/* A ring rather than another fill: "you are here" is a different kind of
-   statement from the stage the cell is showing, and must not read as one more
-   colour on the ramp. */
+/* Where the stay is now: a solid bar drawn over the run, capped at its ends
+   so it reads as one stay. Above the ghost in z-order and in weight. */
 .strip__cell--here::after {
   content: '';
   position: absolute;
-  inset: -2px;
-  border: 2px solid var(--text);
-  border-radius: 4px;
+  inset: -2px 0;
+  border-top: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
+  z-index: 2;
 }
-.strip__cell--here { z-index: 2; }
+.strip__cell--start::after { border-left: 2px solid var(--text); border-radius: 4px 0 0 4px; }
+.strip__cell--end::after { border-right: 2px solid var(--text); border-radius: 0 4px 4px 0; }
+
+/* Where it was before the last move.
+   A cool blue, because it is the one hue the foliage ramp never reaches --
+   against greens, golds, reds and browns it cannot be mistaken for data. It
+   was a dim white dashed hairline sitting directly under a solid white ring,
+   which is a difference you have to go looking for. */
+.strip__cell--was::before {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+  border-top: 2px dashed rgb(122, 196, 255);
+  border-bottom: 2px dashed rgb(122, 196, 255);
+  z-index: 1;
+}
+.strip__cell--wasStart::before {
+  border-left: 2px dashed rgb(122, 196, 255);
+  border-radius: 5px 0 0 5px;
+}
+.strip__cell--wasEnd::before {
+  border-right: 2px dashed rgb(122, 196, 255);
+  border-radius: 0 5px 5px 0;
+}
+
+/* Named, because two markers mean two things and the second only appears
+   after you move something. */
+.strip__key { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 9px; font-size: 11.5px; }
+.strip__key span { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+.strip__key span::before {
+  content: '';
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--text);
+}
+.strip__key__was::before { border-top: 2px dashed rgb(122, 196, 255) !important; }
 
 .tripcontrols {
   display: flex;
