@@ -458,24 +458,49 @@ export default function Trip({ nav }) {
                     ? 'as planned'
                     : `${Math.abs(shift)} day${Math.abs(shift) === 1 ? '' : 's'} ${shift > 0 ? 'later' : 'earlier'}`}
                 </span>
-                <button type="button" className="btn" onClick={findBestWeek} disabled={!ready}>
-                  Find the best week
-                </button>
-                {stops.length > 1 && (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={fitEachStop}
-                    disabled={ready < stops.length}
-                    title="Changes each stop's dates, keeping the order and the length of every stay"
-                  >
-                    Re-time each stop
-                  </button>
-                )}
                 {shift !== 0 && (
                   <button type="button" className="btn btn--quiet" onClick={() => setShift(0)}>
-                    Reset
+                    Put it back
                   </button>
+                )}
+              </div>
+              <p className="note">
+                Drags every stop together to see what leaving earlier or later
+                would do. It is a preview: your dates are untouched until you
+                use one of the buttons below.
+              </p>
+
+              {/* Each action says what it does to the trip, because the two
+                  differ in a way the labels alone cannot carry: one is a view
+                  and the other rewrites the dates you chose. */}
+              <div className="tripactions">
+                <div className="tripactions__one">
+                  <button type="button" className="btn" onClick={findBestWeek} disabled={!ready}>
+                    Find the best week
+                  </button>
+                  <p>
+                    Slides the whole trip to the week that catches the most peak,
+                    keeping the gaps between stops exactly as you have them. Sets
+                    the slider above, so your dates stay as they are.
+                  </p>
+                </div>
+                {stops.length > 1 && (
+                  <div className="tripactions__one">
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={fitEachStop}
+                      disabled={ready < stops.length}
+                    >
+                      Re-time each stop
+                    </button>
+                    <p>
+                      Moves each stop to its own best dates, which can catch
+                      windows that are too far apart for one shift to reach. Keeps
+                      the order and the length of every stay, and <strong>does
+                      change your dates</strong>.
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -518,13 +543,27 @@ export default function Trip({ nav }) {
 
         {stops.length > 0 && (
           <section className="tripsave">
-            <div className="tripsave__row">
-              <button type="button" className="btn" onClick={shareTrip}>
-                {shared === 'shared' ? 'Shared' : shared === 'copied' ? 'Link copied' : 'Share this trip'}
-              </button>
-              <button type="button" className="btn" onClick={saveTrip} disabled={alreadySaved}>
-                {alreadySaved ? 'Saved on this device' : 'Save to this device'}
-              </button>
+            <div className="tripactions">
+              <div className="tripactions__one">
+                <button type="button" className="btn" onClick={shareTrip}>
+                  {shared === 'shared' ? 'Shared' : shared === 'copied' ? 'Link copied' : 'Share this trip'}
+                </button>
+                <p>
+                  Hands over the link, which is the whole trip: stops, stays and
+                  all. Uses your phone&rsquo;s share sheet where there is one and
+                  copies to the clipboard otherwise.
+                </p>
+              </div>
+              <div className="tripactions__one">
+                <button type="button" className="btn" onClick={saveTrip} disabled={alreadySaved}>
+                  {alreadySaved ? 'Saved on this device' : 'Save to this device'}
+                </button>
+                <p>
+                  Keeps it in this browser so you can come back to it without the
+                  link. It does not travel to another device, and clearing your
+                  browsing data clears it.
+                </p>
+              </div>
             </div>
             {shared === 'manual' && (
               <label className="tripsave__manual">
@@ -538,10 +577,9 @@ export default function Trip({ nav }) {
               </label>
             )}
             <p className="note">
-              The whole trip is in the address bar, so the link is the trip. Nothing is
-              stored on a server and there is no account behind it.
-              Saving keeps it in this browser on this device, which is a
-              convenience rather than a backup.
+              Nothing is stored on a server and there is no account behind any of
+              this, which is why the link carries the trip rather than pointing at
+              one.
             </p>
           </section>
         )}
@@ -627,9 +665,32 @@ function StopCard({ stop, shift, error, bounds, onStay, onRemove, onUp, onDown }
           </>
         )}
         <span className="stopcard__actions">
-          <button type="button" onClick={onUp} disabled={!onUp} aria-label="Move earlier in trip">↑</button>
-          <button type="button" onClick={onDown} disabled={!onDown} aria-label="Move later in trip">↓</button>
-          <button type="button" onClick={onRemove} aria-label={`Remove ${stop.name}`}>×</button>
+          <button
+            type="button"
+            onClick={onUp}
+            disabled={!onUp}
+            aria-label={`Move ${stop.name} earlier in the trip`}
+            title="Move this stop earlier in the order. Dates are not changed."
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={onDown}
+            disabled={!onDown}
+            aria-label={`Move ${stop.name} later in the trip`}
+            title="Move this stop later in the order. Dates are not changed."
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove ${stop.name} from the trip`}
+            title="Remove this stop from the trip"
+          >
+            ×
+          </button>
         </span>
       </div>
 

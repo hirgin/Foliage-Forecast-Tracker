@@ -1338,3 +1338,30 @@ footer a { color: var(--accent); }
   color: var(--muted);
   white-space: nowrap;
 }
+
+/* An action and what it does to the trip, side by side. The labels alone
+   cannot carry the difference that matters here: one of these is a preview
+   and the other rewrites the dates you chose. */
+.tripactions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(238px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.tripactions__one {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.tripactions__one p {
+  margin: 0 !important;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted) !important;
+}
+.tripactions__one strong { color: var(--text); }
