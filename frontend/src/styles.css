@@ -1213,3 +1213,80 @@ footer a { color: var(--accent); }
   .daterange { align-self: stretch; }
   .daterange__trigger { justify-content: space-between; }
 }
+
+/* ---------------------------------------------------------- share/save ---- */
+
+.tripsave {
+  margin-top: 26px;
+  padding: 15px 17px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.tripsave__row { display: flex; flex-wrap: wrap; gap: 9px; }
+.tripsave .note { margin-top: 11px; }
+
+/* Shown only when neither the share sheet nor the clipboard was available,
+   so there is always something to copy by hand rather than a button that
+   appeared to do nothing. */
+.tripsave__manual { display: flex; flex-direction: column; gap: 5px; margin-top: 11px; }
+.tripsave__manual span {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tripsave__manual input {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.savedlist { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.savedlist li {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+}
+.savedlist__on { border-color: var(--accent); }
+
+.savedlist__open {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  padding: 11px 13px;
+  cursor: pointer;
+}
+.savedlist__open:hover { background: rgba(255, 255, 255, 0.04); }
+.savedlist__open strong { font-size: 13.5px; font-weight: 600; }
+.savedlist__open span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.savedlist__drop {
+  flex: none;
+  width: 38px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+}
+.savedlist__drop:hover { color: var(--bad); background: rgba(224, 112, 90, 0.08); }

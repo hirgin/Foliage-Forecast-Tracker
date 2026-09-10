@@ -3,7 +3,7 @@ import { stageOf } from '../api/packed';
 import { addDays, daysBetween } from '../season';
 import {
   encodeStops, decodeStops, peakWindow, standingOn,
-  planStop, planTrip, bestShift, countAtPeak, MAX_STOPS,
+  planStop, planTrip, bestShift, countAtPeak, tripLabel, tripSpan, MAX_STOPS,
 } from './plan';
 
 const SEASON_START = '2026-09-01';
@@ -268,5 +268,43 @@ describe('bestShift', () => {
 
   it('gives nothing back when no stop has loaded yet', () => {
     expect(bestShift(stops, {}, BOUNDS)).toBeNull();
+  });
+});
+
+describe('tripLabel', () => {
+  const at = (name, from, to = from) => ({ h3: name, from, to, name });
+
+  it('names a trip by where it starts and ends', () => {
+    expect(tripLabel([at('Stowe', '2026-10-03'), at('Conway', '2026-10-06'), at('Bar Harbor', '2026-10-09')]))
+      .toBe('Stowe → Bar Harbor');
+  });
+
+  it('names a single stop by itself', () => {
+    expect(tripLabel([at('Stowe', '2026-10-03')])).toBe('Stowe');
+  });
+
+  it('has something to say about nothing', () => {
+    expect(tripLabel([])).toBe('Empty trip');
+    expect(tripLabel(null)).toBe('Empty trip');
+  });
+});
+
+describe('tripSpan', () => {
+  const at = (name, from, to = from) => ({ h3: name, from, to, name });
+
+  it('runs from the first arrival to the last departure', () => {
+    expect(tripSpan([at('a', '2026-10-03', '2026-10-05'), at('b', '2026-10-08', '2026-10-11')]))
+      .toEqual({ from: '2026-10-03', to: '2026-10-11' });
+  });
+
+  it('takes the extremes, not the ends of the list', () => {
+    // Stops can be reordered by hand, so the last one is not always the
+    // latest, and a trip should still report the date it actually ends.
+    expect(tripSpan([at('late', '2026-10-20'), at('early', '2026-10-02')]))
+      .toEqual({ from: '2026-10-02', to: '2026-10-20' });
+  });
+
+  it('is null for an empty trip', () => {
+    expect(tripSpan([])).toBeNull();
   });
 });

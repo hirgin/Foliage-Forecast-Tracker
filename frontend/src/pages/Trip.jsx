@@ -14,7 +14,9 @@ import { formatDay } from '../components/TimeSlider';
 import { addDays, clampToSeason, horizonDate, isoToday } from '../season';
 import {
   MAX_STOPS, SHIFT_LIMIT, decodeStops, encodeStops, planTrip, bestShift, countAtPeak,
+  tripLabel, tripSpan,
 } from '../trip/plan';
+import { readTrips, addTrip, removeTrip, isSaved } from '../trip/saved';
 
 /**
  * Plan a trip against the forecast.
@@ -90,6 +92,10 @@ export default function Trip({ nav }) {
   const [nextTo, setNextTo] = useState(null);
   // Bumped on each add, and used to remount the search box so it clears.
   const [added, setAdded] = useState(0);
+  const [saved, setSaved] = useState(() => readTrips());
+  // What the share control last did, so it can say so. Cleared on a timer
+  // because a button that stays "Copied" is lying by the second press.
+  const [shared, setShared] = useState(null);
   const barRef = useRef(null);
   const [mapRes, setMapRes] = useState(6);
   const [bareCells, setBareCells] = useState([]);
@@ -214,6 +220,60 @@ export default function Trip({ nav }) {
     stage(h3, near?.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`);
     barRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [stops, mapRes, places]);
+
+  const encoded = encodeStops(stops);
+  const alreadySaved = isSaved(encoded, undefined);
+
+  /**
+   * Hand the trip over, by whatever means the browser has.
+   *
+   * The share sheet where there is one, the clipboard otherwise, and the bare
+   * URL to select if neither works -- clipboard access needs a secure context
+   * and a permission, and failing silently would leave someone pressing a
+   * button that does nothing.
+   */
+  const shareTrip = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Foliage trip', url });
+        setShared('shared');
+        return;
+      } catch (err) {
+        // Cancelling the sheet is not a failure, and must not fall through to
+        // quietly copying instead.
+        if (err?.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShared('copied');
+    } catch {
+      setShared('manual');
+    }
+  };
+
+  useEffect(() => {
+    if (!shared || shared === 'manual') return undefined;
+    const t = setTimeout(() => setShared(null), 2400);
+    return () => clearTimeout(t);
+  }, [shared]);
+
+  const saveTrip = () => {
+    const span = tripSpan(stops);
+    setSaved(addTrip({
+      stops: encoded,
+      label: tripLabel(stops),
+      dates: span ? `${formatDay(span.from)} – ${formatDay(span.to)}` : '',
+    }));
+  };
+
+  // Loading goes through the URL rather than straight into state, so a saved
+  // trip arrives by exactly the path a shared link does -- including the
+  // reset of the shift that comes with it.
+  const openSaved = (entry) => {
+    window.location.hash = `#/trip?s=${encodeURIComponent(entry.stops)}`;
+  };
 
   const showOnMap = (i) => {
     setFocusIndex(i);
@@ -426,6 +486,60 @@ export default function Trip({ nav }) {
               </ol>
             </section>
           </>
+        )}
+
+        {stops.length > 0 && (
+          <section className="tripsave">
+            <div className="tripsave__row">
+              <button type="button" className="btn" onClick={shareTrip}>
+                {shared === 'shared' ? 'Shared' : shared === 'copied' ? 'Link copied' : 'Share this trip'}
+              </button>
+              <button type="button" className="btn" onClick={saveTrip} disabled={alreadySaved}>
+                {alreadySaved ? 'Saved on this device' : 'Save to this device'}
+              </button>
+            </div>
+            {shared === 'manual' && (
+              <label className="tripsave__manual">
+                <span>Copy this link</span>
+                <input
+                  type="text"
+                  readOnly
+                  value={window.location.href}
+                  onFocus={(e) => e.target.select()}
+                />
+              </label>
+            )}
+            <p className="note">
+              The whole trip is in the address bar, so the link is the trip —
+              nothing is stored on a server and there is no account behind it.
+              Saving keeps it in this browser on this device, which is a
+              convenience rather than a backup.
+            </p>
+          </section>
+        )}
+
+        {saved.length > 0 && (
+          <section>
+            <h2>Saved on this device</h2>
+            <ul className="savedlist">
+              {saved.map((entry) => (
+                <li key={entry.id} className={entry.stops === encoded ? 'savedlist__on' : undefined}>
+                  <button type="button" className="savedlist__open" onClick={() => openSaved(entry)}>
+                    <strong>{entry.label}</strong>
+                    {entry.dates && <span>{entry.dates}</span>}
+                  </button>
+                  <button
+                    type="button"
+                    className="savedlist__drop"
+                    onClick={() => setSaved(removeTrip(entry.id))}
+                    aria-label={`Forget ${entry.label}`}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <section className="callout">

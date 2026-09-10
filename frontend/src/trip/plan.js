@@ -245,3 +245,35 @@ export function bestShift(stops, timelines, bounds, limit = SHIFT_LIMIT) {
 export function countAtPeak(planned) {
   return planned.filter((p) => p.atPeak).length;
 }
+
+/**
+ * What to call a trip in a list of them.
+ *
+ * Where it starts and where it ends, which is how people describe a trip to
+ * each other. The stops between are what the trip page is for; a saved entry
+ * only has to be recognisable.
+ */
+export function tripLabel(stops) {
+  if (!stops?.length) return 'Empty trip';
+  if (stops.length === 1) return stops[0].name;
+  return `${stops[0].name} → ${stops[stops.length - 1].name}`;
+}
+
+/**
+ * The span a whole trip covers, from the first arrival to the last departure.
+ *
+ * Taken as the extremes rather than the first and last stop's own dates: the
+ * stops can be reordered by hand, and a trip whose second stop is its latest
+ * should still report the date it actually ends.
+ */
+export function tripSpan(stops) {
+  if (!stops?.length) return null;
+  let from = stops[0].from;
+  let to = stops[0].to || stops[0].from;
+  for (const s of stops) {
+    if (s.from < from) from = s.from;
+    const end = s.to || s.from;
+    if (end > to) to = end;
+  }
+  return { from, to };
+}
