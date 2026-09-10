@@ -241,6 +241,120 @@ export function bestShift(stops, timelines, bounds, limit = SHIFT_LIMIT) {
   return best;
 }
 
+/**
+ * What a stop at peak is worth against one merely close to it.
+ *
+ * Large enough that no amount of being nearly right adds up to catching peak
+ * once, because it does not: a stay either overlaps the band or it does not,
+ * and three near misses are not worth one hit.
+ */
+const PEAK_WORTH = 1000;
+
+/**
+ * Re-time every stop independently, keeping the order and the length of each
+ * stay.
+ *
+ * [bestShift] slides the whole trip by one offset, which cannot help a trip
+ * whose stops peak at different times: Stowe closing on the 12th and Bar
+ * Harbor opening on the 17th have no single shift that catches both. This
+ * chooses a start date per stop instead, which can.
+ *
+ * It is deliberately not the default. Shifting is a view of the trip you
+ * planned; this rewrites the dates, and a planner that quietly re-books your
+ * nights is not one you would trust twice.
+ *
+ * Exact rather than greedy, because greedy is wrong here in a way that shows:
+ * placing each stop at its own best week in turn lets an early stop sit where
+ * it blocks a later one from reaching its window at all. A backwards pass with
+ * a running suffix maximum is O(stops x days) -- about eight hundred steps for
+ * a season -- so there is nothing to be bought by approximating it.
+ *
+ * [minGap] is the days between one stay ending and the next beginning. One
+ * means the next stop starts the day after, which is what adding a stop
+ * already assumes.
+ */
+export function bestSpacing(stops, timelines, bounds, minGap = 1) {
+  if (!stops?.length || !bounds) return null;
+
+  const days = [];
+  for (let d = bounds.from; d <= bounds.to; d = addDays(d, 1)) days.push(d);
+  const span = days.length;
+  if (!span) return null;
+
+  // Nights, so a stay keeps the length it was given. Someone who booked four
+  // nights wants four nights somewhere better, not a shorter trip.
+  const nights = stops.map((s) => daysBetween(s.from, s.to || s.from));
+
+  // What starting stop i on each day of the season is worth.
+  const scores = stops.map((stop, i) => {
+    const series = timelines?.[stop.h3]?.days;
+    if (!series) return null;
+    const byDate = new Map(series.map((x) => [x.date, x]));
+    return days.map((_, di) => {
+      const end = di + nights[i];
+      if (end >= span) return null; // the stay would run off the season
+      let best = null;
+      for (let k = di; k <= end; k += 1) {
+        const day = byDate.get(days[k]);
+        if (!day || typeof day.progression !== 'number') continue;
+        const gap = Math.abs(day.progression - BAND_MIDDLE);
+        if (!best || gap < best.gap) best = { gap, peak: day.stage === 'PEAK' };
+      }
+      if (!best) return null;
+      return (best.peak ? PEAK_WORTH : 0) - best.gap;
+    });
+  });
+  // A stop whose season has not arrived cannot be placed, and guessing at one
+  // would move a stop for reasons nobody could see.
+  if (scores.some((x) => !x)) return null;
+
+  const n = stops.length;
+  const best = Array.from({ length: n }, () => new Array(span).fill(-Infinity));
+  const nextStart = Array.from({ length: n }, () => new Array(span).fill(-1));
+
+  for (let i = n - 1; i >= 0; i -= 1) {
+    if (i === n - 1) {
+      for (let d = 0; d < span; d += 1) {
+        best[i][d] = scores[i][d] == null ? -Infinity : scores[i][d];
+      }
+      continue;
+    }
+    // The best any later stop can do from day d onwards, and where it starts.
+    const suffix = new Array(span).fill(-Infinity);
+    const suffixAt = new Array(span).fill(-1);
+    for (let d = span - 1; d >= 0; d -= 1) {
+      suffix[d] = best[i + 1][d];
+      suffixAt[d] = d;
+      if (d + 1 < span && suffix[d + 1] > suffix[d]) {
+        suffix[d] = suffix[d + 1];
+        suffixAt[d] = suffixAt[d + 1];
+      }
+    }
+    for (let d = 0; d < span; d += 1) {
+      const own = scores[i][d];
+      const after = d + nights[i] + minGap;
+      if (own == null || after >= span || suffix[after] === -Infinity) continue;
+      best[i][d] = own + suffix[after];
+      nextStart[i][d] = suffixAt[after];
+    }
+  }
+
+  let start = -1;
+  for (let d = 0; d < span; d += 1) {
+    if (best[0][d] > (start < 0 ? -Infinity : best[0][start])) start = d;
+  }
+  if (start < 0 || best[0][start] === -Infinity) return null;
+
+  const placed = [];
+  let at = start;
+  for (let i = 0; i < n; i += 1) {
+    placed.push({ from: days[at], to: days[at + nights[i]] });
+    at = nextStart[i][at];
+    if (i < n - 1 && at < 0) return null;
+  }
+  return placed;
+}
+
 /** How many stops catch peak at some point during their stay. */
 export function countAtPeak(planned) {
   return planned.filter((p) => p.atPeak).length;

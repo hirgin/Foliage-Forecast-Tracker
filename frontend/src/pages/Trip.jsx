@@ -13,8 +13,8 @@ import DateRange from '../components/DateRange';
 import { formatDay } from '../components/TimeSlider';
 import { addDays, clampToSeason, horizonDate, isoToday } from '../season';
 import {
-  MAX_STOPS, SHIFT_LIMIT, decodeStops, encodeStops, planTrip, bestShift, countAtPeak,
-  tripLabel, tripSpan,
+  MAX_STOPS, SHIFT_LIMIT, decodeStops, encodeStops, planTrip, bestShift, bestSpacing,
+  countAtPeak, tripLabel, tripSpan,
 } from '../trip/plan';
 import { readTrips, addTrip, removeTrip, isSaved } from '../trip/saved';
 
@@ -297,6 +297,23 @@ export default function Trip({ nav }) {
     setStops(next);
   };
 
+  /**
+   * Re-time each stop rather than sliding the trip.
+   *
+   * Deliberately a second button and never the default: shifting is a view of
+   * the trip you planned, and this rewrites the dates you chose. It keeps the
+   * order and the length of every stay, so what changes is when each one
+   * happens, not what the trip is.
+   */
+  const fitEachStop = () => {
+    const placed = bestSpacing(stops, timelines.byH3, bounds);
+    if (!placed) return;
+    setStops(stops.map((s, i) => ({ ...s, ...placed[i] })));
+    // The dates themselves moved, so a shift left over from exploring would
+    // now be applied on top of an answer that already accounts for it.
+    setShift(0);
+  };
+
   const findBestWeek = () => {
     const best = bestShift(stops, timelines.byH3, bounds);
     if (best) setShift(best.shift);
@@ -444,6 +461,17 @@ export default function Trip({ nav }) {
                 <button type="button" className="btn" onClick={findBestWeek} disabled={!ready}>
                   Find the best week
                 </button>
+                {stops.length > 1 && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={fitEachStop}
+                    disabled={ready < stops.length}
+                    title="Changes each stop's dates, keeping the order and the length of every stay"
+                  >
+                    Re-time each stop
+                  </button>
+                )}
                 {shift !== 0 && (
                   <button type="button" className="btn btn--quiet" onClick={() => setShift(0)}>
                     Reset

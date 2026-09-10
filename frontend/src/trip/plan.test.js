@@ -3,7 +3,7 @@ import { stageOf } from '../api/packed';
 import { addDays, daysBetween } from '../season';
 import {
   encodeStops, decodeStops, peakWindow, standingOn,
-  planStop, planTrip, bestShift, countAtPeak, tripLabel, tripSpan, MAX_STOPS,
+  planStop, planTrip, bestShift, bestSpacing, countAtPeak, tripLabel, tripSpan, MAX_STOPS,
 } from './plan';
 
 const SEASON_START = '2026-09-01';
@@ -306,5 +306,84 @@ describe('tripSpan', () => {
 
   it('is null for an empty trip', () => {
     expect(tripSpan([])).toBeNull();
+  });
+});
+
+describe('bestSpacing', () => {
+  // The case bestShift cannot solve: Franconia is birch and peaks a week
+  // before its neighbours, so no single offset catches it along with them.
+  const stops = [
+    { h3: 'franconia', from: '2026-09-20', to: '2026-09-22', name: 'Franconia' },
+    { h3: 'stowe', from: '2026-09-24', to: '2026-09-25', name: 'Stowe' },
+    { h3: 'barharbor', from: '2026-09-27', to: '2026-09-30', name: 'Bar Harbor' },
+  ];
+  const timelines = {
+    franconia: { days: series('2026-09-24') },
+    stowe: { days: series('2026-10-05') },
+    barharbor: { days: series('2026-10-17') },
+  };
+
+  it('catches stops that no single shift can catch together', () => {
+    // The whole reason it exists: shifting moves everything by one offset,
+    // and these three windows are too far apart for that to work.
+    const shifted = bestShift(stops, timelines, BOUNDS);
+    const byShift = countAtPeak(planTrip(stops, timelines, shifted.shift));
+
+    const placed = bestSpacing(stops, timelines, BOUNDS);
+    const respaced = stops.map((s, i) => ({ ...s, ...placed[i] }));
+    expect(countAtPeak(planTrip(respaced, timelines, 0))).toBeGreaterThan(byShift);
+  });
+
+  it('keeps every stay the length it was given', () => {
+    // Someone who booked four nights wants four nights somewhere better, not
+    // a shorter trip.
+    const placed = bestSpacing(stops, timelines, BOUNDS);
+    placed.forEach((p, i) => {
+      expect(daysBetween(p.from, p.to)).toBe(daysBetween(stops[i].from, stops[i].to));
+    });
+  });
+
+  it('keeps the stops in order and never overlaps them', () => {
+    const placed = bestSpacing(stops, timelines, BOUNDS);
+    for (let i = 1; i < placed.length; i += 1) {
+      expect(placed[i].from > placed[i - 1].to).toBe(true);
+    }
+  });
+
+  it('leaves at least the gap it was asked for', () => {
+    const placed = bestSpacing(stops, timelines, BOUNDS, 3);
+    for (let i = 1; i < placed.length; i += 1) {
+      expect(daysBetween(placed[i - 1].to, placed[i].from)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('stays inside the season at both ends', () => {
+    const placed = bestSpacing(stops, timelines, BOUNDS);
+    expect(placed[0].from >= BOUNDS.from).toBe(true);
+    expect(placed[placed.length - 1].to <= BOUNDS.to).toBe(true);
+  });
+
+  it('is exact rather than greedy', () => {
+    // Greedy fails here in a way that shows: placing the first stop at its own
+    // best week leaves the second unable to reach its window before the season
+    // ends, so a good answer needs the first stop to give ground.
+    const tight = [
+      { h3: 'early', from: '2026-09-02', to: '2026-09-03', name: 'Early' },
+      { h3: 'late', from: '2026-09-05', to: '2026-09-06', name: 'Late' },
+    ];
+    const lines = {
+      early: { days: series('2026-11-08') },
+      late: { days: series('2026-11-12') },
+    };
+    const placed = bestSpacing(tight, lines, BOUNDS);
+    const respaced = tight.map((s, i) => ({ ...s, ...placed[i] }));
+    expect(countAtPeak(planTrip(respaced, lines, 0))).toBe(2);
+  });
+
+  it('declines to place a trip whose seasons have not loaded', () => {
+    // Guessing would move stops for reasons nobody could see.
+    expect(bestSpacing(stops, { stowe: timelines.stowe }, BOUNDS)).toBeNull();
+    expect(bestSpacing([], timelines, BOUNDS)).toBeNull();
+    expect(bestSpacing(stops, timelines, null)).toBeNull();
   });
 });
