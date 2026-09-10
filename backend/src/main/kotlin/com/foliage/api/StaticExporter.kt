@@ -2,6 +2,7 @@ package com.foliage.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.foliage.api.PackedFormat.putMagic
+import kotlin.math.roundToInt
 import com.foliage.forecast.ForecastService
 import com.foliage.grid.H3Grid
 import com.foliage.ingest.weather.Season
@@ -27,6 +28,7 @@ import java.time.LocalDate
  *     meta.json              season bounds, model version, counts
  *     cells.json             the cell index -- written ONCE, defines the order
  *     forecast/<date>.bin    three parallel byte arrays in that order
+ *     peak.bin               the day peak arrives, one byte per cell
  *     timeline/<res3>.bin    whole-season series, sharded by res 3 ancestor
  *     factors/<res3>.json    peak-day explanations, sharded the same way
  *
@@ -186,15 +188,6 @@ class StaticExporter(
         // Position in this list is the cell's identity everywhere else.
         val order = grid6.map { it.h3 }
 
-        // Cells that never turn: evergreen by forest type *and* by behaviour.
-        // Requiring both is what makes a part-rescored country render
-        // correctly -- see the note on the daily channels below.
-        val everPeaks = forecasts.peakDayByCell(stateFips).keys
-        val neverTurns: Set<Long> = grid6
-            .filter { !com.foliage.forecast.ForestTypeGroup.showsColour(it.forestTypeGroup) }
-            .map { it.h3 }
-            .filterNot { everPeaks.contains(it) }
-            .toSet()
         val indexOf = order.withIndex().associate { (i, h3) -> h3 to i }
 
         val peakDays = forecasts.peakDayByCell()
@@ -290,6 +283,51 @@ class StaticExporter(
         }
 
         // --- one packed file per day --------------------------------------
+        // --- when peak arrives, one byte per cell -------------------------
+        //
+        // Everything else here answers "what is this cell doing on that date",
+        // and the map made people scrub a slider to find the answer to the
+        // opposite question. This is that question directly: the offset in days
+        // from the season's first day to the day the cell first reaches peak.
+        //
+        // It is derivable from the timelines already exported, and deriving it
+        // is what makes it worth a file: doing so in the browser means fetching
+        // all 720 shards, roughly 23 MB, to colour one map. A byte per cell is
+        // 141 KB for the country.
+        run {
+            val seasonStart = days.first()
+            fun offsetOf(peak: java.time.LocalDate?): Int {
+                if (peak == null) return PackedFormat.NO_DATA
+                val n = java.time.temporal.ChronoUnit.DAYS.between(seasonStart, peak)
+                // Outside the exported season is the same claim as no peak at
+                // all: this file cannot say "before you were looking".
+                return if (n < 0 || n >= PackedFormat.NO_DATA) PackedFormat.NO_DATA else n.toInt()
+            }
+
+            val fine = PackedFormat.buffer(PackedFormat.HEADER_BYTES + order.size)
+            fine.putMagic(PackedFormat.MAGIC_PEAK).putInt(order.size)
+            for (h3 in order) fine.put(offsetOf(peakDays[h3]).toByte())
+            write(target.resolve("peak.bin"), fine.array())
+
+            // Averaged over the children that have a peak, matching how the
+            // daily files aggregate. A parent where nothing peaks stays
+            // no-data rather than borrowing a date from a neighbour.
+            for ((res, children, cellOrder) in coarseLevels) {
+                val buf = PackedFormat.buffer(PackedFormat.HEADER_BYTES + cellOrder.size)
+                buf.putMagic(PackedFormat.MAGIC_PEAK).putInt(cellOrder.size)
+                for (parent in cellOrder) {
+                    val offsets = children[parent].orEmpty()
+                        .map { offsetOf(peakDays[it]) }
+                        .filter { it != PackedFormat.NO_DATA }
+                    buf.put(
+                        if (offsets.isEmpty()) PackedFormat.NO_DATA.toByte()
+                        else offsets.average().roundToInt().toByte(),
+                    )
+                }
+                write(target.resolve("peak-r$res.bin"), buf.array())
+            }
+        }
+
         for (day in days) {
             val byCell = forecasts.byDay(day).associateBy { it.h3 }
             val n = order.size
@@ -299,28 +337,20 @@ class StaticExporter(
             // Three separate runs rather than interleaved triples: each
             // channel then compresses against itself, and neighbouring cells
             // hold similar values, so gzip does considerably better.
-            // An evergreen hexagon is written as "no reading" rather than as a
-            // score, which the client draws faded: present on the map, plainly
-            // not part of the autumn.
+            // The evergreen sentinel used to live here, for a conifer cell
+            // that never reached peak all season. It was written for the
+            // rollout that gave conifers a real curve, and it predicted its own
+            // end: "once every state is rescored no cell matches this". That
+            // has happened. Conifers now turn on the same curve as everything
+            // else at about a third the vividness, which is a quiet autumn
+            // rather than a category.
             //
-            // Scoring them NO_CHANGE was worse than it sounds. NO_CHANGE is the
-            // green of a forest that has not turned *yet*, so a December map
-            // grew pockets of green implying colour still to come from stands
-            // that were never going to produce any.
-            // Evergreen is decided by behaviour, not by a flag: a conifer cell
-            // that never reaches peak all season really does never turn, and is
-            // drawn in its own colour rather than as a green that never moves.
-            //
-            // That rule spans a rollout. Cells scored before conifers were
-            // given a real curve sit at zero progression every day of the
-            // season and never peak, so they are still drawn as evergreen;
-            // cells scored after it turn, peak, and are drawn as the muted
-            // autumn they now have. Both are correct at once, which is what
-            // lets the country be rescored a few states at a time instead of
-            // all in one pass. Once every state is rescored no cell matches
-            // this and the sentinel stops being written at all.
+            // What the sentinel still caught was 32 cells with no forecast at
+            // all -- read out of the timeline shards, which never applied it,
+            // every one was empty for all 106 days. Calling those "known, and
+            // known to stay green" was the opposite of the truth. They fall
+            // through to NO_DATA now and draw as the hole they are.
             fun channel(h3: Long, value: Double?, unit: Boolean): Byte = when {
-                neverTurns.contains(h3) -> PackedFormat.EVERGREEN.toByte()
                 unit -> PackedFormat.quantiseUnit(value).toByte()
                 else -> PackedFormat.quantise(value).toByte()
             }
@@ -345,27 +375,21 @@ class StaticExporter(
                 // showing the maple's autumn; including the spruces at zero
                 // would report it as permanently a quarter turned.
                 //
-                // Children that never turn are left out of the average, for the
-                // same reason they get their own colour: mixing a cell that
-                // stays put into a coarse hexagon alongside one that has
-                // finished gives a value half-way through an autumn that never
-                // happened. A parent whose children all stay put is evergreen
-                // country and is drawn as such.
-                val allEvergreen = cellOrder.map { parent ->
-                    val kids = children[parent].orEmpty()
-                    kids.isNotEmpty() && kids.all { neverTurns.contains(it) }
-                }
+                // Children with no reading were already excluded here by name,
+                // as "cells that never turn". mapNotNull does it on its own --
+                // a cell with no forecast contributes nothing to an average --
+                // so the named exclusion was doing no work the null check was
+                // not already doing, and a parent with no readable children
+                // still comes out null and draws as no forecast.
                 fun meanOver(pick: (com.foliage.persistence.StoredForecast) -> Double): List<Double?> =
                     cellOrder.map { parent ->
-                        val kids = children[parent].orEmpty().filterNot { neverTurns.contains(it) }
-                        val values = kids.mapNotNull { byCell[it]?.let(pick) }
+                        val values = children[parent].orEmpty().mapNotNull { byCell[it]?.let(pick) }
                         if (values.isEmpty()) null else values.average()
                     }
                 fun putChannel(values: List<Double?>, unit: Boolean) {
                     values.forEachIndexed { i, v ->
                         coarse.put(
                             when {
-                                allEvergreen[i] -> PackedFormat.EVERGREEN.toByte()
                                 unit -> PackedFormat.quantiseUnit(v).toByte()
                                 else -> PackedFormat.quantise(v).toByte()
                             },

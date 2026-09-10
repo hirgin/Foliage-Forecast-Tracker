@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useForecast, useMeta, usePrefetchForecast } from '../api/hooks';
+import { useForecast, useMeta, usePrefetchForecast, usePeakDates } from '../api/hooks';
 import { resolutionForZoom, cellWidthKm, h3ForPlace, fetchBareCells } from '../api/client';
 import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
 import PlaceSearch from '../components/PlaceSearch';
-import { STAGES } from '../map/colors';
+import { STAGES, peakDateColor, PEAK_DATE_ALPHA } from '../map/colors';
 import { addDays, horizonDate } from '../season';
 
 export default function MapView({ nav }) {
@@ -20,6 +20,10 @@ export default function MapView({ nav }) {
   // country on screen, so the map falls back to a coarser export when zoomed
   // out and swaps back on the way in.
   const [resolution, setResolution] = useState(6);
+  // Which question the map is answering. 'stage' is what a cell is doing on
+  // the chosen date; 'peak' is when its peak arrives, which is the question
+  // people actually turn up with and previously had to find by scrubbing.
+  const [mode, setMode] = useState('stage');
 
   // The unforested rest of the grid, so the map has no holes in it. Fetched
   // once and never per date: these cells carry no forecast, which is exactly
@@ -75,6 +79,39 @@ export default function MapView({ nav }) {
   usePrefetchForecast(date, seasonDays, resolution);
   const cells = data?.cells ?? [];
 
+  // Fetched only when asked for, so anyone who never opens this view never
+  // pays for the file.
+  const peak = usePeakDates(resolution, mode === 'peak');
+  const peakCells = useMemo(() => {
+    if (mode !== 'peak' || !peak.data) return [];
+    const { h3, offsets } = peak.data;
+    const out = new Array(h3.length);
+    for (let i = 0; i < h3.length; i += 1) out[i] = { h3: h3[i], peak: offsets[i] };
+    return out;
+  }, [mode, peak.data]);
+
+  const seasonLength = peak.data?.dates?.length ?? 0;
+  const peakFill = useCallback((d) => {
+    // 255 is "never reaches peak in this season", which is a real answer and
+    // must not be coloured as though it were an early one.
+    if (d.peak == null || d.peak === 255 || !seasonLength) return [70, 66, 60, 90];
+    return [...peakDateColor(d.peak / (seasonLength - 1)), PEAK_DATE_ALPHA];
+  }, [seasonLength]);
+
+  // Month boundaries, so the ramp is read against real dates rather than a
+  // bare gradient with two numbers on the ends.
+  const peakTicks = useMemo(() => {
+    const dates = peak.data?.dates;
+    if (!dates?.length) return [];
+    const out = [];
+    dates.forEach((d, i) => {
+      if (d.slice(8) === '01' || i === 0) {
+        out.push({ at: i / (dates.length - 1), label: formatDay(d).replace(/^1 /, '') });
+      }
+    });
+    return out;
+  }, [peak.data]);
+
   const horizon = useMemo(() => horizonDate(), []);
   const beyondHorizon = Boolean(date) && date > horizon;
 
@@ -95,7 +132,8 @@ export default function MapView({ nav }) {
     // panel steps aside rather than stacking two sheets over a hidden map.
     <div className={selected ? 'app app--detail' : 'app'}>
       <FoliageMap
-        cells={cells}
+        cells={mode === 'peak' ? peakCells : cells}
+        colorFor={mode === 'peak' ? peakFill : undefined}
         bareCells={bareCells}
         resolution={resolution}
         selected={selected}
@@ -140,6 +178,25 @@ export default function MapView({ nav }) {
           }}
         />
 
+        <div className="modes" role="group" aria-label="What the map shows">
+          <button
+            type="button"
+            className={mode === 'stage' ? 'modes__pick modes__pick--on' : 'modes__pick'}
+            onClick={() => setMode('stage')}
+            aria-pressed={mode === 'stage'}
+          >
+            On a date
+          </button>
+          <button
+            type="button"
+            className={mode === 'peak' ? 'modes__pick modes__pick--on' : 'modes__pick'}
+            onClick={() => setMode('peak')}
+            aria-pressed={mode === 'peak'}
+          >
+            When peak arrives
+          </button>
+        </div>
+
         {(meta.isLoading || (isLoading && !cells.length)) && (
           <p className="note">Loading forecast…</p>
         )}
@@ -147,7 +204,7 @@ export default function MapView({ nav }) {
           <p className="note note--bad">{(error ?? meta.error).message}</p>
         )}
 
-        {Boolean(cells.length) && (
+        {mode === 'stage' && Boolean(cells.length) && (
           <div className="headline">
             <span className="headline__date">{date ? formatDay(date) : '—'}</span>
             <span className="headline__peak">
@@ -158,10 +215,33 @@ export default function MapView({ nav }) {
           </div>
         )}
 
+        {mode === 'peak' && (
+          <section className="legend">
+            <h2>Peak arrives</h2>
+            {peak.isLoading && <p className="note">Loading peak dates…</p>}
+            {peak.error && <p className="note note--bad">{peak.error.message}</p>}
+            {peak.data && (
+              <>
+                <div className="peakramp" aria-hidden="true" />
+                <div className="peakramp__ticks">
+                  {peakTicks.map((t) => (
+                    <span key={t.label} style={{ left: `${t.at * 100}%` }}>{t.label}</span>
+                  ))}
+                </div>
+                <p className="note">
+                  Grey is ground that never reaches peak inside the season, or has
+                  no forecast yet. This view does not change with the date, so the
+                  slider is put away while it is open.
+                </p>
+              </>
+            )}
+          </section>
+        )}
+
         {/* The legend stays visible at every size. Without it the colours on
             the map mean nothing, and the counts are how you see where the
             season actually is. On a phone it lays out in two columns. */}
-        {Boolean(cells.length) && (
+        {mode === 'stage' && Boolean(cells.length) && (
           <section className="legend">
             <h2>Stage</h2>
             <div className="legend__rows">
@@ -228,7 +308,7 @@ export default function MapView({ nav }) {
         </div>
       </aside>
 
-      {seasonStart && date && (
+      {mode === 'stage' && seasonStart && date && (
         <TimeSlider
           seasonStart={seasonStart}
           seasonEnd={seasonEnd}

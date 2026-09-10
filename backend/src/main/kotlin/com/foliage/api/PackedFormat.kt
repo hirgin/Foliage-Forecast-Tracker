@@ -35,6 +35,17 @@ object PackedFormat {
     /** Timeline shard: magic, counts, cell indices, then per-cell series. */
     const val MAGIC_TIMELINE = "FFT1"
 
+    /**
+     * When peak arrives, one byte per cell.
+     *
+     * The daily files answer "what is this cell doing on this date". This is
+     * the inverse, and the question people actually arrive with: when should I
+     * go here. A byte holds the offset in days from the season's first day,
+     * which a 106-day season fits with room to spare, and [NO_DATA] means the
+     * cell never reaches peak inside it.
+     */
+    const val MAGIC_PEAK = "FFPK"
+
     const val HEADER_BYTES = 8
     const val CHANNELS = 3
 
@@ -53,19 +64,28 @@ object PackedFormat {
     const val NO_DATA = 255
 
     /**
-     * An evergreen forest: surveyed, scored, and never going to change colour.
+     * Retired, and reserved rather than freed. **Do not reuse this byte.**
      *
-     * A separate value from [NO_DATA] because they are different claims and
-     * the map has to say so. Drawn as no-data, an evergreen hexagon reads as a
-     * hole in the forecast -- "not forecast yet" in the legend -- when the
-     * truth is the opposite: it is known, and known to stay green. Scored as
-     * zero progression instead, it reads as a forest still waiting to turn,
-     * which is how a December map grew pockets of green.
+     * It marked an evergreen forest: surveyed, scored, and never going to
+     * change colour, drawn in a slate blue of its own. The category is gone
+     * because the model outgrew it -- conifers turn on the same curve as
+     * everything else at about a third the vividness (see
+     * PeakDateModel.CONIFER_VIVIDNESS), which is a quiet autumn rather than a
+     * class apart. This value's own comment predicted the end: "once every
+     * state is rescored no cell matches this".
      *
-     * Neither is right, so evergreens get their own value and their own colour.
-     * Genuine readings top out at 200, so 254 is free.
+     * What it still caught was worse than nothing. Read out of the timeline
+     * shards, which never applied it, all 32 cells carrying it had no forecast
+     * for any of the 106 days of the season. The map was calling them "known,
+     * and known to stay green" when they were holes. They write [NO_DATA] now.
+     *
+     * Kept as a name because published exports carry the byte until the next
+     * export replaces them, and the client must go on decoding it as "no
+     * reading" -- read as an ordinary value it halves to 127 and draws as past
+     * peak. Reusing 254 for anything else would resurrect that.
      */
-    const val EVERGREEN = 254
+    @Suppress("unused")
+    const val RETIRED_EVERGREEN = 254
 
     /** Confidence arrives as 0–1 rather than 0–100. */
     fun quantiseUnit(value: Double?): Int = quantise(value?.times(100))

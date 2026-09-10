@@ -588,7 +588,9 @@ function clampCentre(map) {
  * from the members: a fresh Set every render has a fresh identity and would
  * redraw the country on every keystroke.
  */
-export default function FoliageMap({ cells, bareCells = [], resolution = 6, selected, onSelect, focus, onZoom }) {
+export default function FoliageMap({
+  cells, bareCells = [], resolution = 6, selected, onSelect, focus, onZoom, colorFor,
+}) {
   const selectedSet = useMemo(
     () => (selected == null ? EMPTY_SELECTION
       : typeof selected === 'string' ? new Set([selected])
@@ -864,6 +866,10 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
         // A scored cell draws its own colour; an unscored one borrows from the
         // nearest forest that has a reading, the same way bare ground does.
         getFillColor: (d) => {
+          // A caller drawing something other than today's stage supplies its
+          // own fill. Borrowing from a neighbour is a repair for a *missing*
+          // forecast, which is not what a cell with no peak date is.
+          if (colorFor) return colorFor(d);
           if (d.stage != null) return foliageColor(d);
           const value = fillValue(donors.get(d.h3) ?? [], scoredByH3);
           if (value == null) return foliageColor(d);
@@ -880,7 +886,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
         onHover: ({ object }) => setHovered(object ?? null),
         onClick: ({ object }) => onSelect?.(object?.h3 ?? null),
         updateTriggers: {
-          getFillColor: [visible, donors, scoredByH3],
+          getFillColor: [visible, donors, scoredByH3, colorFor],
           getLineColor: [selectionKey],
           getLineWidth: [selectionKey],
         },
@@ -888,7 +894,7 @@ export default function FoliageMap({ cells, bareCells = [], resolution = 6, sele
     // The bare layer is conditional, so drop the null when it is off rather
     // than handing deck.gl a hole in the list.
     ].filter(Boolean),
-    [visible, resolution, selectedSet, selectionKey, onSelect, donors, scoredByH3],
+    [visible, resolution, selectedSet, selectionKey, onSelect, donors, scoredByH3, colorFor],
   );
 
   useEffect(() => {

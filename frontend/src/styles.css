@@ -1290,3 +1290,51 @@ footer a { color: var(--accent); }
   cursor: pointer;
 }
 .savedlist__drop:hover { color: var(--bad); background: rgba(224, 112, 90, 0.08); }
+
+/* ------------------------------------------------------------ map modes ---
+
+   Which question the map answers: what a cell is doing on a date, or when its
+   peak arrives. They are different maps of the same data, so the control sits
+   above the legend that changes with it. */
+.modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  margin-top: 12px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+.modes__pick {
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 6px;
+  cursor: pointer;
+}
+.modes__pick:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.modes__pick--on { color: var(--text); background: rgba(255, 255, 255, 0.11); font-weight: 600; }
+.modes__pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Viridis, matching peakDateColor. Written out rather than generated so the
+   legend cannot drift from the ramp the map is drawing. */
+.peakramp {
+  height: 12px;
+  border-radius: 3px;
+  margin-top: 4px;
+  background: linear-gradient(
+    to right,
+    rgb(68, 1, 84), rgb(59, 82, 139), rgb(33, 145, 140), rgb(94, 201, 98), rgb(253, 231, 37)
+  );
+}
+.peakramp__ticks { position: relative; height: 14px; margin-top: 3px; }
+.peakramp__ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}

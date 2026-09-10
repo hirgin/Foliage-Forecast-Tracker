@@ -172,3 +172,24 @@ export function seasonDates(seasonStart, seasonEnd) {
   }
   return out;
 }
+
+/**
+ * Decodes peak.bin: one byte per cell, in the index's order.
+ *
+ * The byte is the offset in days from the season's first day to the day that
+ * cell first reaches peak, and 255 means it never does inside the season --
+ * evergreen country, or ground with no forecast at all. Distinguishing the two
+ * is the daily files' job; this one only has to say "not in this season".
+ */
+export function decodePeak(buffer) {
+  if (buffer.byteLength < 8) throw new Error('peak file truncated');
+  const view = new DataView(buffer);
+  const magic = readMagic(view);
+  if (magic !== 'FFPK') throw new Error(`expected FFPK, got ${magic}`);
+
+  const count = view.getUint32(4, true);
+  if (buffer.byteLength < 8 + count) {
+    throw new Error(`peak claims ${count} cells but is ${buffer.byteLength} bytes`);
+  }
+  return { count, offsets: new Uint8Array(buffer, 8, count) };
+}

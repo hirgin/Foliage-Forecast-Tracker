@@ -1,6 +1,7 @@
 import { cellToParent } from 'h3-js';
 import {
   decodeDay,
+  decodePeak,
   decodeTimelineShard,
   toCells,
   seriesFor,
@@ -255,4 +256,31 @@ export async function fetchExplain(h3, date) {
     atPeakOnly: true,
     factors: entry?.factors ?? [],
   };
+}
+
+/**
+ * When peak arrives, for every cell at one resolution.
+ *
+ * Static only. The live API has no equivalent because it has no reason to:
+ * this exists so the map can colour a whole country by peak date without
+ * fetching every timeline shard to work it out.
+ */
+export async function fetchPeakDates(resolution = 6) {
+  if (STATIC) {
+    const path = resolution === 6 ? '/peak.bin' : `/peak-r${resolution}.bin`;
+    const [index, meta, buffer] = await Promise.all([
+      resolution === 6 ? staticIndex() : coarseIndex(resolution),
+      staticMeta(),
+      request(path, true),
+    ]);
+    const peak = decodePeak(buffer);
+    if (peak.count !== index.h3.length) {
+      throw new ApiError(
+        `peak has ${peak.count} cells but the index has ${index.h3.length}`,
+        0,
+      );
+    }
+    return { h3: index.h3, offsets: peak.offsets, dates: seasonDates(meta.seasonStart, meta.seasonEnd) };
+  }
+  throw new ApiError('peak dates are only published in the static build', 0);
 }

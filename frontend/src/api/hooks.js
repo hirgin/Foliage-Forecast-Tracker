@@ -1,6 +1,8 @@
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { fetchMeta, fetchForecast, fetchTimeline, fetchExplain, fetchPlaces } from './client';
+import {
+  fetchMeta, fetchForecast, fetchTimeline, fetchExplain, fetchPlaces, fetchPeakDates,
+} from './client';
 
 export function useMeta() {
   return useQuery({
@@ -148,6 +150,20 @@ export function usePlaces(enabled = true) {
     enabled,
     retry: false,
     // Changes only when the grid or the GeoNames dump does.
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * Peak dates for a whole resolution, fetched only once the map asks to see
+ * them. Someone who never opens that view never pays for the file.
+ */
+export function usePeakDates(resolution, enabled) {
+  return useQuery({
+    queryKey: ['peak', resolution],
+    queryFn: () => fetchPeakDates(resolution),
+    enabled: Boolean(enabled),
+    retry: false,
     staleTime: Infinity,
   });
 }

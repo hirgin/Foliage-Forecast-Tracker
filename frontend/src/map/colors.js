@@ -239,3 +239,34 @@ export function canopyColor(pct) {
   for (const stop of CANOPY_STOPS) if (pct >= stop.min) chosen = stop;
   return [...chosen.rgb, 205];
 }
+
+/**
+ * The ramp for *when* peak arrives, as against what a cell is doing today.
+ *
+ * Deliberately nothing like the foliage ramp. The two answer different
+ * questions and would be read as the same one if they shared a palette: red
+ * meaning "at peak now" and red meaning "peaks in late November" on the same
+ * map is worse than no colour at all.
+ *
+ * Viridis, because it is perceptually even -- equal steps in date look like
+ * equal steps in colour -- and it survives red-green colour blindness, which a
+ * rainbow does not. Drawn at a flat, high alpha: this map encodes no
+ * confidence, so nothing here should fade.
+ */
+const PEAK_RAMP = [
+  [68, 1, 84],
+  [59, 82, 139],
+  [33, 145, 140],
+  [94, 201, 98],
+  [253, 231, 37],
+];
+
+export const PEAK_DATE_ALPHA = 218;
+
+/** [t] runs 0 at the season's first day to 1 at its last. */
+export function peakDateColor(t) {
+  const x = Math.min(1, Math.max(0, t)) * (PEAK_RAMP.length - 1);
+  const i = Math.min(PEAK_RAMP.length - 2, Math.floor(x));
+  const f = x - i;
+  return [0, 1, 2].map((k) => Math.round(lerp(PEAK_RAMP[i][k], PEAK_RAMP[i + 1][k], f)));
+}
