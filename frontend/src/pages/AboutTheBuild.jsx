@@ -2,7 +2,7 @@ const PHASES = [
   { n: 0, name: 'Foundations', body: 'Kotlin/Spring Boot and React/Vite skeletons, health endpoint, migrations that degrade instead of aborting startup.' },
   { n: 1, name: 'The grid', body: 'CONUS tiled into H3 hexagons, masked to real forest cover, each cell carrying its own elevation and canopy density.' },
   { n: 2, name: 'Weather pipeline', body: 'Observed, forecast and climatological weather for every cell, batched, audited, idempotent and resumable.' },
-  { n: 3, name: 'The model', body: 'Peak date predicted from where a place sits — how far north, how high, how near the sea — and calibrated against twelve seasons of Maine Forest Service field reports. It replaced one that accumulated cool days toward a threshold, and ran a fortnight early because that error compounded all season.' },
+  { n: 3, name: 'The model', body: 'Peak date predicted from where a place sits: how far north, how high, how near the sea. Calibrated against twelve seasons of Maine Forest Service field reports. It replaced one that accumulated cool days toward a threshold, and ran a fortnight early because that error compounded all season.' },
   { n: 4, name: 'Map experience', body: 'Time slider, stage ramp, per-cell explanation, and confidence shown honestly.' },
 ];
 
@@ -82,7 +82,7 @@ export default function AboutTheBuild({ nav }) {
           {PHASES.map((p) => (
             <li key={p.n}>
               <strong>
-                Phase {p.n} — {p.name}
+                Phase {p.n}: {p.name}
               </strong>
               <p>{p.body}</p>
             </li>
@@ -95,8 +95,9 @@ export default function AboutTheBuild({ nav }) {
             <h3>Hexagons, not counties</h3>
             <p>
               Counties are political boundaries with no relationship to foliage. One Colorado
-              county spans 4,000 ft of elevation — several weeks of difference in peak timing —
-              and averaging that into a single colour discards the strongest signal available.
+              county spans 4,000 ft of elevation, several weeks of difference in peak
+              timing, and averaging that into a single colour discards the strongest signal
+              available.
             </p>
           </article>
           <article>
@@ -120,9 +121,10 @@ export default function AboutTheBuild({ nav }) {
             <p>
               This used to say every constant was a stated assumption rather than a fitted
               parameter. That stopped being true: the model is now a least-squares fit end to
-              end. What is kept from the old stance is the standard of evidence — it is fitted
-              against records of when leaves actually turned, not against other people&rsquo;s
-              forecasts, and every term still has to carry the sign physics requires. A fit that
+              end. What is kept from the old stance is the standard of evidence. It is fitted
+              against records of when leaves actually turned rather than against other
+              people&rsquo;s forecasts, and every term still has to carry the sign physics
+              requires. A fit that
               scored better with warmer weather producing an earlier peak was rejected for that
               reason alone.
             </p>
@@ -140,8 +142,8 @@ export default function AboutTheBuild({ nav }) {
             <span>6 states · within ~2 days</span>
             <em>
               Checked against twelve seasons of Maine Forest Service field reports and five years
-              of New Hampshire regional records — observations of real leaves. Coastal Maine runs
-              2.1 days mean error with no directional bias.
+              of New Hampshire regional records: observations of real leaves. Coastal Maine
+              runs 2.1 days mean error with no directional bias.
             </em>
           </div>
           <div>
@@ -149,8 +151,8 @@ export default function AboutTheBuild({ nav }) {
             <span>Drawn fainter · within ~4 days</span>
             <em>
               No comparable record exists, so these are fitted against a national county
-              prediction map — itself a forecast, and one running four to six days early where it
-              can be compared with Maine&rsquo;s foresters. 4.1 days mean error over 2,820
+              prediction map, itself a forecast, and one running four to six days early where
+              it can be compared with Maine&rsquo;s foresters. 4.1 days mean error over 2,820
               counties.
             </em>
           </div>
@@ -195,18 +197,18 @@ export default function AboutTheBuild({ nav }) {
         <h2>Where the data comes from</h2>
         <ul className="sources">
           <li>
-            <strong>When leaves actually peaked</strong> — Maine Forest Service weekly foliage
+            <strong>When leaves actually peaked:</strong> Maine Forest Service weekly foliage
             reports, 2014–2025; VisitNH regional peak records
           </li>
           <li>
-            <strong>Peak dates elsewhere</strong> — SmokyMountains.com county prediction map
+            <strong>Peak dates elsewhere:</strong> SmokyMountains.com county prediction map
           </li>
-          <li><strong>Forest type</strong> — USFS BIGMAP forest type group</li>
-          <li><strong>Tree canopy</strong> — USFS / NLCD Tree Canopy Cover, 30 m raster</li>
-          <li><strong>Elevation</strong> — USGS 3DEP and AWS Terrain Tiles</li>
-          <li><strong>Weather</strong> — Open-Meteo, including its historical archive</li>
-          <li><strong>Boundaries</strong> — US Census TIGERweb</li>
-          <li><strong>Basemap</strong> — OpenFreeMap, built on OpenStreetMap data</li>
+          <li><strong>Forest type:</strong> USFS BIGMAP forest type group</li>
+          <li><strong>Tree canopy:</strong> USFS / NLCD Tree Canopy Cover, 30 m raster</li>
+          <li><strong>Elevation:</strong> USGS 3DEP and AWS Terrain Tiles</li>
+          <li><strong>Weather:</strong> Open-Meteo, including its historical archive</li>
+          <li><strong>Boundaries:</strong> US Census TIGERweb</li>
+          <li><strong>Basemap:</strong> OpenFreeMap, built on OpenStreetMap data</li>
         </ul>
 
         <h2>What running it found</h2>
@@ -217,7 +219,7 @@ export default function AboutTheBuild({ nav }) {
         </p>
         <p className="lede lede--small">
           This is a record of what went wrong, not a description of what runs now. Several of
-          these are faults in a model since deleted — the chilling and drought terms below no
+          these are faults in a model since deleted; the chilling and drought terms below no
           longer exist. They are kept because how a thing failed is worth more than a tidy
           account of the version that replaced it.
         </p>
@@ -233,9 +235,9 @@ export default function AboutTheBuild({ nav }) {
         <h2>The honest part</h2>
         <p>
           This forecast cannot be validated. No dataset records when foliage actually peaked, so
-          accuracy is unknown and unclaimed. The tests assert what can be known — bounded
+          accuracy is unknown and unclaimed. The tests assert what can be known: bounded
           outputs, monotonic response to each driver, and a calibration that puts peak where
-          published norms put it — and the documentation states plainly what the model cannot do.
+          published norms put it. The documentation states plainly what the model cannot do.
         </p>
         <p>
           Saying so is not a hedge. A map that looks authoritative while resting on a three-year

@@ -103,8 +103,8 @@ function Row({ stop, dates }) {
             style={cellStyle(day)}
             title={
               day && day.progression != null
-                ? `${stop.name} — ${formatDay(d)}: ${stageLabel(day.stage)}`
-                : `${stop.name} — ${formatDay(d)}: no forecast`
+                ? `${stop.name}, ${formatDay(d)}: ${stageLabel(day.stage)}`
+                : `${stop.name}, ${formatDay(d)}: no forecast`
             }
           />
         );

@@ -193,7 +193,7 @@ export default function DateRange({
 
           <p className="cal__hint">
             {draft.picking
-              ? 'Now pick the day you leave — or the same day again for a day trip.'
+              ? 'Now pick the day you leave, or the same day again for a day trip.'
               : 'Pick the day you arrive, then the day you leave.'}
           </p>
         </div>

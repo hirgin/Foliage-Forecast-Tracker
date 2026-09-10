@@ -313,8 +313,8 @@ export default function Trip({ nav }) {
         <p className="lede">
           Add the places you are going and when you expect to be there. The map
           shows one day across the whole country; this shows your stops across
-          the whole season, so you can see whether the trip lands on peak — and
-          what moving it a few days would do.
+          the whole season, so you can see whether the trip lands on peak, and what
+          moving it a few days would do.
         </p>
 
         <section className="tripbar" ref={barRef}>
@@ -363,8 +363,8 @@ export default function Trip({ nav }) {
             <h2>Nothing planned yet</h2>
             <p>
               Search for a town or a mountain above to add your first stop.
-              Everything stays in the address bar — copy the link to share the
-              plan or keep it for later. Nothing is saved anywhere else.
+              Everything stays in the address bar, so copy the link to share the plan or
+              keep it for later. Nothing is saved anywhere else.
             </p>
           </section>
         )}
@@ -377,7 +377,7 @@ export default function Trip({ nav }) {
               arrive at {focused?.name}. Pick another stop below to see its day.{' '}
               {mapRes === 6
                 ? 'Click a forested hexagon to add it to the trip.'
-                : 'Zoom in — or click an area — to add a stop by hand.'}
+                : 'Zoom in, or click an area, to add a stop by hand.'}
             </p>
             <div
               className="tripmap"
@@ -459,7 +459,7 @@ export default function Trip({ nav }) {
                   {beyondHorizon && (
                     <span className="verdict__caveat">
                       {' '}This is beyond the 16-day forecast, so it describes a
-                      typical year rather than this one — the likely week, not a
+                      typical year rather than this one: the likely week, not a
                       promise.
                     </span>
                   )}
@@ -510,8 +510,8 @@ export default function Trip({ nav }) {
               </label>
             )}
             <p className="note">
-              The whole trip is in the address bar, so the link is the trip —
-              nothing is stored on a server and there is no account behind it.
+              The whole trip is in the address bar, so the link is the trip. Nothing is
+              stored on a server and there is no account behind it.
               Saving keeps it in this browser on this device, which is a
               convenience rather than a backup.
             </p>
@@ -545,9 +545,8 @@ export default function Trip({ nav }) {
         <section className="callout">
           <h2>What this can and cannot tell you</h2>
           <p>
-            Peak date comes from where a place sits — how far north, how high,
-            how near the sea, what grows there — and that does not change from
-            year to year. Weather changes how good the colour is, not when it
+            Peak date comes from where a place sits: how far north, how high, how near
+            the sea, what grows there. That does not change from year to year. Weather changes how good the colour is, not when it
             arrives. So this is the week to aim for in a typical autumn, and it
             is best in New England, where it is checked against foresters&rsquo;
             records. <a href="#/about-the-build">About the build</a> has the
@@ -650,10 +649,10 @@ function verdictFor(stop, error) {
   }
   if (where === 'early') {
     return single
-      ? `${n(days)} early — peak opens ${formatDay(stop.window.from)}.`
+      ? `${n(days)} early. Peak opens ${formatDay(stop.window.from)}.`
       : `Leaving ${n(days)} before peak opens on ${formatDay(stop.window.from)}.`;
   }
   return single
-    ? `${n(days)} late — peak closed ${formatDay(stop.window.to)}.`
+    ? `${n(days)} late. Peak closed ${formatDay(stop.window.to)}.`
     : `Arriving ${n(days)} after peak closed on ${formatDay(stop.window.to)}.`;
 }

@@ -124,7 +124,7 @@ export default function DetailPanel({ h3, date, onClose }) {
 
       {explain.data?.factors?.length > 0 && (
         <section className="factors">
-          <h3>Why{explain.data.atPeakOnly ? ' — at peak' : ''}</h3>
+          <h3>Why{explain.data.atPeakOnly ? ' at peak' : ''}</h3>
           {explain.data.atPeakOnly && (
             <p className="factors__note">
               Drivers are shown for this cell&rsquo;s peak day

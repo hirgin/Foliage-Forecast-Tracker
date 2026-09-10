@@ -15,7 +15,7 @@ const DRIVERS = [
   },
   {
     name: 'How high up',
-    body: 'Higher ground is colder and turns sooner — a ridge can be ten days ahead of the valley below it.',
+    body: 'Higher ground is colder and turns sooner. A ridge can be ten days ahead of the valley below it.',
   },
   {
     name: 'How near the sea',
@@ -37,9 +37,9 @@ export default function HowItWorks({ nav }) {
         </header>
 
         <p className="lede">
-          For every 3 km hexagon, the map works out <strong>one date</strong> — when the leaves
-          there should be at their best — and then draws a season around it: building for a few
-          weeks, about ten days at peak, then fading.
+          For every 3 km hexagon, the map works out <strong>one date</strong>, the day the
+          leaves there should be at their best, and then draws a season around it: building for
+          a few weeks, about ten days at peak, then fading.
         </p>
 
         <h2>What decides the date</h2>
@@ -62,7 +62,7 @@ export default function HowItWorks({ nav }) {
         <h2>How sure it is</h2>
         <p>
           Best in New England, where it is checked against foresters&rsquo; records of when the
-          leaves actually turned — usually within a couple of days. Elsewhere there is no such
+          leaves actually turned, usually within a couple of days. Elsewhere there is no such
           record to check against, so it is a rougher estimate, and those hexagons are{' '}
           <strong>drawn fainter</strong> to say so.
         </p>

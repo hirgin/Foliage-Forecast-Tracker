@@ -186,8 +186,8 @@ export default function MapView({ nav }) {
         {beyondHorizon && (
           <p className="note note--warn">
             Beyond the 16-day weather forecast. This date is estimated from a
-            three-year average, not forecast — treat it as a typical year rather
-            than a prediction about this one.
+            three-year average rather than a forecast. Treat it as a typical year, not a
+            prediction about this one.
           </p>
         )}
 
