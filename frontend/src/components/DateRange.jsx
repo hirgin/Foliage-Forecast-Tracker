@@ -3,7 +3,7 @@ import { progressionColor, stageLabel } from '../map/colors';
 import { formatDay } from './TimeSlider';
 import {
   addMonths, monthGrid, monthName, monthRange, openingMonth,
-  pickRange, previewRange, within, nightsIn, WEEKDAYS,
+  pickRange, previewRange, within, nightsIn, stepDay, startOfMonth, WEEKDAYS,
 } from './calendar';
 
 /**
@@ -33,8 +33,12 @@ export default function DateRange({
   // Measured rather than guessed: a fixed right-alignment fixes the trigger
   // on the right and breaks the one on the left.
   const [nudge, setNudge] = useState(0);
+  // The day the arrow keys are on. A grid of a hundred buttons is a hundred
+  // tab stops, which is not navigation; one stop and four arrows is.
+  const [cursor, setCursor] = useState(null);
   const boxRef = useRef(null);
   const popRef = useRef(null);
+  const gridRef = useRef(null);
 
   // Reopening starts from what is currently set rather than from where the
   // last visit was left, so the control never contradicts the trip.
@@ -43,6 +47,7 @@ export default function DateRange({
     setDraft({ from, to, picking: false });
     setView(openingMonth(from, min, max));
     setHovered(null);
+    setCursor(from && from >= min && from <= max ? from : min);
   }, [open, from, to, min, max]);
 
   useLayoutEffect(() => {
@@ -74,6 +79,22 @@ export default function DateRange({
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !cursor) return;
+    gridRef.current?.querySelector(`[data-day="${cursor}"]`)?.focus();
+  }, [open, cursor, view]);
+
+  const onGridKey = (e) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+    if (step === undefined && e.key !== 'Home' && e.key !== 'End') return;
+    e.preventDefault();
+    const next = e.key === 'Home' ? min : e.key === 'End' ? max : stepDay(cursor, step, min, max);
+    setCursor(next);
+    // Arrowing past the edge of the month turns the page rather than stopping,
+    // which is what makes a three-month season navigable at all.
+    if (startOfMonth(next) !== view) setView(startOfMonth(next));
+  };
 
   const byDate = useMemo(
     () => new Map((series || []).map((d) => [d.date, d])),
@@ -148,7 +169,12 @@ export default function DateRange({
             {WEEKDAYS.map((d, i) => <span key={`${d}-${i}`}>{d}</span>)}
           </div>
 
-          <div className="cal__grid" onMouseLeave={() => setHovered(null)}>
+          <div
+            className="cal__grid"
+            ref={gridRef}
+            onKeyDown={onGridKey}
+            onMouseLeave={() => setHovered(null)}
+          >
             {grid.weeks.flat().map((day, i) => {
               if (!day) return <span className="cal__pad" key={`pad-${i}`} />;
               const outside = day < min || day > max;
@@ -174,9 +200,13 @@ export default function DateRange({
                 <button
                   type="button"
                   key={day}
+                  data-day={day}
+                  // One stop for the whole grid: arrows move within it.
+                  tabIndex={day === cursor ? 0 : -1}
                   className={cls.join(' ')}
                   disabled={outside}
                   onClick={() => choose(day)}
+                  onFocus={() => setCursor(day)}
                   onMouseEnter={() => setHovered(day)}
                   aria-label={
                     reading?.stage
@@ -195,6 +225,7 @@ export default function DateRange({
             {draft.picking
               ? 'Now pick the day you leave, or the same day again for a day trip.'
               : 'Pick the day you arrive, then the day you leave.'}
+            {' '}Arrow keys move a day at a time.
           </p>
         </div>
       )}

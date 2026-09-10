@@ -4,6 +4,8 @@ const PHASES = [
   { n: 2, name: 'Weather pipeline', body: 'Observed, forecast and climatological weather for every cell, batched, audited, idempotent and resumable.' },
   { n: 3, name: 'The model', body: 'Peak date predicted from where a place sits: how far north, how high, how near the sea. Calibrated against twelve seasons of Maine Forest Service field reports. It replaced one that accumulated cool days toward a threshold, and ran a fortnight early because that error compounded all season.' },
   { n: 4, name: 'Map experience', body: 'Time slider, stage ramp, per-cell explanation, and confidence shown honestly.' },
+  { n: 5, name: 'Trip planning', body: 'The same export read the other way round: a few cells across many days rather than every cell on one. Stops become stays, each measured against its own peak window, with the trip held entirely in its own URL.' },
+  { n: 6, name: 'When peak arrives', body: 'A second map coloured by the day peak lands rather than by what today looks like. One byte per cell, 138 KB for the country, because deriving it in the browser would mean fetching every timeline shard to colour one map.' },
 ];
 
 const FINDINGS = [

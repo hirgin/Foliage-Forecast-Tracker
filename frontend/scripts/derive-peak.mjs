@@ -6,12 +6,17 @@
  * public/data, so the map's peak-date view can be built and checked without
  * spending an export to see it.
  *
- * Run from frontend/:  node derive-peak.mjs
+ * Run from frontend/:  node scripts/derive-peak.mjs
+ *
+ * It lives under frontend/ rather than in a top-level scripts/ because node
+ * resolves node_modules from the file's own location, and this needs h3-js
+ * and the app's own stageOf -- borrowed rather than restated, since the peak
+ * band is already one of the copies that have to stay in step.
  */
 import fs from 'fs';
 import path from 'path';
 import { cellToParent } from 'h3-js';
-import { stageOf } from './src/api/packed.js';
+import { stageOf } from '../src/api/packed.js';
 
 const DATA = path.join('public', 'data');
 const NO_DATA = 255;

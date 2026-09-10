@@ -91,6 +91,12 @@ export default function MapView({ nav }) {
   }, [mode, peak.data]);
 
   const seasonLength = peak.data?.dates?.length ?? 0;
+  const peakless = useMemo(() => {
+    if (!peak.data) return 0;
+    let n = 0;
+    for (const v of peak.data.offsets) if (v === 255) n += 1;
+    return n;
+  }, [peak.data]);
   const peakFill = useCallback((d) => {
     // 255 is "never reaches peak in this season", which is a real answer and
     // must not be coloured as though it were an early one.
@@ -229,9 +235,23 @@ export default function MapView({ nav }) {
                   ))}
                 </div>
                 <p className="note">
-                  Grey is ground that never reaches peak inside the season, or has
-                  no forecast yet. This view does not change with the date, so the
-                  slider is put away while it is open.
+                  {peakless.toLocaleString()} hexagons are grey. Every one of them
+                  has no forecast at all rather than a peak outside the season, so
+                  grey here means a hole in the data and not a forest that stays
+                  put. This view does not change with the date, so the slider is
+                  put away while it is open.
+                </p>
+                {/* The fault this view exposes that the stage map hid. Saying it
+                    on About the build is not enough: nobody reads that page
+                    while looking at this map, and the whole point of drawing
+                    peak dates is that people will read dates off them. */}
+                <p className="note note--warn">
+                  The Pacific Northwest is about a week early here. The model
+                  reads nearness to the sea along an east–west line, which is
+                  right on the Atlantic and backwards on the Pacific, so
+                  Washington and Oregon are drawn peaking with the northern
+                  Rockies when they run later.{' '}
+                  <a href="#/about-the-build">What else it gets wrong.</a>
                 </p>
               </>
             )}

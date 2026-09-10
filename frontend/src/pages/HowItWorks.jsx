@@ -71,6 +71,40 @@ export default function HowItWorks({ nav }) {
           rather than this one. Faint means less certain, wherever you see it.
         </p>
 
+        <h2>Two ways to read the map</h2>
+        <div className="drivers">
+          <article>
+            <h3>On a date</h3>
+            <p>
+              Every hexagon coloured for one day, with a slider to run through
+              the season. Answers &ldquo;what will it look like on the 12th&rdquo;.
+            </p>
+          </article>
+          <article>
+            <h3>When peak arrives</h3>
+            <p>
+              Every hexagon coloured by the day its peak lands, the whole season
+              at once. Answers &ldquo;when should I go here&rdquo;, which is the
+              question most people turn up with.
+            </p>
+          </article>
+        </div>
+
+        <h2>Planning a trip</h2>
+        <p>
+          <a href="#/trip">Plan a trip</a> takes the same forecast the other way
+          round: a few places across the whole season, rather than the whole
+          country on one day. Add the stops you are thinking of and when you
+          would be there, and it shows each one against its own peak, so you can
+          see whether the trip lands on it. It will also find the week that
+          catches the most, or re-time the stops individually when their peaks
+          are too far apart for one week to cover.
+        </p>
+        <p>
+          The trip lives entirely in the address bar, so the link is the trip.
+          Nothing is stored on a server and there is no account behind it.
+        </p>
+
         <h2>Stages</h2>
         <div className="stagerow">
           {STAGES.map((s) => (

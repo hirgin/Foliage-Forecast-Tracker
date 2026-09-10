@@ -212,8 +212,16 @@ npm run dev --prefix frontend        # UI on :5173, proxies /api to :8080
 1. Grid — H3 res 6 tiling of CONUS, canopy mask, terrain attributes.
 2. Weather pipeline — Open-Meteo at res 5, bulk load, audit.
 3. Forecast model — phenology scoring, lapse-rate downscale to res 6.
-4. Map experience — hexagon choropleth, time slider, detail panel.
+4. ✅ Map experience — hexagon choropleth, time slider, detail panel.
 5. Polish — caching, "How It Works", deploy.
+5c. ✅ Trip planning — stops as stays against their own peak windows, held in
+   the URL. Built entirely on `timeline/<res3>.bin`, which already carried
+   whole seasons per cell: no new endpoint, no export change, no rows.
+5d. ✅ When peak arrives — a second map coloured by peak date rather than by
+   today's stage. `peak.bin` is one byte per cell (138 KB nationally) because
+   deriving it in the browser means fetching every timeline shard.
+   `frontend/scripts/derive-peak.mjs` rebuilds it from an export already on
+   disk, so this view can be worked on without spending an export.
 5b. ✅ Species — FIA forest type per cell from USFS BIGMAP, scaling `S_PEAK`.
    CONUS surveyed. Validated against 46,424 USA-NPN observations. See ADR-0009.
 6. NOAA GRIB2 — HRRR at native res 6, swapped in behind `WeatherSource`.
