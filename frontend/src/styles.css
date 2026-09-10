@@ -888,33 +888,45 @@ footer a { color: var(--accent); }
 .strip__cell--here::after {
   content: '';
   position: absolute;
-  inset: -2px 0;
+  inset: -1px -1px;
   border-top: 2px solid var(--text);
   border-bottom: 2px solid var(--text);
-  z-index: 2;
+  box-shadow: 0 -1px 0 rgba(8, 10, 14, 0.7), 0 1px 0 rgba(8, 10, 14, 0.7);
+  z-index: 5;
 }
 .strip__cell--start::after { border-left: 2px solid var(--text); border-radius: 4px 0 0 4px; }
 .strip__cell--end::after { border-right: 2px solid var(--text); border-radius: 0 4px 4px 0; }
 
 /* Where it was before the last move.
    A cool blue, because it is the one hue the foliage ramp never reaches --
-   against greens, golds, reds and browns it cannot be mistaken for data. It
-   was a dim white dashed hairline sitting directly under a solid white ring,
-   which is a difference you have to go looking for. */
+   against greens, golds, reds and browns it cannot be mistaken for data.
+
+   Solid, not dashed. At 13px columns a dashed 2px border breaks into
+   segments about two pixels long, which over a strip of saturated colour
+   reads as speckle rather than as a line; colour alone separates it from the
+   white bar perfectly well.
+
+   Seated inside the row gap rather than overhanging it. At -4px on a 3px gap
+   the bar reached into the next row, where cells drawn later covered it, so
+   part of what little there was to see was being painted over.
+
+   The dark halo is what makes it hold against both a pale gold cell and a
+   near-black one, without tinting the data underneath the way a wash would. */
 .strip__cell--was::before {
   content: '';
   position: absolute;
-  inset: -4px 0;
-  border-top: 2px dashed rgb(122, 196, 255);
-  border-bottom: 2px dashed rgb(122, 196, 255);
-  z-index: 1;
+  inset: -3px -1px;
+  border-top: 2px solid rgb(122, 196, 255);
+  border-bottom: 2px solid rgb(122, 196, 255);
+  box-shadow: 0 -1px 0 rgba(8, 10, 14, 0.7), 0 1px 0 rgba(8, 10, 14, 0.7);
+  z-index: 3;
 }
 .strip__cell--wasStart::before {
-  border-left: 2px dashed rgb(122, 196, 255);
+  border-left: 2px solid rgb(122, 196, 255);
   border-radius: 5px 0 0 5px;
 }
 .strip__cell--wasEnd::before {
-  border-right: 2px dashed rgb(122, 196, 255);
+  border-right: 2px solid rgb(122, 196, 255);
   border-radius: 0 5px 5px 0;
 }
 
@@ -928,7 +940,7 @@ footer a { color: var(--accent); }
   height: 0;
   border-top: 2px solid var(--text);
 }
-.strip__key__was::before { border-top: 2px dashed rgb(122, 196, 255) !important; }
+.strip__key__was::before { border-top: 2px solid rgb(122, 196, 255) !important; }
 
 .tripcontrols {
   display: flex;
@@ -1427,13 +1439,3 @@ footer a { color: var(--accent); }
 }
 .tripactions__one strong { color: var(--text); }
 
-/* Where a stay sat before the last adjustment.
-   Dashed and dim against the solid ring of where it is now, and drawn under
-   it, so the move reads as a move rather than as two trips. */
-.strip__cell--was::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border: 1px dashed rgba(242, 236, 226, 0.55);
-  border-radius: 4px;
-}

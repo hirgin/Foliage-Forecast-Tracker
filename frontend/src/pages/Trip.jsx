@@ -453,8 +453,7 @@ export default function Trip({ nav }) {
               <h2>Your trip against the season</h2>
               <p className="note">
                 Each row is a stop, each column a day. The outlined run is
-                your stay, and a dashed one is where it sat before you moved
-                it. Faded means the forecast is working from a
+                your stay, and a blue one is where it sat before you moved it. Faded means the forecast is working from a
                 typical year rather than this one.
               </p>
 
