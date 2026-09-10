@@ -93,6 +93,11 @@ export default function Trip({ nav }) {
   // Bumped on each add, and used to remount the search box so it clears.
   const [added, setAdded] = useState(0);
   const [saved, setSaved] = useState(() => readTrips());
+  // Where each stay sat before the last adjustment, keyed by cell so a
+  // removed stop simply stops matching. Set by re-timing, which rewrites the
+  // dates; the slider needs no record because the stops still hold the
+  // unshifted ones.
+  const [wasBefore, setWasBefore] = useState(null);
   // What the share control last did, so it can say so. Cleared on a timer
   // because a button that stays "Copied" is lying by the second press.
   const [shared, setShared] = useState(null);
@@ -128,6 +133,14 @@ export default function Trip({ nav }) {
   const departing = nextTo && nextTo >= arriving ? nextTo : arriving;
 
   const planned = planTrip(stops, timelines.byH3, shift);
+  // What the strip draws as the outline the trip moved from. A shift leaves
+  // the stops themselves untouched, so they are their own record of it.
+  const movedFrom = useMemo(() => {
+    if (shift !== 0) {
+      return Object.fromEntries(stops.map((s) => [s.h3, { from: s.from, to: s.to }]));
+    }
+    return wasBefore;
+  }, [shift, stops, wasBefore]);
   const focused = planned[Math.min(focusIndex, Math.max(0, planned.length - 1))] || null;
   const mapDate = focused?.from || bounds?.from || null;
   const mapData = useForecast(mapDate, mapRes);
@@ -284,6 +297,9 @@ export default function Trip({ nav }) {
   // Both ends arrive together from the picker, which cannot produce an
   // inverted range, so there is no end to push out of the way any more.
   const setStopStay = (i, from, to) => {
+    // Any hand edit ends the comparison: the outline would then be measuring
+    // against a trip the user has already moved past.
+    setWasBefore(null);
     setStops(stops.map((s, j) => (j === i ? { ...s, from, to } : s)));
   };
 
@@ -308,6 +324,7 @@ export default function Trip({ nav }) {
   const fitEachStop = () => {
     const placed = bestSpacing(stops, timelines.byH3, bounds);
     if (!placed) return;
+    setWasBefore(Object.fromEntries(stops.map((s) => [s.h3, { from: s.from, to: s.to }])));
     setStops(stops.map((s, i) => ({ ...s, ...placed[i] })));
     // The dates themselves moved, so a shift left over from exploring would
     // now be applied on top of an answer that already accounts for it.
@@ -436,11 +453,14 @@ export default function Trip({ nav }) {
               <h2>Your trip against the season</h2>
               <p className="note">
                 Each row is a stop, each column a day. The outlined run is
-                your stay. Faded means the forecast is working from a
+                your stay, and a dashed one is where it sat before you moved
+                it. Faded means the forecast is working from a
                 typical year rather than this one.
               </p>
 
-              {dates.length > 0 && <TripStrip planned={planned} dates={dates} />}
+              {dates.length > 0 && (
+                <TripStrip planned={planned} dates={dates} was={movedFrom} />
+              )}
 
               <div className="tripcontrols">
                 <label htmlFor="shift">Shift the whole trip</label>

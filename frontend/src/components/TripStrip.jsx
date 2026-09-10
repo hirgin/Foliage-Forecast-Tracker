@@ -31,7 +31,7 @@ function cellStyle(day) {
   };
 }
 
-export default function TripStrip({ planned, dates }) {
+export default function TripStrip({ planned, dates, was }) {
   const scrollRef = useRef(null);
   const firstDate = planned[0]?.from;
 
@@ -65,14 +65,19 @@ export default function TripStrip({ planned, dates }) {
         })}
 
         {planned.map((stop) => (
-          <Row key={`${stop.h3}-${stop.from}`} stop={stop} dates={dates} />
+          <Row
+            key={`${stop.h3}-${stop.from}`}
+            stop={stop}
+            dates={dates}
+            was={was?.[stop.h3]}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function Row({ stop, dates }) {
+function Row({ stop, dates, was }) {
   // Indexed once per row rather than scanned per column: a season is ~76 days
   // and a linear find inside the column loop makes the row quadratic.
   const byDate = new Map((stop.series || []).map((d) => [d.date, d]));
@@ -96,10 +101,22 @@ function Row({ stop, dates }) {
         // overlap into one bar, so a four-night stop reads as a span rather
         // than four separate visits.
         const here = d >= stop.from && d <= stop.to;
+        // Where the stay sat before the current adjustment. Without it the
+        // strip shows the answer and not the move: drag the slider and the
+        // ring simply appears somewhere else, with nothing to say it came
+        // from anywhere. Suppressed once the two coincide, since a ghost
+        // under the thing casting it is just a heavier outline.
+        const before = Boolean(was) && d >= was.from && d <= was.to
+          && !(was.from === stop.from && was.to === stop.to);
+
+        const cls = ['strip__cell'];
+        if (here) cls.push('strip__cell--here');
+        if (before) cls.push('strip__cell--was');
+
         return (
           <div
             key={d}
-            className={here ? 'strip__cell strip__cell--here' : 'strip__cell'}
+            className={cls.join(' ')}
             style={cellStyle(day)}
             title={
               day && day.progression != null

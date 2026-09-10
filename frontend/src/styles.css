@@ -1365,3 +1365,14 @@ footer a { color: var(--accent); }
   color: var(--muted) !important;
 }
 .tripactions__one strong { color: var(--text); }
+
+/* Where a stay sat before the last adjustment.
+   Dashed and dim against the solid ring of where it is now, and drawn under
+   it, so the move reads as a move rather than as two trips. */
+.strip__cell--was::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px dashed rgba(242, 236, 226, 0.55);
+  border-radius: 4px;
+}
