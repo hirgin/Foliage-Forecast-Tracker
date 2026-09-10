@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useForecast, useMeta, usePrefetchForecast, usePeakDates } from '../api/hooks';
+import {
+  useForecast, useMeta, usePrefetchForecast, usePeakDates, usePlaces,
+} from '../api/hooks';
 import { resolutionForZoom, cellWidthKm, h3ForPlace, fetchBareCells } from '../api/client';
 import FoliageMap from '../map/FoliageMap';
 import TimeSlider, { formatDay } from '../components/TimeSlider';
 import DetailPanel from '../components/DetailPanel';
 import PlaceSearch from '../components/PlaceSearch';
 import { STAGES, peakDateColor, PEAK_DATE_ALPHA } from '../map/colors';
+import { rankPlaces, describeKind } from '../map/bestPlaces';
 import { addDays, horizonDate } from '../season';
 
 export default function MapView({ nav }) {
@@ -24,6 +27,10 @@ export default function MapView({ nav }) {
   // the chosen date; 'peak' is when its peak arrives, which is the question
   // people actually turn up with and previously had to find by scrubbing.
   const [mode, setMode] = useState('stage');
+  // Where to go on the chosen day. Behind a toggle because answering it costs
+  // the place index and a detailed day, and someone who only wants the map
+  // should not pay for a question they did not ask.
+  const [showBest, setShowBest] = useState(false);
 
   // The unforested rest of the grid, so the map has no holes in it. Fetched
   // once and never per date: these cells carry no forecast, which is exactly
@@ -133,6 +140,15 @@ export default function MapView({ nav }) {
   const peakCount = (counts.PEAK ?? 0) + (counts.NEAR_PEAK ?? 0);
   const onSelect = useCallback((h3) => setSelected(h3), []);
 
+  const { data: placeIndex, isLoading: placesLoading } = usePlaces(showBest && mode === 'stage');
+  // Always the detailed grid: a place carries an index into that list, and
+  // handing this a coarse day would point every place at the wrong hexagon.
+  const fine = useForecast(date, 6, showBest && mode === 'stage');
+  const best = useMemo(
+    () => (showBest ? rankPlaces(placeIndex, fine.data?.cells) : []),
+    [showBest, placeIndex, fine.data],
+  );
+
   return (
     // On a phone the detail panel takes the whole lower half, so the main
     // panel steps aside rather than stacking two sheets over a hidden map.
@@ -219,6 +235,56 @@ export default function MapView({ nav }) {
                 : 'No cells near peak yet'}
             </span>
           </div>
+        )}
+
+        {mode === 'stage' && Boolean(cells.length) && (
+          <section className="bestplaces">
+            <button
+              type="button"
+              className="bestplaces__toggle"
+              onClick={() => setShowBest((v) => !v)}
+              aria-expanded={showBest}
+            >
+              <span>At peak on {date ? formatDay(date) : 'this date'}</span>
+              <em aria-hidden="true">{showBest ? '−' : '+'}</em>
+            </button>
+
+            {showBest && (
+              <>
+                {(placesLoading || fine.isLoading) && <p className="note">Looking…</p>}
+                {best.length > 0 && (
+                  <ol className="bestplaces__list">
+                    {best.map((p) => (
+                      <li key={`${p.name}-${p.state}`}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFocus({ lat: p.lat, lon: p.lon, nonce: Date.now() });
+                          }}
+                        >
+                          <strong>{p.name}</strong>
+                          <span>{p.state ? `${p.state} · ` : ''}{describeKind(p.kind)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {!placesLoading && !fine.isLoading && best.length === 0 && (
+                  <p className="note">
+                    Nothing is at peak on this date. Try a week further into the
+                    season.
+                  </p>
+                )}
+                <p className="note">
+                  Recognisable places whose own hexagon is at peak, nearest the
+                  middle of the band rather than its edge, at most two to a
+                  state. Ranked by how well known a place is, which is all the
+                  index knows: it cannot tell you whether somewhere is worth the
+                  drive, only that the leaves there are out. Tap one to fly to it.
+                </p>
+              </>
+            )}
+          </section>
         )}
 
         {mode === 'peak' && (

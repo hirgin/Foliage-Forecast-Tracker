@@ -1439,3 +1439,49 @@ footer a { color: var(--accent); }
 }
 .tripactions__one strong { color: var(--text); }
 
+
+/* Where to go on the chosen day. Folded away by default: answering it costs
+   the place index and a detailed day, which is not a bill to hand someone who
+   only opened the map. */
+.bestplaces { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+.bestplaces__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.bestplaces__toggle:hover { color: var(--text); }
+.bestplaces__toggle em { font-style: normal; font-size: 14px; line-height: 1; }
+
+.bestplaces__list { list-style: none; margin: 10px 0 0; padding: 0; }
+.bestplaces__list li + li { margin-top: 2px; }
+.bestplaces__list button {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 7px;
+  cursor: pointer;
+}
+.bestplaces__list button:hover { background: rgba(255, 255, 255, 0.06); }
+.bestplaces__list strong { font-size: 12.5px; font-weight: 600; }
+.bestplaces__list span { font-size: 10.5px; color: var(--muted); }

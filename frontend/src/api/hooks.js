@@ -59,13 +59,13 @@ export function usePrefetchForecast(date, days, resolution = 6) {
   }, [client, date, days, resolution]);
 }
 
-export function useForecast(date, resolution = 6) {
+export function useForecast(date, resolution = 6, enabled = true) {
   return useQuery({
     // Resolution is part of the key, so zooming swaps between two cached
     // sets rather than refetching one over the other.
     queryKey: ['forecast', date, resolution],
     queryFn: () => fetchForecast(date, resolution),
-    enabled: Boolean(date),
+    enabled: Boolean(date) && enabled,
     retry: false,
     // Scrubbing the slider revisits dates constantly; keeping them resident
     // is what makes dragging feel instant after the first pass.
