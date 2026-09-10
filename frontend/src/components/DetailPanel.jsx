@@ -1,21 +1,35 @@
+import { useState } from 'react';
 import { useTimeline, useExplain } from '../api/hooks';
+import { h3ForPlace } from '../api/client';
 import { stageColor, stageLabel } from '../map/colors';
 import { formatDay } from './TimeSlider';
+import PlaceSearch from './PlaceSearch';
+import { peakWindow } from '../trip/plan';
+import { daysBetween } from '../season';
 
 const W = 258;
 const H = 54;
 
 /** Season curve for one cell, with the selected day marked. */
-function Sparkline({ days, activeDate }) {
+/** The other place's curve, in the same blue the trip strip uses for "was". */
+const COMPARE_STROKE = 'rgb(122, 196, 255)';
+
+function Sparkline({ days, activeDate, against }) {
   if (!days?.length) return null;
 
   const step = W / (days.length - 1);
-  const points = days
-    .map((d, i) => `${(i * step).toFixed(1)},${(H - (d.progression / 100) * H).toFixed(1)}`)
+  const line = (series) => series
+    .map((d, i) => `${(i * step).toFixed(1)},${(H - ((d.progression ?? 0) / 100) * H).toFixed(1)}`)
     .join(' ');
+  const points = line(days);
 
   const activeIndex = days.findIndex((d) => d.date === activeDate);
   const peakIndex = days.findIndex((d) => d.stage === 'PEAK');
+  // Only drawn when the two cover the same days, which they do whenever both
+  // come from the same export. Interpolating mismatched seasons would be
+  // inventing a comparison rather than showing one.
+  const other = against?.length === days.length ? against : null;
+  const otherPeak = other ? other.findIndex((d) => d.stage === 'PEAK') : -1;
 
   return (
     <svg className="spark" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Season progression">
@@ -33,6 +47,27 @@ function Sparkline({ days, activeDate }) {
           />
         );
       })}
+      {other && (
+        <polyline
+          points={line(other)}
+          fill="none"
+          stroke={COMPARE_STROKE}
+          strokeWidth="1.5"
+          strokeDasharray="3 2"
+        />
+      )}
+      {otherPeak >= 0 && (
+        <line
+          x1={otherPeak * step}
+          x2={otherPeak * step}
+          y1="0"
+          y2={H}
+          stroke={COMPARE_STROKE}
+          strokeWidth="1"
+          strokeDasharray="2 2"
+          opacity="0.7"
+        />
+      )}
       <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.5" />
       {peakIndex >= 0 && (
         <line
@@ -62,8 +97,19 @@ export default function DetailPanel({ h3, date, onClose }) {
   const timeline = useTimeline(h3);
   const explain = useExplain(h3, date);
 
+  // The other place, for "Stowe or the Whites?". Answering that meant opening
+  // two hexagons in turn and holding the first one in your head.
+  const [against, setAgainst] = useState(null);
+  const other = useTimeline(against?.h3);
+
   const today = timeline.data?.days?.find((d) => d.date === date);
   const [r, g, b] = stageColor(today?.stage);
+
+  const mine = peakWindow(timeline.data?.days);
+  const theirs = peakWindow(other.data?.days);
+  // Signed, so the sentence can say which comes first rather than making the
+  // reader subtract two dates themselves.
+  const gap = mine && theirs ? daysBetween(mine.from, theirs.from) : null;
 
   return (
     <aside className="detail">
@@ -115,10 +161,46 @@ export default function DetailPanel({ h3, date, onClose }) {
             </p>
           )}
 
-          <Sparkline days={timeline.data.days} activeDate={date} />
+          <Sparkline
+            days={timeline.data.days}
+            activeDate={date}
+            against={other.data?.days}
+          />
           <p className="spark__caption">
             Season progression · dashed line marks first peak
           </p>
+
+          <div className="compare">
+            {against ? (
+              <>
+                <div className="compare__head">
+                  <span className="compare__who">{against.name}</span>
+                  <button type="button" onClick={() => setAgainst(null)} aria-label="Stop comparing">
+                    ×
+                  </button>
+                </div>
+                {other.isLoading && <p className="note">Loading…</p>}
+                {other.error && <p className="note note--bad">{other.error.message}</p>}
+                {theirs && mine && (
+                  <p className="note">
+                    {gap === 0
+                      ? 'Both peak on the same day.'
+                      : `${against.name} peaks ${Math.abs(gap)} day${Math.abs(gap) === 1 ? '' : 's'} ${gap > 0 ? 'later' : 'earlier'}, on ${formatDay(theirs.from)}.`}
+                  </p>
+                )}
+                {other.data && !theirs && (
+                  <p className="note">{against.name} never reaches peak this season.</p>
+                )}
+              </>
+            ) : (
+              <PlaceSearch
+                onSelect={async (place) => {
+                  const cell = await h3ForPlace(place, null);
+                  if (cell && cell !== h3) setAgainst({ h3: cell, name: place.name });
+                }}
+              />
+            )}
+          </div>
         </>
       )}
 

@@ -1485,3 +1485,28 @@ footer a { color: var(--accent); }
 .bestplaces__list button:hover { background: rgba(255, 255, 255, 0.06); }
 .bestplaces__list strong { font-size: 12.5px; font-weight: 600; }
 .bestplaces__list span { font-size: 10.5px; color: var(--muted); }
+
+/* Comparing this hexagon with somewhere else. "Stowe or the Whites?" meant
+   opening two hexagons in turn and holding the first one in your head. */
+.compare { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border); }
+.compare .search { margin-top: 0; }
+.compare__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.compare__who {
+  font-size: 12.5px;
+  font-weight: 600;
+  /* The same blue as its curve, so the name and the line are one thing. */
+  color: rgb(122, 196, 255);
+}
+.compare__head button {
+  width: 22px;
+  height: 22px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.compare__head button:hover { color: var(--bad); border-color: var(--bad); }
