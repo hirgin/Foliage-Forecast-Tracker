@@ -797,7 +797,14 @@ export default function FoliageMap({
   // The guard is worth keeping for res 6, where there are 76,138 bare cells
   // and each one ring-searches outward. The coarse levels hold 34 and 2,764,
   // which is nothing.
-  if (windowed || resolution !== 6) {
+  // Gated in a memo, not run bare in the render body: [hovered] lives in this
+  // same component, so every mouse movement over the map re-renders it, and
+  // this block was re-filtering every visible cell on each of those renders
+  // -- work meant to happen once per pan, happening once per pixel of mouse
+  // travel instead. Keyed on the same values the block itself reads, so it
+  // still runs exactly when the donors it fills could actually be stale.
+  useMemo(() => {
+    if (!(windowed || resolution !== 6)) return;
     // Both kinds of hole, not just one.
     //
     // `bare` is ground with too few trees to forecast. The other kind is a
@@ -815,7 +822,7 @@ export default function FoliageMap({
       // no forest anywhere near them -- which is most of Kansas.
       for (const h3 of missing) if (!donors.has(h3)) donors.set(h3, []);
     }
-  }
+  }, [windowed, resolution, visible, scoredH3, donors]);
 
   const layers = useMemo(
     () => [
